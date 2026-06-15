@@ -5,21 +5,21 @@ import { motion } from 'framer-motion';
 
 function FrogMascot({ size = 80 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="100" cy="120" rx="70" ry="60" fill="#39FF14" stroke="#000" strokeWidth="4" />
-      <ellipse cx="100" cy="115" rx="62" ry="52" fill="#5CFF41" />
-      <circle cx="70" cy="75" r="28" fill="#39FF14" stroke="#000" strokeWidth="4" />
-      <circle cx="130" cy="75" r="28" fill="#39FF14" stroke="#000" strokeWidth="4" />
-      <circle cx="70" cy="75" r="22" fill="#FFF" stroke="#000" strokeWidth="2" />
-      <circle cx="130" cy="75" r="22" fill="#FFF" stroke="#000" strokeWidth="2" />
-      <circle cx="73" cy="73" r="10" fill="#000" />
-      <circle cx="133" cy="73" r="10" fill="#000" />
-      <circle cx="76" cy="70" r="3" fill="#FFF" />
-      <circle cx="136" cy="70" r="3" fill="#FFF" />
-      <ellipse cx="100" cy="128" rx="30" ry="14" fill="#FFD700" stroke="#000" strokeWidth="3" />
-      <path d="M78 125 Q100 140 122 125" stroke="#000" strokeWidth="3" fill="none" strokeLinecap="round" />
-      <circle cx="55" cy="105" r="10" fill="#FF69B4" opacity="0.5" />
-      <circle cx="145" cy="105" r="10" fill="#FF69B4" opacity="0.5" />
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="58" rx="38" ry="32" fill="#8E866A" stroke="#524635" strokeWidth="2" />
+      <ellipse cx="50" cy="55" rx="34" ry="28" fill="#B5AE8E" />
+      <circle cx="34" cy="38" r="16" fill="#8E866A" stroke="#524635" strokeWidth="2" />
+      <circle cx="66" cy="38" r="16" fill="#8E866A" stroke="#524635" strokeWidth="2" />
+      <circle cx="34" cy="38" r="13" fill="#F5ECD7" stroke="#524635" strokeWidth="1.5" />
+      <circle cx="66" cy="38" r="13" fill="#F5ECD7" stroke="#524635" strokeWidth="1.5" />
+      <circle cx="36" cy="37" r="5" fill="#3B3225" />
+      <circle cx="68" cy="37" r="5" fill="#3B3225" />
+      <circle cx="38" cy="35" r="1.5" fill="#F5ECD7" />
+      <circle cx="70" cy="35" r="1.5" fill="#F5ECD7" />
+      <ellipse cx="50" cy="62" rx="18" ry="8" fill="#D4A854" stroke="#524635" strokeWidth="1.5" />
+      <path d="M38 60 Q50 68 62 60" stroke="#524635" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <circle cx="42" cy="52" r="4" fill="#D08E7D" opacity="0.4" />
+      <circle cx="58" cy="52" r="4" fill="#D08E7D" opacity="0.4" />
     </svg>
   );
 }
@@ -53,24 +53,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-pop-cream font-pop text-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-parchment-50 font-body text-ink-700 flex items-center justify-center px-4 relative">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.27 0 0 0 0 0.16 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
       <motion.div
-        initial={{ y: 30, opacity: 0 }}
+        initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="w-full max-w-md bg-white border-4 border-black shadow-pop-xl p-8"
+        className="relative z-10 w-full max-w-md bg-parchment-100 border-2 border-aged-200 rounded-sm p-8 shadow-warm"
       >
         <div className="flex justify-center mb-6">
-          <div className="animate-float">
-            <FrogMascot size={72} />
-          </div>
+          <FrogMascot size={72} />
         </div>
 
-        <h2 className="font-display text-3xl md:text-4xl text-center tracking-wider mb-6">
+        <h2 className="font-display text-2xl md:text-3xl text-center text-ink-800 mb-6">
           {isRegister ? '注册呱邻国' : '登录呱邻国'}
         </h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-pop-red/10 border-4 border-pop-red text-pop-red font-bold text-sm">
+          <div className="mb-4 p-3 bg-rust-50 border-2 border-rust-300 text-rust-500 font-body text-sm">
             {error}
           </div>
         )}
@@ -78,65 +83,65 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <div>
-              <label className="block font-display text-sm tracking-wider mb-1">昵称</label>
+              <label className="block font-body text-sm text-ink-600 mb-1">昵称</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2.5 border-4 border-black font-pop font-bold focus:outline-none focus:border-pop-red transition-colors"
+                className="w-full px-3 py-2 bg-parchment-50 border-2 border-aged-200 rounded-sm font-body text-sm focus:outline-none focus:border-amber-400 transition-colors"
               />
             </div>
           )}
 
           <div>
-            <label className="block font-display text-sm tracking-wider mb-1">邮箱</label>
+            <label className="block font-body text-sm text-ink-600 mb-1">邮箱</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2.5 border-4 border-black font-pop font-bold focus:outline-none focus:border-pop-red transition-colors"
+              className="w-full px-3 py-2 bg-parchment-50 border-2 border-aged-200 rounded-sm font-body text-sm focus:outline-none focus:border-amber-400 transition-colors"
             />
           </div>
 
           <div>
-            <label className="block font-display text-sm tracking-wider mb-1">密码</label>
+            <label className="block font-body text-sm text-ink-600 mb-1">密码</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-3 py-2.5 border-4 border-black font-pop font-bold focus:outline-none focus:border-pop-red transition-colors"
+              className="w-full px-3 py-2 bg-parchment-50 border-2 border-aged-200 rounded-sm font-body text-sm focus:outline-none focus:border-amber-400 transition-colors"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full font-display text-xl py-3 bg-pop-red text-white border-4 border-black shadow-pop-lg hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all tracking-wider disabled:opacity-50"
+            className="w-full font-body text-base py-2.5 bg-amber-400 text-ink-800 border-2 border-amber-500 hover:bg-amber-500 transition-colors rounded-sm disabled:opacity-50"
           >
             {loading ? '...' : (isRegister ? '注册' : '登录')}
           </button>
         </form>
 
-        <p className="mt-4 text-center font-pop font-bold text-black/60">
+        <p className="mt-4 text-center font-body text-sm text-ink-500">
           {isRegister ? '已有账号？' : '没有账号？'}
           <button
             onClick={() => { setIsRegister(!isRegister); setError(''); }}
-            className="text-pop-red hover:underline ml-1"
+            className="text-amber-600 hover:text-amber-700 ml-1"
           >
             {isRegister ? '登录' : '注册'}
           </button>
         </p>
 
-        <div className="mt-6 pt-4 border-t-4 border-black">
-          <p className="text-center font-pop font-bold text-xs text-black/40 mb-3">
+        <div className="mt-6 pt-4 border-t-2 border-aged-200">
+          <p className="text-center font-body text-xs text-ink-400 mb-3">
             也可以跳过登录，直接使用自己的 API Key
           </p>
           <button
             onClick={() => navigate('/learn')}
-            className="w-full font-display text-base py-2.5 bg-pop-yellow text-black border-4 border-black shadow-pop hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all tracking-wider"
+            className="w-full font-body text-sm py-2 bg-transparent text-ink-600 border-2 border-aged-300 hover:border-amber-400 hover:text-amber-600 transition-colors rounded-sm"
           >
             跳过，直接使用
           </button>
