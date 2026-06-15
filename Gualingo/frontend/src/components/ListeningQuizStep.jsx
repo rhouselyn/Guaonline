@@ -103,7 +103,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
         </div>
         <div className="flex items-center gap-3">
           {totalItemsInUnit > 0 && (
-            <span className="text-sm text-ink-500 font-medium">{t.step || '第'} {stepInUnit} / {totalItemsInUnit} {t.question || '题'}</span>
+            <span className="text-sm text-ink-500 font-medium retro-badge-ink">{t.step || '第'} {stepInUnit} / {totalItemsInUnit} {t.question || '题'}</span>
           )}
           {!isChecked && !isSkipped && (
             <motion.button
@@ -131,13 +131,15 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
         </div>
       </div>
 
-      <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm">
+      <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm retro-corners relative overflow-hidden">
+        <div className="absolute inset-0 dotted-bg opacity-[0.03] pointer-events-none rounded-md" />
+        <div className="relative z-10">
         <div className="text-center mb-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-500 rounded-none text-sm font-medium mb-4"
+            className="inline-flex items-center gap-2 px-4 py-1.5 retro-badge-amber text-sm font-medium mb-4"
           >
             <Headphones className="w-4 h-4" />
             {t.listeningQuizTitle || '听力题'}
@@ -164,7 +166,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
         </div>
 
         <div className="mb-8">
-          <div className="p-4 border-2 border-dashed border-aged-300 rounded-sm flex flex-wrap gap-2 bg-parchment-50/50 relative">
+          <div className="p-4 border-2 border-dashed border-aged-300 rounded-sm flex flex-wrap gap-2 bg-parchment-50/50 relative retro-card font-serif">
             <div className="flex flex-wrap gap-2 invisible" aria-hidden="true">
               {correctWords.map((_, i) => (
                 <span key={`ph-${i}`} className="px-4 py-2 rounded-none text-sm font-medium">{correctWords[i]}</span>
@@ -183,13 +185,13 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0 }}
                     transition={{ layout: { type: 'spring', stiffness: 500, damping: 35 }, opacity: { duration: 0.15 }, scale: { duration: 0.15 } }}
-                    className={`px-4 py-2 rounded-none text-sm font-bold cursor-pointer select-none ${
+                    className={`px-4 py-2 rounded-none text-sm font-bold cursor-pointer select-none retro-btn shadow-retro-sm ${
                       isChecked
                         ? isCorrect
-                          ? 'bg-olive-50 text-olive-500 border-2 border-olive-400'
+                          ? 'bg-amber-400 text-parchment-50 border-2 border-amber-500 retro-card-highlight'
                           : pos < correctWords.length && item.word.toLowerCase() === correctWords[pos].toLowerCase()
-                            ? 'bg-olive-50 text-olive-500 border-2 border-olive-400'
-                            : 'bg-rust-50 text-rust-400 border-2 border-rust-400'
+                            ? 'bg-amber-400 text-parchment-50 border-2 border-amber-500 retro-card-highlight'
+                            : 'bg-rust-50 text-rust-400 border-2 border-rust-400 retro-card'
                         : 'bg-amber-400 text-parchment-50 hover:bg-amber-500 border-2 border-amber-500'
                     }`}
                     onClick={() => handleRemoveWord(pos)}
@@ -201,6 +203,8 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
             </div>
           </div>
         </div>
+
+        <div className="retro-divider my-6" />
 
         <div className="mb-8">
           <div className="flex flex-wrap gap-2">
@@ -214,7 +218,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
                   transition={{ duration: 0.15 }}
                   onClick={() => handleWordSelect(word, index)}
                   disabled={isSelected || isChecked}
-                  className={`px-4 py-2 rounded-none text-sm font-bold select-none ${
+                  className={`px-4 py-2 rounded-none text-sm font-bold select-none retro-card retro-btn shadow-retro-sm ${
                     isSelected
                       ? 'pointer-events-none invisible'
                       : isChecked
@@ -229,15 +233,17 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
           </div>
         </div>
 
+        <div className="retro-divider my-6" />
+
         {isChecked && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`p-5 rounded-sm mb-6 ${isCorrect ? 'bg-olive-50 border-4 border-olive-400' : 'bg-rust-50 border-4 border-rust-400'}`}
+            className={`p-5 rounded-sm mb-6 ${isCorrect ? 'bg-amber-50 border-4 border-amber-400 retro-card-highlight' : 'bg-rust-50 border-4 border-rust-400 retro-card'}`}
           >
             <div className="flex items-center gap-3 mb-2">
               {isCorrect ? <CheckCircle2 className="w-6 h-6 text-olive-600" /> : <XCircle className="w-6 h-6 text-rust-500" />}
-              <span className={`font-bold text-lg ${isCorrect ? 'text-olive-600' : 'text-rust-500'}`}>
+              <span className={`font-bold text-lg font-serif ${isCorrect ? 'text-olive-600' : 'text-rust-500'}`}>
                 {isSkipped ? (t.skipped || '已跳过') : isCorrect ? t.correct : t.incorrect}
               </span>
             </div>
@@ -256,7 +262,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
               whileTap={{ scale: 0.98 }}
               onClick={checkAnswer}
               disabled={selectedWords.length === 0}
-              className="flex-1 py-4 btn-primary text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-4 btn-primary retro-btn text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {t.checkAnswer}
             </motion.button>
@@ -266,7 +272,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
               whileTap={{ scale: 0.98 }}
               onClick={handleNextQuestion}
               disabled={loading}
-              className="flex-1 py-4 btn-primary text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-4 btn-primary retro-btn text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -281,6 +287,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
               )}
             </motion.button>
           )}
+        </div>
         </div>
       </div>
     </motion.div>

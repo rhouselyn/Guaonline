@@ -165,3 +165,96 @@ body {
   z-index: 1;
   opacity: 0.5;
 }
+
+/* 复古装饰角标 - 四角 L 型边框 */
+.retro-corners {
+  position: relative;
+}
+.retro-corners::before,
+.retro-corners::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+.retro-corners::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #D4A853;
+  border-left: 2px solid #D4A853;
+}
+.retro-corners::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #D4A853;
+  border-right: 2px solid #D4A853;
+}
+
+/* 复古分隔线 - 菱形装饰 */
+.retro-divider {
+  position: relative;
+  text-align: center;
+  border: none;
+  margin: 1rem 0;
+}
+.retro-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid #C9BB9E;
+}
+.retro-divider::after {
+  content: '◆';
+  position: relative;
+  display: inline-block;
+  padding: 0 8px;
+  background: #F5ECD7;
+  color: #D4A853;
+  font-size: 8px;
+  line-height: 1;
+}
+
+/* 复古按钮按压效果 */
+.retro-btn {
+  transition: all 0.15s ease;
+  box-shadow: 2px 2px 0px rgba(58, 46, 28, 0.15);
+}
+.retro-btn:hover {
+  box-shadow: 1px 1px 0px rgba(58, 46, 28, 0.15);
+  transform: translate(1px, 1px);
+}
+.retro-btn:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+/* 复古卡片 - 带角标和阴影 */
+.retro-card {
+  @apply bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro relative;
+}
+.retro-card-highlight {
+  @apply bg-parchment-50 border-2 border-amber-300 rounded-md shadow-retro relative;
+}
+
+/* 波点纹理背景 */
+.dotted-bg {
+  background-image: radial-gradient(circle, #8b7e5e 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* 复古标签样式 */
+.retro-badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded-sm;
+}
+.retro-badge-amber {
+  @apply retro-badge bg-amber-100/80 text-amber-700 border border-amber-300/50;
+}
+.retro-badge-olive {
+  @apply retro-badge bg-olive-100/80 text-olive-600 border border-olive-200/50;
+}
+.retro-badge-ink {
+  @apply retro-badge bg-ink-700 text-parchment-50 border border-ink-800;
+}
