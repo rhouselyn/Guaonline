@@ -76,6 +76,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
+      // 注册时验证邮箱格式
+      if (isRegister && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError('请输入有效的邮箱地址');
+        setLoading(false);
+        return;
+      }
       if (isRegister) {
         await auth.register(email, password, name);
       } else {
@@ -181,11 +187,11 @@ export default function LoginPage() {
             <div>
               <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">邮箱</label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="your@email.com"
+                placeholder={!isRegister ? "邮箱或 admin" : "your@email.com"}
                 className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
               />
             </div>
