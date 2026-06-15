@@ -37,6 +37,8 @@
 | 全局 API Key | `/admin/api-keys` | 🔑 | 配置平台级 LLM API Key |
 | 用户管理 | `/admin/users` | 👥 | 用户列表、搜索、查看详情 |
 | 额度管理 | `/admin/quota` | ⚡ | 批量调整额度 |
+| 黑名单 | `/admin/blacklist` | 🚫 | 封禁/解封用户 |
+| Token 成本 | `/admin/costs` | 💰 | LLM Token 成本追踪 |
 
 ## 3. 仪表盘 `/admin`
 
@@ -44,6 +46,7 @@
 - **总用户数** / 今日新增
 - **活跃用户**（7天内有请求）
 - **全局额度消耗**（今日/本月）
+- **LLM Token 成本**（今日/本月，美元估算）
 - **API 调用统计**（今日成功/失败次数）
 
 ### 用户分布
@@ -51,10 +54,15 @@
 - **学习语言分布**：source_lang 统计（用户主要学什么语言）
 - **目标语言分布**：target_lang 统计（用户翻译成什么语言）
 
+### 成本概览
+- **平均每用户成本**（本月）
+- **Top 10 成本用户**（本月，显示邮箱和 token 消耗量）
+
 ### 数据来源
 - 从 users 表聚合用户统计
 - 从 history 表聚合语言分布
 - 从 admin_logs 表聚合额度消耗
+- 从 token_usage 表聚合成本数据
 
 ## 4. 全局 API Key `/admin/api-keys`
 
@@ -115,7 +123,73 @@
 - 详情（调整前后值）
 - 时间戳
 
-## 7. 后端 API
+## 7. 黑名单 `/admin/blacklist`
+
+### 功能
+- **黑名单列表**：显示所有被封禁用户（邮箱、名称、封禁原因、封禁时间）
+- **添加到黑名单**：输入用户邮箱或从用户列表中点击「封禁」，填写封禁原因
+- **移出黑名单**：点击「解封」按钮，确认后移出
+- **封禁效果**：黑名单用户登录后无法调用任何需要额度的 API（process-text 等），返回 403 "账号已被封禁"
+
+### 数据存储
+在 users 表新增 `banned` 和 `banned_reason` 列：
+```sql
+ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN banned_reason TEXT;
+```
+
+### 封禁检查
+在 `require_auth` 依赖中增加封禁检查：如果用户 `banned == 1`，返回 403。
+
+## 8. Token 成本追踪 `/admin/costs`
+
+### 功能
+- **成本概览卡片**：今日 Token 成本、本月 Token 成本（美元估算）
+- **平均每用户成本**：本月总成本 / 活跃用户数
+- **Top 10 成本用户**：表格显示邮箱、prompt tokens、completion tokens、总 tokens、估算成本
+- **成本趋势图**：最近 7 天/30 天的每日成本折线图
+- **按模型分布**：各模型的 token 消耗占比
+
+### 数据采集
+每次 LLM API 调用后，记录 token 使用量到 `token_usage` 表。从 LLM API 响应的 `usage` 字段提取：
+- `prompt_tokens`
+- `completion_tokens`
+- `total_tokens`
+
+### 成本估算
+使用模型对应的价格表估算美元成本（内置常见模型价格，admin 可在设置中自定义价格）：
+```
+gpt-4o:        $2.50/1M input, $10.00/1M output
+gpt-4o-mini:   $0.15/1M input, $0.60/1M output
+claude-sonnet:  $3.00/1M input, $15.00/1M output
+...
+```
+
+### 数据存储
+新增 `token_usage` 表：
+```sql
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    request_type TEXT,              -- 'process_text', 'translate', 'generate', 'word_detail' 等
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+### 采集时机
+在以下位置插入 token 记录逻辑：
+- `text_processing.py` 的 `_preprocess_and_run`：翻译/生成/文本处理
+- `vocabulary.py` 的单词详情生成
+- `settings.py` 的 UI 翻译
+
+每次 LLM 调用后，从响应的 `usage` 字段提取 token 数据并写入 `token_usage` 表。
+
+## 9. 后端 API
 
 新增 `backend/routers/admin.py`，所有端点使用 `require_admin` 守卫：
 
@@ -134,10 +208,16 @@ GET  /api/admin/users/:id/favorites — 用户收藏单词
 GET  /api/admin/users/:id/preferences — 用户偏好
 GET  /api/admin/users/:id/word-list — 用户单词总览
 POST /api/admin/quota/batch        — 批量调整额度
+GET  /api/admin/blacklist          — 黑名单列表
+POST /api/admin/blacklist          — 添加到黑名单（email + reason）
+DELETE /api/admin/blacklist/:user_id — 移出黑名单
+GET  /api/admin/costs              — Token 成本概览（今日/本月/avg/top10）
+GET  /api/admin/costs/trend        — 成本趋势（7天/30天每日）
+GET  /api/admin/costs/by-model     — 按模型分布
 GET  /api/admin/logs               — 操作日志（分页）
 ```
 
-## 8. 数据存储
+## 10. 数据存储
 
 ### 新增表：admin_logs
 ```sql
@@ -149,6 +229,27 @@ CREATE TABLE IF NOT EXISTS admin_logs (
     details TEXT,                  -- JSON 详情
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+```
+
+### 新增表：token_usage
+```sql
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    request_type TEXT,              -- 'process_text', 'translate', 'generate', 'word_detail' 等
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+### users 表新增列
+```sql
+ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN banned_reason TEXT;
 ```
 
 ### 复用存储
@@ -168,6 +269,8 @@ frontend/src/
 │   ├── AdminUsers.jsx         — 用户列表
 │   ├── AdminUserDetail.jsx    — 用户详情
 │   ├── AdminQuota.jsx         — 额度批量管理
+│   ├── AdminBlacklist.jsx     — 黑名单管理
+│   ├── AdminCosts.jsx         — Token 成本追踪
 │   └── AdminLogs.jsx          — 操作日志
 ```
 
@@ -180,6 +283,8 @@ frontend/src/
   <Route path="users" element={<AdminUsers />} />
   <Route path="users/:id" element={<AdminUserDetail />} />
   <Route path="quota" element={<AdminQuota />} />
+  <Route path="blacklist" element={<AdminBlacklist />} />
+  <Route path="costs" element={<AdminCosts />} />
 </Route>
 ```
 
@@ -192,3 +297,5 @@ Admin 页面使用 `React.lazy` 懒加载，不影响主应用包体积。
 - Admin 密码通过环境变量配置，不硬编码在生产环境
 - 批量操作有确认弹窗和操作日志
 - 用户详情页为只读查看，不能代替用户操作
+- 黑名单用户在 `require_auth` 层即被拦截，无法调用任何受保护 API
+- Token 成本数据只记录使用全局 API Key 的调用，用户自带 Key 的调用不记录
