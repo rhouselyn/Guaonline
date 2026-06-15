@@ -91,8 +91,12 @@ export default function LoginPage() {
         navigate('/learn');
       }
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      setError(detail || (isRegister ? '注册失败' : '登录失败'));
+      if (err.response?.status === 403) {
+        setError(err.response?.data?.detail || '账号已被封禁');
+      } else {
+        const detail = err.response?.data?.detail;
+        setError(detail || (isRegister ? '注册失败' : '登录失败'));
+      }
     } finally {
       setLoading(false);
     }

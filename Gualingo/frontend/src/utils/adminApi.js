@@ -28,10 +28,11 @@ export const adminApi = {
     return response.data;
   },
 
-  getUsers: async (page = 1, search = '', tier = '', sort = 'created_at', order = 'desc') => {
+  getUsers: async (page = 1, search = '', tier = '', status = '', sort = 'created_at', order = 'desc') => {
     const params = { page, page_size: 20, sort, order };
     if (search) params.search = search;
     if (tier) params.tier = tier;
+    if (status) params.status = status;
     const response = await axios.get(`${baseUrl}/api/admin/users`, { params });
     return response.data;
   },
@@ -48,6 +49,36 @@ export const adminApi = {
 
   adjustUserQuota: async (userId, action, value) => {
     const response = await axios.put(`${baseUrl}/api/admin/users/${userId}/quota`, { action, value });
+    return response.data;
+  },
+
+  banUser: async (userId, reason = '') => {
+    const response = await axios.post(`${baseUrl}/api/admin/users/${userId}/ban`, { reason });
+    return response.data;
+  },
+
+  unbanUser: async (userId) => {
+    const response = await axios.post(`${baseUrl}/api/admin/users/${userId}/unban`);
+    return response.data;
+  },
+
+  deleteUser: async (userId) => {
+    const response = await axios.delete(`${baseUrl}/api/admin/users/${userId}`);
+    return response.data;
+  },
+
+  batchBan: async (userIds, reason = '') => {
+    const response = await axios.post(`${baseUrl}/api/admin/users/batch-ban`, { user_ids: userIds, reason });
+    return response.data;
+  },
+
+  batchUnban: async (userIds) => {
+    const response = await axios.post(`${baseUrl}/api/admin/users/batch-unban`, { user_ids: userIds });
+    return response.data;
+  },
+
+  batchDelete: async (userIds) => {
+    const response = await axios.post(`${baseUrl}/api/admin/users/batch-delete`, { user_ids: userIds });
     return response.data;
   },
 

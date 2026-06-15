@@ -1,6 +1,26 @@
 import { useState, useEffect } from 'react'
 import { adminApi } from '../../utils/adminApi'
 
+const BarChart = ({ title, data, colors = {} }) => {
+  const maxVal = Math.max(...Object.values(data), 1)
+  return (
+    <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
+      <h3 className="text-[#c9a96e] font-bold mb-3">{title}</h3>
+      <div className="space-y-2">
+        {Object.entries(data).map(([key, val]) => (
+          <div key={key} className="flex items-center gap-2">
+            <span className="text-[#e8d5b7] text-sm w-16 text-right">{key}</span>
+            <div className="flex-1 bg-[#1a1a2e] rounded h-5 overflow-hidden">
+              <div className="h-full rounded" style={{ width: `${(val/maxVal)*100}%`, backgroundColor: colors[key] || '#c9a96e' }} />
+            </div>
+            <span className="text-[#e8d5b7] text-sm w-8">{val}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -34,30 +54,9 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
-          <h3 className="text-[#c9a96e] font-bold mb-3">Tier 分布</h3>
-          {Object.entries(data.tier_distribution || {}).map(([tier, count]) => (
-            <div key={tier} className="flex justify-between text-[#e8d5b7] text-sm mb-1">
-              <span>{tier}</span><span>{count}</span>
-            </div>
-          ))}
-        </div>
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
-          <h3 className="text-[#c9a96e] font-bold mb-3">学习语言分布</h3>
-          {Object.entries(data.source_lang_distribution || {}).slice(0, 8).map(([lang, count]) => (
-            <div key={lang} className="flex justify-between text-[#e8d5b7] text-sm mb-1">
-              <span>{lang}</span><span>{count}</span>
-            </div>
-          ))}
-        </div>
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
-          <h3 className="text-[#c9a96e] font-bold mb-3">目标语言分布</h3>
-          {Object.entries(data.target_lang_distribution || {}).slice(0, 8).map(([lang, count]) => (
-            <div key={lang} className="flex justify-between text-[#e8d5b7] text-sm mb-1">
-              <span>{lang}</span><span>{count}</span>
-            </div>
-          ))}
-        </div>
+        <BarChart title="Tier 分布" data={data.tier_distribution || {}} colors={{ free: '#6b7280', basic: '#3b82f6', pro: '#a855f7' }} />
+        <BarChart title="学习语言分布" data={data.source_lang_distribution || {}} />
+        <BarChart title="目标语言分布" data={data.target_lang_distribution || {}} />
       </div>
 
       {data.top_cost_users?.length > 0 && (

@@ -84,10 +84,13 @@ async def register(user_data: UserCreate):
 @router.post("/login", response_model=Token)
 async def login(user_data: UserLogin):
     conn = _get_conn()
-    row = conn.execute("SELECT id, password_hash, tier FROM users WHERE email = ?", (user_data.email,)).fetchone()
+    row = conn.execute("SELECT id, password_hash, tier, banned, banned_reason FROM users WHERE email = ?", (user_data.email,)).fetchone()
     conn.close()
     if not row or not _verify_password(user_data.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    if row["banned"]:
+        reason = row["banned_reason"] or "账号已被封禁"
+        raise HTTPException(status_code=403, detail=f"账号已被封禁：{reason}")
     return create_tokens(row["id"], UserTier(row["tier"]))
 
 
@@ -97,10 +100,13 @@ async def refresh_token(refresh_token: str):
     if token_data is None:
         raise HTTPException(status_code=401, detail="无效的刷新令牌")
     conn = _get_conn()
-    row = conn.execute("SELECT tier FROM users WHERE id = ?", (token_data.user_id,)).fetchone()
+    row = conn.execute("SELECT tier, banned, banned_reason FROM users WHERE id = ?", (token_data.user_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=401, detail="用户不存在")
+    if row["banned"]:
+        reason = row["banned_reason"] or "账号已被封禁"
+        raise HTTPException(status_code=403, detail=f"账号已被封禁：{reason}")
     return create_tokens(token_data.user_id, UserTier(row["tier"]))
 
 

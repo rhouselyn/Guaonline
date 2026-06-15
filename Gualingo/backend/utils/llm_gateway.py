@@ -25,7 +25,7 @@ def _load_global_settings() -> dict:
         with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"request_interval": 1.0, "batch_size": 3}
+        return {"request_interval": 0.1, "batch_size": 5}
 
 
 class TierKeyPool:

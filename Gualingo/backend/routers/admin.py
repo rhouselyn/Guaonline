@@ -171,6 +171,7 @@ async def list_users(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     tier: Optional[str] = None,
+    status: Optional[str] = None,
     sort: str = Query("created_at", pattern="^(created_at|quota_used|name)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     admin: AdminTokenData = Depends(require_admin),
@@ -184,6 +185,10 @@ async def list_users(
     if tier:
         conditions.append("tier = ?")
         params.append(tier)
+    if status == "banned":
+        conditions.append("banned = 1")
+    elif status == "active":
+        conditions.append("banned = 0")
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     order_clause = f"ORDER BY {sort} {order.upper()}"
@@ -202,6 +207,130 @@ async def list_users(
         "page_size": page_size,
         "users": [dict(r) for r in rows],
     }
+
+
+# ── 批量用户操作（必须在 /users/{user_id} 之前注册） ────────
+
+class BanRequest(BaseModel):
+    reason: str = ""
+
+
+class BatchBanRequest(BaseModel):
+    user_ids: List[str]
+    reason: str = ""
+
+
+class BatchUnbanRequest(BaseModel):
+    user_ids: List[str]
+
+
+class BatchDeleteRequest(BaseModel):
+    user_ids: List[str]
+
+
+@router.post("/users/batch-ban")
+async def batch_ban_users(req: BatchBanRequest, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    for uid in req.user_ids:
+        conn.execute("UPDATE users SET banned = 1, banned_reason = ? WHERE id = ?", (req.reason, uid))
+    conn.commit()
+    conn.close()
+    _log_action("batch_ban", "user", None, {"count": len(req.user_ids), "reason": req.reason})
+    return {"status": "ok", "affected": len(req.user_ids)}
+
+
+@router.post("/users/batch-unban")
+async def batch_unban_users(req: BatchUnbanRequest, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    for uid in req.user_ids:
+        conn.execute("UPDATE users SET banned = 0, banned_reason = NULL WHERE id = ?", (uid,))
+    conn.commit()
+    conn.close()
+    _log_action("batch_unban", "user", None, {"count": len(req.user_ids)})
+    return {"status": "ok", "affected": len(req.user_ids)}
+
+
+@router.post("/users/batch-delete")
+async def batch_delete_users(req: BatchDeleteRequest, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    for uid in req.user_ids:
+        conn.execute("DELETE FROM users WHERE id = ?", (uid,))
+    conn.commit()
+    conn.close()
+    # 清理用户数据
+    try:
+        from db_storage import DatabaseStorage
+        storage = DatabaseStorage()
+        for uid in req.user_ids:
+            records = storage.load_history(user_id=uid)
+            for record in records:
+                file_id = record.get("file_id")
+                if file_id:
+                    storage.delete_history_record(file_id)
+            conn2 = storage._get_conn()
+            conn2.execute("DELETE FROM user_preferences WHERE user_id = ?", (uid,))
+            conn2.execute("DELETE FROM favorite_words WHERE user_id = ?", (uid,))
+            conn2.commit()
+    except Exception as e:
+        print(f"[WARN] 批量清理用户数据失败: {e}")
+    _log_action("batch_delete", "user", None, {"count": len(req.user_ids)})
+    return {"status": "ok", "affected": len(req.user_ids)}
+
+
+@router.post("/users/{user_id}/ban")
+async def ban_user(user_id: str, req: BanRequest, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="用户不存在")
+    conn.execute("UPDATE users SET banned = 1, banned_reason = ? WHERE id = ?", (req.reason, user_id))
+    conn.commit()
+    conn.close()
+    _log_action("ban_user", "user", user_id, {"reason": req.reason})
+    return {"status": "ok"}
+
+
+@router.post("/users/{user_id}/unban")
+async def unban_user(user_id: str, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    conn.execute("UPDATE users SET banned = 0, banned_reason = NULL WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    _log_action("unban_user", "user", user_id)
+    return {"status": "ok"}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    row = conn.execute("SELECT id, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="用户不存在")
+    # 删除用户记录
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    # 删除用户相关数据
+    try:
+        from db_storage import DatabaseStorage
+        storage = DatabaseStorage()
+        # 删除该用户的历史记录及关联数据
+        records = storage.load_history(user_id=user_id)
+        for record in records:
+            file_id = record.get("file_id")
+            if file_id:
+                storage.delete_history_record(file_id)
+        # 删除用户偏好
+        conn2 = storage._get_conn()
+        conn2.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
+        conn2.execute("DELETE FROM favorite_words WHERE user_id = ?", (user_id,))
+        conn2.commit()
+    except Exception as e:
+        print(f"[WARN] 清理用户数据失败: {e}")
+    _log_action("delete_user", "user", user_id, {"email": row["email"]})
+    return {"status": "ok"}
 
 
 @router.get("/users/{user_id}")
@@ -420,7 +549,7 @@ def _load_global_settings() -> dict:
         with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"request_interval": 1.0, "batch_size": 3}
+        return {"request_interval": 0.1, "batch_size": 5}
 
 
 def _save_global_settings(data: dict):

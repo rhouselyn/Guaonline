@@ -9,6 +9,9 @@ export default function AdminApiKeys() {
   const [editing, setEditing] = useState({})
   const [testing, setTesting] = useState(null)
   const [testResult, setTestResult] = useState(null)
+  const [interval, setInterval_] = useState(0.1)
+  const [batchSize, setBatchSize] = useState(5)
+  const [settingsSaved, setSettingsSaved] = useState(false)
 
   useEffect(() => {
     adminApi.getApiKeys().then(data => {
@@ -23,7 +26,17 @@ export default function AdminApiKeys() {
       }
       setEditing(ed)
     })
+    adminApi.getGlobalSettings().then(data => {
+      setInterval_(data.request_interval ?? 0.1)
+      setBatchSize(data.batch_size ?? 5)
+    })
   }, [])
+
+  const saveSettings = async () => {
+    await adminApi.updateGlobalSettings({ request_interval: interval, batch_size: batchSize })
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2000)
+  }
 
   const addConfig = (tier) => {
     setEditing(prev => ({
@@ -82,6 +95,38 @@ export default function AdminApiKeys() {
   return (
     <div>
       <h2 className="text-2xl font-bold text-[#c9a96e] mb-6">全局 API Key 管理</h2>
+
+      {/* 全局设置 */}
+      <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20 mb-6">
+        <h3 className="text-[#c9a96e] font-bold mb-3">全局设置</h3>
+        <div className="flex gap-8 items-end">
+          <div className="flex-1">
+            <label className="text-[#e8d5b7]/60 text-sm block mb-1">请求间隔（秒）</label>
+            <div className="flex items-center gap-3">
+              <input type="range" min={0.01} max={10} step={0.01} value={interval}
+                onChange={e => setInterval_(Number(e.target.value))} className="flex-1" />
+              <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{interval.toFixed(2)}s</span>
+            </div>
+            <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
+              <span>0.01s</span><span>10s</span>
+            </div>
+          </div>
+          <div className="flex-1">
+            <label className="text-[#e8d5b7]/60 text-sm block mb-1">并发批大小</label>
+            <div className="flex items-center gap-3">
+              <input type="range" min={1} max={100} step={1} value={batchSize}
+                onChange={e => setBatchSize(Number(e.target.value))} className="flex-1" />
+              <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{batchSize}</span>
+            </div>
+            <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
+              <span>1</span><span>100</span>
+            </div>
+          </div>
+          <button onClick={saveSettings} className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">
+            {settingsSaved ? '已保存' : '保存设置'}
+          </button>
+        </div>
+      </div>
 
       <div className="flex gap-2 mb-6">
         {TIERS.map(tier => (
