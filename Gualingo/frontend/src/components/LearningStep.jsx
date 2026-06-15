@@ -54,7 +54,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-3xl mx-auto relative"
+      className="max-w-3xl mx-auto"
     >
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={onBack}
-            className="flex items-center gap-2 btn-ghost retro-btn"
+            className="flex items-center gap-2 btn-ghost"
           >
             <ArrowLeft className="w-4 h-4" />
             {t.back}
@@ -70,7 +70,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
         </div>
         <div className="flex items-center gap-3">
           {totalItemsInUnit > 0 && (
-            <span className="text-sm text-amber-500 font-bold">
+            <span className="text-sm text-ink-500 font-medium">
               {(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}
             </span>
           )}
@@ -79,7 +79,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               onClick={onOpenVocabList}
-              className="flex items-center gap-2 btn-ghost retro-btn"
+              className="flex items-center gap-2 btn-ghost"
             >
               <BookOpen className="w-4 h-4" />
               {t.vocabList || '单词表'}
@@ -95,15 +95,14 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="retro-card retro-corners p-8 overflow-hidden"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm"
           >
-            <div className="absolute inset-0 dotted-bg opacity-[0.03] pointer-events-none rounded-md" />
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-2">
                 <motion.h2
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-4xl font-bold font-serif text-ink-800"
+                  className="text-4xl font-bold font-display text-ink-700"
                 >
                   {learningData.word}
                 </motion.h2>
@@ -130,8 +129,6 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               )}
             </div>
 
-            <div className="retro-divider mb-6" />
-
             <div className="grid grid-cols-2 gap-3">
               {learningData.options.map((option, index) => (
                 <motion.button
@@ -143,7 +140,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   whileTap={{ scale: 0.98 }}
                   onClick={() => onOptionSelect(index)}
                   disabled={selectedOption !== null && isCorrect}
-                  className={`w-full py-3 px-4 text-left rounded-sm transition-all shadow-retro-sm ${selectedOption === index ? (isCorrect ? 'bg-olive-50 border-2 border-olive-400 text-olive-500 shadow-retro' : 'bg-rust-50 border-2 border-rust-400 text-rust-400') : 'border-2 border-aged-200 bg-parchment-50 text-ink-800 hover:border-amber-300 hover:shadow-retro'}`}
+                  className={`w-full py-3 px-4 text-left rounded-sm transition-all ${selectedOption === index ? (isCorrect ? 'bg-olive-50 border-2 border-olive-400 text-olive-500' : 'bg-rust-50 border-2 border-rust-400 text-rust-400') : 'border-2 border-aged-200 bg-parchment-50 text-ink-800 hover:border-amber-300'}`}
                 >
                   <div className="flex items-center gap-3">
                     {selectedOption === index && isCorrect && (
@@ -163,16 +160,15 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="retro-card-highlight retro-corners p-8 overflow-hidden"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm"
           >
-            <div className="absolute inset-0 dotted-bg opacity-[0.03] pointer-events-none rounded-md" />
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between mb-8">
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <motion.h2
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-4xl font-bold font-serif text-ink-800"
+                    className="text-4xl font-bold font-display text-ink-700"
                   >
                     {learningData.word}
                   </motion.h2>
@@ -200,15 +196,13 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               </div>
             </div>
 
-            <div className="retro-divider mb-6" />
-
             <div className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
               >
-                <h3 className="text-sm font-bold font-serif text-ink-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-ink-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Brain className="w-4 h-4" />
                   {t.definition}
                 </h3>
@@ -223,7 +217,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <h3 className="text-sm font-bold font-serif text-ink-800 uppercase tracking-wider mb-3">
+                  <h3 className="text-sm font-bold text-ink-400 uppercase tracking-wider mb-3">
                     {t.context}
                   </h3>
                   <div className="flex items-start gap-2">
@@ -247,9 +241,9 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
-                  className="retro-card p-4"
+                  className="bg-amber-50 p-4 rounded-sm border-2 border-amber-200"
                 >
-                  <h4 className="retro-badge-amber mb-2">{t.contextMeaning || '上下文释义'}</h4>
+                  <h4 className="text-sm font-medium text-amber-500 mb-2">{t.contextMeaning || '上下文释义'}</h4>
                   <p className="text-ink-600">{learningData.meaning || learningData.context_meaning}</p>
                 </motion.div>
               )}
@@ -260,13 +254,13 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
                 >
-                  <h3 className="text-sm font-bold font-serif text-ink-800 uppercase tracking-wider mb-3">
+                  <h3 className="text-sm font-bold text-ink-400 uppercase tracking-wider mb-3">
                     {t.variants}
                   </h3>
                   <div className="space-y-2">
                     {learningData.variants_detail.map((variant, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <span className="retro-badge-ink">
+                        <span className="px-2 py-1 bg-parchment-100 text-ink-700 rounded text-sm font-medium">
                           {variant.type}
                         </span>
                         <span className="text-ink-700">{variant.form}</span>
@@ -282,12 +276,12 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                 >
-                  <h3 className="text-sm font-bold font-serif text-ink-800 uppercase tracking-wider mb-3">
+                  <h3 className="text-sm font-bold text-ink-400 uppercase tracking-wider mb-3">
                     {t.examples}
                   </h3>
                   <div className="space-y-4">
                     {learningData.examples.map((example, index) => (
-                      <div key={index} className="border-l-4 border-amber-400 pl-4">
+                      <div key={index} className="border-l-4 border-aged-300 pl-4">
                         <div className="flex items-start gap-2">
                           <p className="text-ink-800 mb-1 flex-1">{example.sentence}</p>
                           <motion.button
@@ -312,10 +306,10 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.35 }}
                 >
-                  <h3 className="text-sm font-bold font-serif text-ink-800 uppercase tracking-wider mb-3">
+                  <h3 className="text-sm font-bold text-ink-400 uppercase tracking-wider mb-3">
                     {t.memoryHint}
                   </h3>
-                  <p className="text-lg text-ink-600 leading-relaxed retro-card p-4">
+                  <p className="text-lg text-ink-600 leading-relaxed bg-amber-50 p-4 rounded-sm border-2 border-amber-200">
                     {learningData.memory_hint}
                   </p>
                 </motion.div>
@@ -330,7 +324,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               whileTap={{ scale: 0.99 }}
               onClick={onNextWord}
               disabled={loading}
-              className="mt-8 w-full py-4 btn-primary retro-btn disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="mt-8 w-full py-4 btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
