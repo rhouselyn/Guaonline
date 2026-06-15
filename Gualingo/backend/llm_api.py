@@ -4,7 +4,7 @@ import requests
 import asyncio
 from typing import List, Dict, Any
 from pathlib import Path
-from config import LLM_SETTINGS_FILE
+from config import LLM_SETTINGS_FILE, DATA_DIR
 
 
 def _repair_truncated_json(json_str):
@@ -239,7 +239,31 @@ def get_lang_name(code):
     return LANG_NAMES.get(code, code)
 
 
-async def call_with_rotation(messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096):
+async def call_with_rotation(messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096, tier: str = None):
+    # Tier-based Key 路由
+    if tier:
+        tier_config = get_tier_llm_config(tier)
+        if tier_config and tier_config.get("api_key"):
+            headers = {
+                "Authorization": f"Bearer {tier_config['api_key']}",
+                "Content-Type": "application/json",
+            }
+            base_url = tier_config.get("base_url", "https://api.openai.com/v1")
+            model = tier_config.get("model", "gpt-4o-mini")
+            url = f"{base_url.rstrip('/')}/chat/completions"
+            payload = {
+                "model": model,
+                "messages": messages,
+                **({"temperature": temperature} if temperature is not None else {}),
+                **({"max_tokens": max_tokens} if max_tokens is not None else {}),
+            }
+            import httpx
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    return resp.json()
+                # 失败则 fallback 到默认配置
+
     import time as _time
     settings = _load_settings()
     configs = settings.get("configs", [])
@@ -404,7 +428,7 @@ class LLMAPI:
                 result["choices"][0]["message"] = message
         return result
 
-    async def call_llm(self, messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096):
+    async def call_llm(self, messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096, user_id=None):
         import time as _time
         self.reload()
         payload = {
@@ -431,6 +455,14 @@ class LLMAPI:
             t1 = _time.time()
             has_tools = "yes" if tools else "no"
             print(f"[TIMING] call_llm (tools={has_tools}): {t1 - t0:.3f}s")
+            # 记录 token 使用量
+            if user_id and result and isinstance(result, dict) and result.get("usage"):
+                try:
+                    from utils.token_tracker import record_token_usage
+                    model_name = getattr(self, '_current_model', None) or "unknown"
+                    record_token_usage(user_id, model_name, result["usage"], "llm_call")
+                except Exception:
+                    pass
             return result
         except requests.exceptions.Timeout:
             print("API request timed out. Retrying...")
@@ -445,11 +477,19 @@ class LLMAPI:
             t1 = _time.time()
             has_tools = "yes" if tools else "no"
             print(f"[TIMING] call_llm retry (tools={has_tools}): {t1 - t0:.3f}s")
+            # 记录 token 使用量
+            if user_id and result and isinstance(result, dict) and result.get("usage"):
+                try:
+                    from utils.token_tracker import record_token_usage
+                    model_name = getattr(self, '_current_model', None) or "unknown"
+                    record_token_usage(user_id, model_name, result["usage"], "llm_call")
+                except Exception:
+                    pass
             return result
 
     @classmethod
-    async def call_with_rotation(cls, messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096):
-        return await call_with_rotation(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+    async def call_with_rotation(cls, messages: List[Dict], tools: List[Dict] = None, temperature: float = 0.0, max_tokens: int = 4096, tier: str = None):
+        return await call_with_rotation(messages, tools=tools, temperature=temperature, max_tokens=max_tokens, tier=tier)
 
     async def generate_multiple_choice(self, word: str, correct_meaning: str, context: str, target_lang: str, source_lang: str = "en", temperature: float = 0.7):
         tool_def = {
@@ -837,3 +877,84 @@ TEXT_CONTENT
         except Exception as e:
             print(f"Process remaining words failed: {e}")
             return []
+
+
+# ── Tier-based Key 池管理 ──────────────────────────────────
+
+TIER_KEYS_FILE = str(DATA_DIR / "tier_keys.json")
+
+
+def _load_tier_keys() -> dict:
+    """加载按 tier 分组的 API Key 配置。"""
+    try:
+        with open(TIER_KEYS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"tier_keys": {}}
+
+
+def _save_tier_keys(data: dict):
+    """保存按 tier 分组的 API Key 配置。"""
+    with open(TIER_KEYS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def get_tier_keys() -> dict:
+    """获取所有 tier 的 API Key 配置（脱敏）。"""
+    data = _load_tier_keys()
+    masked = {}
+    for tier, pool in data.get("tier_keys", {}).items():
+        configs = []
+        for cfg in pool.get("configs", []):
+            key = cfg.get("api_key", "")
+            if key and len(key) > 8:
+                masked_key = key[:4] + "*" * (len(key) - 8) + key[-4:]
+            else:
+                masked_key = "****" if key else ""
+            configs.append({
+                "api_key": masked_key,
+                "base_url": cfg.get("base_url", ""),
+                "model": cfg.get("model", ""),
+                "has_key": bool(key),
+            })
+        masked[tier] = {"configs": configs, "active_index": pool.get("active_index", 0)}
+    return masked
+
+
+def update_tier_keys(tier: str, configs: list, active_index: int = 0):
+    """更新指定 tier 的 API Key 配置。"""
+    data = _load_tier_keys()
+    if "tier_keys" not in data:
+        data["tier_keys"] = {}
+    # 保留已有未脱敏的 key
+    existing = data["tier_keys"].get(tier, {}).get("configs", [])
+    new_configs = []
+    for i, cfg in enumerate(configs):
+        key = cfg.get("api_key", "")
+        # 如果 key 是脱敏的（包含 *），保留原有的
+        if "*" in key and i < len(existing):
+            key = existing[i].get("api_key", key)
+        new_configs.append({
+            "api_key": key,
+            "base_url": cfg.get("base_url", ""),
+            "model": cfg.get("model", ""),
+        })
+    data["tier_keys"][tier] = {"configs": new_configs, "active_index": active_index}
+    _save_tier_keys(data)
+
+
+def get_tier_llm_config(tier: str) -> dict | None:
+    """获取指定 tier 的当前活跃 LLM 配置（未脱敏）。用于实际 API 调用。"""
+    data = _load_tier_keys()
+    pool = data.get("tier_keys", {}).get(tier)
+    if not pool or not pool.get("configs"):
+        return None
+    idx = pool.get("active_index", 0)
+    configs = pool["configs"]
+    if idx >= len(configs):
+        idx = 0
+    # 轮换：更新 active_index
+    next_idx = (idx + 1) % len(configs)
+    pool["active_index"] = next_idx
+    _save_tier_keys(data)
+    return configs[idx]

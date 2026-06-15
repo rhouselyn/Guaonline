@@ -45,6 +45,11 @@ export const auth = {
     return !!this.getAccessToken();
   },
 
+  isAdmin() {
+    const user = this.getUser();
+    return user?.role === 'admin';
+  },
+
   async login(email, password) {
     const response = await axios.post('/api/auth/login', { email, password });
     this.setTokens(response.data);
@@ -78,6 +83,17 @@ export const auth = {
     } catch {
       this.clearTokens();
       return null;
+    }
+  },
+
+  isAdmin() {
+    try {
+      const tokens = this.getTokens();
+      if (!tokens?.access_token) return false;
+      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
+      return payload.role === 'admin';
+    } catch {
+      return false;
     }
   },
 

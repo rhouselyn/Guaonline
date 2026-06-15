@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from auth.jwt_utils import decode_token
-from auth.models import TokenData, UserTier
+from auth.models import TokenData, UserTier, AdminTokenData
 
 security = HTTPBearer(auto_error=False)
 
@@ -28,4 +28,27 @@ async def require_auth(current_user: TokenData = Depends(get_current_user)) -> T
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="请先登录",
         )
+    # 封禁检查
+    from auth.router import _get_conn
+    try:
+        conn = _get_conn()
+        row = conn.execute("SELECT banned FROM users WHERE id = ?", (current_user.user_id,)).fetchone()
+        conn.close()
+        if row and row["banned"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被封禁")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     return current_user
+
+
+async def require_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AdminTokenData:
+    """要求 admin 角色。"""
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
+    from auth.jwt_utils import decode_admin_token
+    admin_data = decode_admin_token(credentials.credentials)
+    if admin_data is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+    return admin_data

@@ -1,0 +1,14 @@
+{
+  "tier_keys": {
+    "free": {
+      "configs": [
+        {
+          "api_key": "sk-test-free-key",
+          "base_url": "https://api.openai.com/v1",
+          "model": "gpt-4o-mini"
+        }
+      ],
+      "active_index": 0
+    }
+  }
+}

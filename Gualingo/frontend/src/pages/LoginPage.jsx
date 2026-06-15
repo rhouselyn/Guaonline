@@ -81,6 +81,10 @@ export default function LoginPage() {
       } else {
         await auth.login(email, password);
       }
+      if (auth.isAdmin()) {
+        window.location.href = '/admin';
+        return;
+      }
       navigate('/learn');
     } catch (err) {
       const detail = err.response?.data?.detail;

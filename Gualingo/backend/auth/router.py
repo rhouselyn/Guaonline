@@ -39,6 +39,17 @@ def _get_conn():
     # 确保旧表也有新列
     from auth.quota import _ensure_quota_columns
     _ensure_quota_columns(conn)
+    # 确保 banned 列存在
+    try:
+        cursor = conn.execute("PRAGMA table_info(users)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "banned" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
+        if "banned_reason" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN banned_reason TEXT")
+        conn.commit()
+    except Exception:
+        pass
     return conn
 
 

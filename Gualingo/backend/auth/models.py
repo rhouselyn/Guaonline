@@ -49,3 +49,7 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     user_id: str
     tier: UserTier = UserTier.free
+
+
+class AdminTokenData(BaseModel):
+    role: str = "admin"
