@@ -1,0 +1,16 @@
+{
+  "tier_keys": {
+    "free": {
+      "configs": [
+        {
+          "api_key": "sk-tszhvcglvfqiivwqqtqwkxmxsneyuymjjywtfxteofmfvkct",
+          "base_url": "https://api.siliconflow.cn/v1",
+          "model": "Qwen/Qwen3.6-27B",
+          "input_price_per_million": 100,
+          "output_price_per_million": 100
+        }
+      ],
+      "active_index": 0
+    }
+  }
+}

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from config import DATA_DIR, CONFIG_DIR, USER_PREFS_FILE
+from config import DATA_DIR
 
 
 class DatabaseStorage:
@@ -151,6 +151,7 @@ class DatabaseStorage:
 
             CREATE TABLE IF NOT EXISTS history (
                 file_id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT,
                 title TEXT NOT NULL DEFAULT '',
                 source_lang TEXT NOT NULL DEFAULT 'en',
                 target_lang TEXT NOT NULL DEFAULT 'zh',
@@ -174,16 +175,25 @@ class DatabaseStorage:
             );
 
             CREATE TABLE IF NOT EXISTS user_preferences (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
+                user_id TEXT NOT NULL,
                 prefs TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id)
             );
 
             CREATE TABLE IF NOT EXISTS favorite_words (
+                user_id TEXT NOT NULL,
                 word TEXT NOT NULL,
                 source_lang TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                PRIMARY KEY (word, source_lang)
+                PRIMARY KEY (user_id, word, source_lang)
+            );
+
+            CREATE TABLE IF NOT EXISTS ui_translations (
+                lang_code TEXT NOT NULL,
+                translations TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (lang_code)
             );
         """)
         conn.commit()
@@ -327,7 +337,31 @@ class DatabaseStorage:
             conn.execute("DELETE FROM language_word_index WHERE source_lang = ? AND word_lower = ?",
                          (source_lang, word_lower))
             conn.commit()
-            return None
+
+        # 索引未命中或过期，直接搜索 word_cache 表（通过 language_settings 关联 source_lang）
+        row = conn.execute(
+            "SELECT wc.word_info FROM word_cache wc "
+            "JOIN language_settings ls ON wc.file_id = ls.file_id "
+            "WHERE ls.source_lang = ? AND wc.word = ?",
+            (source_lang, word_lower)
+        ).fetchone()
+        if row:
+            data = json.loads(row["word_info"])
+            cached_word = data.get("word", "").lower()
+            if cached_word == word_lower:
+                # 修复索引：将找到的 file_id 更新到索引中
+                file_id = None
+                fid_row = conn.execute(
+                    "SELECT wc.file_id FROM word_cache wc "
+                    "JOIN language_settings ls ON wc.file_id = ls.file_id "
+                    "WHERE ls.source_lang = ? AND wc.word = ? LIMIT 1",
+                    (source_lang, word_lower)
+                ).fetchone()
+                if fid_row:
+                    file_id = fid_row["file_id"]
+                    self.add_word_to_language_index(source_lang, word, file_id, overwrite=True)
+                return data
+
         return None
 
     # ── language_settings ──────────────────────────────────
@@ -558,9 +592,25 @@ class DatabaseStorage:
 
     # ── history ────────────────────────────────────────────
 
-    def load_history(self) -> List[Dict]:
+    def load_history(self, user_id: str = None) -> List[Dict]:
         conn = self._get_conn()
-        rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC").fetchall()
+        # 确保 user_id 列存在（兼容旧数据库）
+        try:
+            cursor = conn.execute("PRAGMA table_info(history)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE history ADD COLUMN user_id TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
+        if user_id:
+            rows = conn.execute(
+                "SELECT * FROM history WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC").fetchall()
         if rows:
             return [dict(row) for row in rows]
         return []
@@ -578,17 +628,27 @@ class DatabaseStorage:
             )
         conn.commit()
 
-    def add_history_record(self, file_id: str, title: str, source_lang: str, target_lang: str, text_preview: str):
+    def add_history_record(self, file_id: str, title: str, source_lang: str, target_lang: str, text_preview: str, user_id: str = None):
         now = datetime.datetime.now().isoformat()
         conn = self._get_conn()
+        # 确保 user_id 列存在
+        try:
+            cursor = conn.execute("PRAGMA table_info(history)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE history ADD COLUMN user_id TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
         conn.execute(
-            "INSERT OR IGNORE INTO history (file_id, title, source_lang, target_lang, text_preview, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (file_id, title, source_lang, target_lang, text_preview, now)
+            "INSERT OR IGNORE INTO history (file_id, user_id, title, source_lang, target_lang, text_preview, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (file_id, user_id, title, source_lang, target_lang, text_preview, now)
         )
         conn.commit()
         record = {
-            "file_id": file_id, "title": title, "source_lang": source_lang,
+            "file_id": file_id, "user_id": user_id, "title": title, "source_lang": source_lang,
             "target_lang": target_lang, "text_preview": text_preview, "created_at": now
         }
         return record
@@ -669,59 +729,139 @@ class DatabaseStorage:
 
     # ── user_preferences ───────────────────────────────────
 
-    def save_user_preferences(self, prefs: Dict):
+    def save_user_preferences(self, prefs: Dict, user_id: str = None):
         conn = self._get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO user_preferences (id, prefs, updated_at) VALUES (1, ?, datetime('now'))",
-            (json.dumps(prefs, ensure_ascii=False),)
-        )
+        # 兼容旧表结构
+        self._ensure_prefs_user_id(conn)
+        if user_id:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_preferences (user_id, prefs, updated_at) VALUES (?, ?, datetime('now'))",
+                (user_id, json.dumps(prefs, ensure_ascii=False))
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_preferences (user_id, prefs, updated_at) VALUES ('__default__', ?, datetime('now'))",
+                (json.dumps(prefs, ensure_ascii=False),)
+            )
         conn.commit()
 
-    def load_user_preferences(self) -> Dict:
+    def load_user_preferences(self, user_id: str = None) -> Dict:
         conn = self._get_conn()
-        row = conn.execute("SELECT prefs FROM user_preferences WHERE id = 1").fetchone()
+        self._ensure_prefs_user_id(conn)
+        uid = user_id or "__default__"
+        row = conn.execute("SELECT prefs FROM user_preferences WHERE user_id = ?", (uid,)).fetchone()
         if row:
-            data = json.loads(row["prefs"])
-            return data
-        return {"source_lang": "auto", "target_lang": "zh", "rpm": 60, "skip_listening": False}
+            return json.loads(row["prefs"])
+        return {"source_lang": "auto", "target_lang": "zh", "skip_listening": False, "only_new_words": False}
+
+    def _ensure_prefs_user_id(self, conn):
+        """兼容旧表：如果 user_preferences 没有 user_id 列则迁移。"""
+        try:
+            cursor = conn.execute("PRAGMA table_info(user_preferences)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE user_preferences RENAME TO user_preferences_old")
+                conn.execute("""CREATE TABLE user_preferences (
+                    user_id TEXT NOT NULL,
+                    prefs TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id)
+                )""")
+                conn.execute("INSERT OR IGNORE INTO user_preferences (user_id, prefs, updated_at) SELECT '__default__', prefs, updated_at FROM user_preferences_old")
+                conn.execute("DROP TABLE user_preferences_old")
+                conn.commit()
+        except Exception:
+            pass
 
     # ── favorite_words ─────────────────────────────────────
 
-    def add_favorite_word(self, word: str, source_lang: str):
+    def add_favorite_word(self, word: str, source_lang: str, user_id: str = None):
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         conn.execute(
-            "INSERT OR IGNORE INTO favorite_words (word, source_lang) VALUES (?, ?)",
-            (word, source_lang)
+            "INSERT OR IGNORE INTO favorite_words (user_id, word, source_lang) VALUES (?, ?, ?)",
+            (uid, word, source_lang)
         )
         conn.commit()
 
-    def remove_favorite_word(self, word: str, source_lang: str):
+    def remove_favorite_word(self, word: str, source_lang: str, user_id: str = None):
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         conn.execute(
-            "DELETE FROM favorite_words WHERE word = ? AND source_lang = ?",
-            (word, source_lang)
+            "DELETE FROM favorite_words WHERE user_id = ? AND word = ? AND source_lang = ?",
+            (uid, word, source_lang)
         )
         conn.commit()
 
-    def get_favorite_words(self, source_lang: str = None) -> List[str]:
+    def get_favorite_words(self, source_lang: str = None, user_id: str = None) -> List[str]:
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         if source_lang:
             rows = conn.execute(
-                "SELECT word FROM favorite_words WHERE source_lang = ? ORDER BY created_at DESC",
-                (source_lang,)
+                "SELECT word FROM favorite_words WHERE user_id = ? AND source_lang = ? ORDER BY created_at DESC",
+                (uid, source_lang)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT word FROM favorite_words ORDER BY created_at DESC"
+                "SELECT word FROM favorite_words WHERE user_id = ? ORDER BY created_at DESC",
+                (uid,)
             ).fetchall()
         return [row["word"] for row in rows]
 
-    def is_favorite_word(self, word: str, source_lang: str) -> bool:
+    def is_favorite_word(self, word: str, source_lang: str, user_id: str = None) -> bool:
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         row = conn.execute(
-            "SELECT 1 FROM favorite_words WHERE word = ? AND source_lang = ?",
-            (word, source_lang)
+            "SELECT 1 FROM favorite_words WHERE user_id = ? AND word = ? AND source_lang = ?",
+            (uid, word, source_lang)
         ).fetchone()
         return row is not None
 
-    
+    def _ensure_fav_user_id(self, conn):
+        """兼容旧表：如果 favorite_words 没有 user_id 列则迁移。"""
+        try:
+            cursor = conn.execute("PRAGMA table_info(favorite_words)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE favorite_words RENAME TO favorite_words_old")
+                conn.execute("""CREATE TABLE favorite_words (
+                    user_id TEXT NOT NULL,
+                    word TEXT NOT NULL,
+                    source_lang TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id, word, source_lang)
+                )""")
+                conn.execute("INSERT OR IGNORE INTO favorite_words (user_id, word, source_lang, created_at) SELECT '__default__', word, source_lang, created_at FROM favorite_words_old")
+                conn.execute("DROP TABLE favorite_words_old")
+                conn.commit()
+        except Exception:
+            pass
+
+    # ── ui_translations ───────────────────────────────────
+
+    def save_ui_translations(self, lang_code: str, translations: dict):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO ui_translations (lang_code, translations, updated_at) VALUES (?, ?, datetime('now'))",
+            (lang_code, json.dumps(translations, ensure_ascii=False))
+        )
+        conn.commit()
+
+    def load_ui_translations(self, lang_code: str) -> Optional[dict]:
+        conn = self._get_conn()
+        row = conn.execute("SELECT translations FROM ui_translations WHERE lang_code = ?", (lang_code,)).fetchone()
+        if row:
+            return json.loads(row["translations"])
+        return None
+
+    def get_all_ui_translation_langs(self) -> List[str]:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT lang_code FROM ui_translations ORDER BY lang_code").fetchall()
+        return [row["lang_code"] for row in rows]
+
+
+

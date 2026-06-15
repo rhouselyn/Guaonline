@@ -68,6 +68,12 @@ export const api = {
     return response.data;
   },
 
+  // 触发优先生成单词详情
+  priorityWordGen: async (fileId, word) => {
+    const response = await axios.post(`${baseUrl}/api/learn/${fileId}/priority-word-gen`, { word });
+    return response.data;
+  },
+
   // 获取学习进度和分组信息
   getLearningProgress: async (fileId) => {
     const response = await axios.get(`${baseUrl}/api/learn/${fileId}/progress`);
@@ -261,14 +267,4 @@ export const api = {
     const response = await axios.get(`${baseUrl}/api/favorites/check`, { word, source_lang: sourceLang });
     return response.data;
   },
-
-  checkForUpdates: async () => {
-    const response = await axios.get(`${baseUrl}/api/version-check`);
-    return response.data;
-  },
-
-  triggerAutoUpdate: async () => {
-    const response = await axios.post(`${baseUrl}/api/auto-update`);
-    return response.data;
-  }
 };

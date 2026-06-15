@@ -5,16 +5,20 @@ import time
 import asyncio
 import datetime
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 
 from llm_api import detect_language, get_lang_name
-from utils.state import llm_api, storage, processing_status
+from utils.llm_gateway import gateway
+from utils.state import storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title
+from auth.deps import get_current_user, require_auth, TokenData
+from auth.quota import check_and_refill_quota, consume_quota
+from vocab import global_vocab, user_vocab
 
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str):
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free"):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
         # 直接输入模式：原文就是用户输入的文本，立即保存
@@ -28,7 +32,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", **_preserve_tr}
             source_lang_name = get_lang_name(source_lang)
             target_lang_name = get_lang_name(target_lang)
-            llm_api.reload()
+            gateway.reload()
             messages = [
                 {
                     "role": "system",
@@ -36,7 +40,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await llm_api.call_llm(messages, temperature=0.3, max_tokens=4096)
+            response = await gateway.call(user_id, tier, messages, temperature=0.3, max_tokens=4096, request_type="translate")
             if "choices" in response and len(response["choices"]) > 0:
                 translated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if translated:
@@ -49,7 +53,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             _preserve_gen = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", **_preserve_gen}
             source_lang_name = get_lang_name(source_lang)
-            llm_api.reload()
+            gateway.reload()
             messages = [
                 {
                     "role": "system",
@@ -57,7 +61,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await llm_api.call_llm(messages, temperature=0.7, max_tokens=4096)
+            response = await gateway.call(user_id, tier, messages, temperature=0.7, max_tokens=4096, request_type="generate")
             if "choices" in response and len(response["choices"]) > 0:
                 generated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if generated:
@@ -79,27 +83,38 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 3. 更新语言设置和历史记录
         storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
-        app_settings = storage.load_user_preferences()
+        app_settings = storage.load_user_preferences(user_id=user_id)
         recent_langs = app_settings.get("recent_languages", [])
         if source_lang in recent_langs:
             recent_langs.remove(source_lang)
         recent_langs.insert(0, source_lang)
         recent_langs = recent_langs[:10]
         app_settings["recent_languages"] = recent_langs
-        storage.save_user_preferences(app_settings)
+        storage.save_user_preferences(app_settings, user_id=user_id)
 
         # 4. 生成标题
-        title = await generate_title(text, source_lang)
+        title = await generate_title(text, source_lang, user_id=user_id, tier=tier)
         # 更新 processing_status 中的标题
         if file_id in processing_status:
             processing_status[file_id]["title"] = title
 
         # 5. 执行文本处理
-        await process_text_background(file_id, text, source_lang, target_lang)
+        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)
 
         # 6. 处理成功后才写入历史记录
         text_preview = text.strip()[:100]
-        storage.add_history_record(file_id, title, source_lang, target_lang, text_preview)
+        storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
+
+        # 7. 写入词汇缓存（从处理结果中提取）
+        try:
+            file_data = storage.load_pipeline_data(file_id)
+            if file_data and "dictionary" in file_data:
+                words = file_data["dictionary"]
+                if isinstance(words, list):
+                    user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
+                    global_vocab.batch_upsert(words, source_lang, target_lang)
+        except Exception as e:
+            print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:
         print(f"[ERROR] 预处理或处理出错: {str(e)}")
         import traceback
@@ -120,9 +135,33 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         }
 
 
+# 每用户每分钟最高请求数
+_RATE_LIMIT_MAX = 3
+_rate_limit_store: dict = {}  # user_id -> [timestamp, ...]
+
+
+def _check_rate_limit(user_id: str) -> bool:
+    """检查用户是否超过限流。返回 True 表示允许，False 表示拒绝。"""
+    import time
+    now = time.time()
+    window = 60  # 60秒窗口
+    if user_id not in _rate_limit_store:
+        _rate_limit_store[user_id] = []
+    # 清理过期记录
+    _rate_limit_store[user_id] = [t for t in _rate_limit_store[user_id] if now - t < window]
+    if len(_rate_limit_store[user_id]) >= _RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[user_id].append(now)
+    return True
+
+
 @router.post("/process-text")
-async def process_text(request: dict, background_tasks: BackgroundTasks):
+async def process_text(request: dict, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_auth)):
     try:
+        # 限流检查
+        if not _check_rate_limit(current_user.user_id):
+            raise HTTPException(status_code=429, detail="rateLimitExceeded")
+
         text = request.get("text", "")
         source_lang = request.get("source_language", "en")
         target_lang = request.get("target_language", "en")
@@ -131,13 +170,40 @@ async def process_text(request: dict, background_tasks: BackgroundTasks):
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        # 检查 API Key 是否已配置
-        llm_api.reload()
-        if not llm_api.api_key:
-            raise HTTPException(status_code=400, detail="API Key 未配置，请先在设置中填写 API Key")
-
         now = datetime.datetime.now()
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
+
+        # 预估句子数并检查额度
+        from auth.quota import check_and_refill_quota
+        quota_info = check_and_refill_quota(current_user.user_id)
+        if quota_info["max"] != -1:  # 非无限额度
+            # 估算句子数
+            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
+            sentence_count = min(sentence_count, 50)
+            if quota_info["available"] < sentence_count:
+                # 获取用户界面语言对应的翻译
+                from db_storage import DatabaseStorage
+                db = DatabaseStorage()
+                prefs = db.load_user_preferences(user_id=current_user.user_id)
+                ui_lang = prefs.get("ui_lang", prefs.get("target_lang", "zh"))
+
+                # 从 UI 翻译缓存获取 quotaInsufficient 翻译
+                template = None
+                translations = db.load_ui_translations(ui_lang)
+                if translations:
+                    template = translations.get("quotaInsufficient")
+                # 回退到中文
+                if not template:
+                    from ui_translations import UI_TRANSLATION_SCHEMA
+                    schema = UI_TRANSLATION_SCHEMA.get("quotaInsufficient", {})
+                    template = schema.get(ui_lang) or schema.get("zh", "额度不足：需要 {0} 句，剩余 {1} 句")
+
+                detail = template.replace("{0}", str(sentence_count)).replace("{1}", str(quota_info["available"]))
+                raise HTTPException(status_code=402, detail=detail)
+
+            # 额度足够，立即扣减
+            from auth.quota import consume_quota
+            consume_quota(current_user.user_id, sentence_count)
 
         # 立即设置初始状态
         preprocess_label = ""
@@ -157,7 +223,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks):
         }
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
 
         return {
             "file_id": file_id,
@@ -190,7 +256,7 @@ async def detect_language_endpoint(request: dict):
 
 
 @router.post("/translate-text")
-async def translate_text(request: dict):
+async def translate_text(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         text = request.get("text", "")
         source_lang = request.get("source_language", "zh")
@@ -202,7 +268,7 @@ async def translate_text(request: dict):
         source_lang_name = get_lang_name(source_lang)
         target_lang_name = get_lang_name(target_lang)
 
-        llm_api.reload()
+        gateway.reload()
         messages = [
             {
                 "role": "system",
@@ -213,7 +279,7 @@ async def translate_text(request: dict):
                 "content": text
             }
         ]
-        response = await llm_api.call_llm(messages, temperature=0.3, max_tokens=4096)
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.3, max_tokens=4096, request_type="translate")
 
         translated_text = ""
         if "choices" in response and len(response["choices"]) > 0:
@@ -230,7 +296,7 @@ async def translate_text(request: dict):
 
 
 @router.post("/generate-text")
-async def generate_text(request: dict):
+async def generate_text(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         prompt = request.get("prompt", "")
         source_lang = request.get("source_language", "en")
@@ -241,7 +307,7 @@ async def generate_text(request: dict):
 
         source_lang_name = get_lang_name(source_lang)
 
-        llm_api.reload()
+        gateway.reload()
         messages = [
             {
                 "role": "system",
@@ -252,7 +318,7 @@ async def generate_text(request: dict):
                 "content": prompt
             }
         ]
-        response = await llm_api.call_llm(messages, temperature=0.7, max_tokens=4096)
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.7, max_tokens=4096, request_type="generate")
 
         generated_text = ""
         if "choices" in response and len(response["choices"]) > 0:

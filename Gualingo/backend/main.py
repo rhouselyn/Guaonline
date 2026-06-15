@@ -3,15 +3,13 @@
 职责：创建 FastAPI 应用、挂载 CORS 中间件、注册路由、启动事件、前端静态文件服务。
 """
 
-import json
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from llm_api import get_settings
-from config import UI_TRANSLATIONS_DIR, FRONTEND_DIR, HOST, PORT
-from utils.state import _ui_translation_cache, storage
+from config import FRONTEND_DIR, HOST, PORT
+from utils.state import storage
 
 # ── 创建应用 ──────────────────────────────────────────────
 app = FastAPI(title="少邻国 - Gualingo", version="1.0.0")
@@ -27,6 +25,8 @@ app.add_middleware(
 
 # ── 注册路由 ──────────────────────────────────────────────
 from routers import text_processing, learning, phases, vocabulary, history, settings, tts, favorites
+from auth.router import router as auth_router
+from routers.admin import router as admin_router
 
 app.include_router(text_processing.router)
 app.include_router(learning.router)
@@ -36,19 +36,13 @@ app.include_router(history.router)
 app.include_router(settings.router)
 app.include_router(tts.router)
 app.include_router(favorites.router)
+app.include_router(auth_router)
+app.include_router(admin_router)
 
 # ── 启动事件 ──────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    # Load existing translation files into cache
-    if UI_TRANSLATIONS_DIR.exists():
-        for cache_file in UI_TRANSLATIONS_DIR.glob("*.json"):
-            lang_code = cache_file.stem
-            try:
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    _ui_translation_cache[lang_code] = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
+    pass
 
 
 # ── 前端静态文件服务 ────────────────────────────────────────

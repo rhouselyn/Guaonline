@@ -2,11 +2,14 @@
 
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
+from auth.deps import require_auth, TokenData
 
-from utils.state import llm_api, storage
+from utils.llm_gateway import gateway
+from utils.state import storage
 from utils.helpers import fix_llm_options_result
+from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
 
@@ -22,10 +25,17 @@ async def get_vocab(file_id: str):
         else:
             vocab_list = []
 
+        language_settings = storage.load_language_settings(file_id)
+        source_lang = language_settings.get("source_lang", "en")
+
         enriched_list = []
         for entry in vocab_list:
             enriched_entry = dict(entry)
-            cached = storage.load_word_cache(file_id, entry.get("word", ""))
+            word = entry.get("word", "")
+            cached = storage.load_word_cache(file_id, word)
+            if not cached and word:
+                # 当前文件无缓存，查全局缓存
+                cached = storage.find_global_word_cache(word, source_lang)
             if cached:
                 if cached.get("enriched_meaning"):
                     enriched_entry["enriched_meaning"] = cached["enriched_meaning"]
@@ -56,15 +66,47 @@ async def get_sentences(file_id: str):
 
 
 @router.get("/word/{file_id}/{word}")
-async def get_word_details(file_id: str, word: str):
+async def get_word_details(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
     try:
         print(f"[DEBUG] 获取单词详情: {word}")
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
         target_lang = language_settings["target_lang"]
 
-        # 先检查缓存
+        # 1. 先检查当前文件的缓存
         cached_word = storage.load_word_cache(file_id, word)
+        if not cached_word:
+            # 2. 当前文件无缓存，查全局缓存
+            global_cached = storage.find_global_word_cache(word, source_lang)
+            if global_cached:
+                print(f"[DEBUG] 从全局缓存获取单词信息: {word}")
+                import copy
+                cached_word = copy.deepcopy(global_cached)
+                # 补充当前文件的 context_sentences
+                context_sents = []
+                sentences = storage.load_pipeline_data(file_id)
+                if sentences:
+                    try:
+                        word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+                    except re.error:
+                        word_pattern = re.compile(re.escape(word), re.IGNORECASE)
+                    for sent_idx, sentence_data in enumerate(sentences):
+                        if "sentence" in sentence_data:
+                            if word_pattern.search(sentence_data["sentence"]):
+                                translation = ""
+                                if "translation_result" in sentence_data:
+                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                                context_sents.append({
+                                    "sentence": sentence_data["sentence"],
+                                    "translation": translation,
+                                    "sentence_index": sent_idx
+                                })
+                if context_sents:
+                    cached_word["context_sentences"] = context_sents
+                    cached_word["context"] = context_sents[0]["sentence"]
+                # 保存到当前文件的缓存
+                storage.save_word_cache(file_id, word, cached_word)
+
         if cached_word:
             print(f"[DEBUG] 从缓存中获取单词信息: {word}")
             cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
@@ -73,12 +115,8 @@ async def get_word_details(file_id: str, word: str):
             placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
             if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
                 mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
-            if not mc_options:
-                print(f"[DEBUG] 缓存中 MC 选项为空或无效，清除缓存重新生成: {word}")
-                storage.delete_word_cache(file_id, word)
-                cached_word = None
-        if cached_word:
-            if "options" not in cached_word:
+
+            if "options" not in cached_word and mc_options:
                 options = []
                 correct_index = 0
                 for i, opt in enumerate(mc_options):
@@ -101,7 +139,10 @@ async def get_word_details(file_id: str, word: str):
             if needs_rebuild or not context_sents:
                 sentences = storage.load_pipeline_data(file_id)
                 if sentences:
-                    word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+                    try:
+                        word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+                    except re.error:
+                        word_pattern = re.compile(re.escape(word), re.IGNORECASE)
                     rebuilt = []
                     for sent_idx, sentence_data in enumerate(sentences):
                         if "sentence" in sentence_data:
@@ -144,7 +185,9 @@ async def get_word_details(file_id: str, word: str):
                     "vocab": vocab,
                     "priority_queue": [],
                     "task": None,
-                    "processing_words": set()
+                    "processing_words": set(),
+                    "user_id": current_user.user_id,
+                    "tier": current_user.tier.value,
                 }
             state = word_gen_state[file_id]
             state["vocab"] = vocab
@@ -153,7 +196,7 @@ async def get_word_details(file_id: str, word: str):
             if "plan_position" not in state:
                 state["plan_position"] = 0
 
-            await process_single_word_gen(file_id, word, vocab, source_lang, target_lang)
+            await process_single_word_gen(file_id, word, vocab, source_lang, target_lang, user_id=current_user.user_id, tier=current_user.tier.value)
 
             cached_word = storage.load_word_cache(file_id, word)
             if cached_word:
@@ -191,7 +234,9 @@ async def get_word_details(file_id: str, word: str):
                     "vocab": vocab,
                     "priority_queue": [word],
                     "task": asyncio.create_task(background_word_gen(file_id)),
-                    "processing_words": set()
+                    "processing_words": set(),
+                    "user_id": current_user.user_id,
+                    "tier": current_user.tier.value,
                 }
 
             for _ in range(60):
@@ -232,7 +277,7 @@ async def get_word_details(file_id: str, word: str):
 
 
 @router.post("/word-detail/regenerate")
-async def regenerate_word_detail(request: dict):
+async def regenerate_word_detail(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         word = request.get("word", "")
         source_lang = request.get("source_lang", "en")
@@ -240,7 +285,7 @@ async def regenerate_word_detail(request: dict):
         if not word:
             raise HTTPException(status_code=400, detail="Word is required")
 
-        records = storage.load_history()
+        records = storage.load_history(user_id=current_user.user_id)
         matching = [r for r in records if r.get("source_lang") == source_lang]
 
         for record in matching:
@@ -248,7 +293,8 @@ async def regenerate_word_detail(request: dict):
             if file_id:
                 storage.delete_word_cache(file_id, word)
 
-        options_result = await llm_api.generate_multiple_choice(
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word, "", "", target_lang, source_lang, 0.7
         )
         file_id = matching[0].get("file_id") if matching else None
@@ -282,7 +328,7 @@ async def regenerate_word_detail(request: dict):
 
 
 @router.post("/word/{file_id}/{word}/regenerate")
-async def regenerate_word_detail_by_file(file_id: str, word: str):
+async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
     try:
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
@@ -336,7 +382,8 @@ async def regenerate_word_detail_by_file(file_id: str, word: str):
                 correct_meaning = word_entry["context_meaning"]
 
         # Generate with temperature 0.7
-        options_result = await llm_api.generate_multiple_choice(
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word,
             correct_meaning,
             context,
@@ -388,9 +435,10 @@ async def regenerate_word_detail_by_file(file_id: str, word: str):
 
 
 @router.get("/word-detail")
-async def get_word_detail(word: str, source_lang: str = "en", target_lang: str = "en"):
+async def get_word_detail(word: str, source_lang: str = "en", target_lang: str = "en", current_user: TokenData = Depends(require_auth)):
     try:
-        records = storage.load_history()
+        # 1. 先查当前用户的个人缓存
+        records = storage.load_history(user_id=current_user.user_id)
         matching = [r for r in records if r.get("source_lang") == source_lang]
 
         for record in matching:
@@ -410,10 +458,30 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
                     "variants_detail": cached.get("variants_detail", []),
                 }
 
-        options_result = await llm_api.generate_multiple_choice(
+        # 2. 个人缓存未命中，查全局缓存
+        global_cached = storage.find_global_word_cache(word, source_lang)
+        if global_cached:
+            return {
+                "word": global_cached.get("word", word),
+                "ipa": global_cached.get("ipa", ""),
+                "meaning": global_cached.get("enriched_meaning", "") or global_cached.get("meaning", ""),
+                "enriched_meaning": global_cached.get("enriched_meaning", ""),
+                "part_of_speech": global_cached.get("morphology", ""),
+                "examples": global_cached.get("examples", []),
+                "memory_hint": global_cached.get("memory_hint", ""),
+                "variants_detail": global_cached.get("variants_detail", []),
+            }
+
+        # 3. 均未命中，调用 LLM 生成
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word, "", "", target_lang, source_lang, 0
         )
-        options_result = fix_llm_options_result(options_result, source_lang, file_id)
+
+        # 保存到当前用户的第一个匹配文件缓存
+        save_file_id = matching[0].get("file_id") if matching else None
+        if save_file_id:
+            options_result = fix_llm_options_result(options_result, source_lang, save_file_id)
 
         result = {
             "word": options_result.get("word", word),
@@ -426,17 +494,15 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
             "variants_detail": options_result.get("variants_detail", []),
         }
 
-        if matching:
-            file_id = matching[0].get("file_id")
-            if file_id:
-                cache_data = dict(options_result)
-                cache_data["word"] = options_result.get("word", word)
-                cache_data["meaning"] = options_result.get("enriched_meaning", "")
-                cache_data["context"] = ""
-                cache_data["context_sentences"] = []
-                cache_data["morphology"] = options_result.get("morphology", "")
-                cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
-                storage.save_word_cache(file_id, word, cache_data)
+        if save_file_id:
+            cache_data = dict(options_result)
+            cache_data["word"] = options_result.get("word", word)
+            cache_data["meaning"] = options_result.get("enriched_meaning", "")
+            cache_data["context"] = ""
+            cache_data["context_sentences"] = []
+            cache_data["morphology"] = options_result.get("morphology", "")
+            cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
+            storage.save_word_cache(save_file_id, word, cache_data)
 
         return result
     except Exception as e:
@@ -457,9 +523,9 @@ async def get_file_info(file_id: str):
 
 
 @router.get("/word-list")
-async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional[str] = None):
+async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional[str] = None, current_user: TokenData = Depends(require_auth)):
     try:
-        records = storage.load_history()
+        records = storage.load_history(user_id=current_user.user_id)
         if source_lang:
             filtered = []
             for r in records:

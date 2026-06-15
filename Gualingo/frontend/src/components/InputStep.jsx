@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
 
@@ -491,6 +492,7 @@ function ModeSelector({ mode, setMode, t }) {
 }
 
 function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
+  const navigate = useNavigate()
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
   // 记住非直接输入模式（翻译/生成）的语言选择，默认 en
@@ -536,21 +538,34 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
       </div>
 
       {/* Center content - brand logo and tagline */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 relative">
+        {/* 装饰性波点背景 */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
+          style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+        />
+
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex items-center gap-3 mb-3"
+          className="flex items-center gap-3 mb-3 cursor-pointer group relative"
+          onClick={() => navigate('/')}
+          title="返回首页"
         >
-          <div className="w-14 h-14 bg-amber-400 rounded-sm flex items-center justify-center shadow-retro-sm">
-            <FrogLogo size={32} />
+          <div className="w-16 h-16 bg-amber-400 rounded-md flex items-center justify-center shadow-retro border-2 border-amber-500 relative">
+            <FrogLogo size={36} />
+            {/* 角标装饰 */}
+            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-amber-600" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-amber-600" />
+            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-amber-600" />
+            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-amber-600" />
           </div>
           <div>
-            <h1 className="text-3xl font-display font-bold text-ink-800 leading-tight">
+            <h1 className="text-3xl font-display font-bold text-ink-800 leading-tight group-hover:text-amber-600 transition-colors"
+              style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
               {t.title || '呱邻国'}
             </h1>
-            <p className="text-sm text-ink-400">{t.subtitle || 'Gualingo'}</p>
+            <p className="text-sm text-ink-400 font-serif">{t.subtitle || 'Gualingo'}</p>
           </div>
         </motion.div>
         <motion.p
@@ -565,7 +580,12 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
 
       {/* Bottom area - input box */}
       <div className="w-full max-w-2xl mx-auto pb-4 px-4">
-        <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-sm shadow-retro overflow-hidden">
+        <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
+          {/* 角标装饰 */}
+          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
+          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
+          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
           {/* Mode tabs at top of input */}
           <div className="border-b border-aged-200/60 px-3 pt-2 pb-0">
             <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />

@@ -6,9 +6,11 @@ import random
 import asyncio
 import time
 
-from llm_api import get_settings, get_lang_name
+from llm_api import get_lang_name
 from text_processor import TextProcessor, BACKUP_VOCAB, BACKUP_VOCAB_BY_LANG, is_punctuation_only, is_source_lang_text, strip_edge_punctuation, NO_SPACE_LANGUAGES
-from utils.state import llm_api, text_processor, storage, processing_status, word_gen_state
+from utils.llm_gateway import gateway
+from utils.state import text_processor, storage, processing_status, word_gen_state
+from vocab import global_vocab, user_vocab
 from utils.helpers import (
     RateLimiter, vocab_sort_key, is_speaker_label, is_punctuation_only as _is_punct,
     get_translation_phrases, split_translation_to_phrases, select_key_tokens,
@@ -20,11 +22,375 @@ from utils.helpers import (
 )
 
 
-async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, rpm: int = 20):
+class _LLMApiShim:
+    """兼容旧 text_processor.process_translation(llm_api) 签名的适配器。"""
+    def __init__(self, user_id: str, tier: str):
+        self._user_id = user_id
+        self._tier = tier
+
+    async def process_text_with_dictionary(self, text, source_lang, target_lang, context_sentences=None):
+        return await _gateway_process_text_with_dictionary(
+            self._user_id, self._tier, text, source_lang, target_lang, context_sentences
+        )
+
+
+async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
+    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
+    source_lang_name = get_lang_name(source_lang)
+    target_lang_name = get_lang_name(target_lang)
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "process_text_with_dictionary",
+            "description": "同时处理文本拆解翻译和单词词典条目生成",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "string", "description": "原文文本（完全保留原始空格）"},
+                    "translation": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string", "description": "A single word or fixed multi-word expression from the source text. MUST NOT contain any punctuation marks (periods, commas, question marks, exclamation marks, colons, semicolons, or any language-specific punctuation). Punctuation does NOT belong to any token — it is completely discarded. Hyphens(-) and apostrophes(') must be preserved if they are internal parts of a word in that language. TOKENIZATION PRINCIPLE: Follow the natural word boundaries of the source language."},
+                                "phonetic": {"type": "string", "description": "Pronunciation of this word. Use the most commonly used and widely recognized pronunciation notation for the source language — this may be IPA, pinyin, romaji, or any other standard system that native speakers and learners would expect. For tonal languages, include tone information."},
+                                "morphology": {"type": "string", "description": "Meaning in TARGET_LANG based on the context - concise, just a few independent words, not a full sentence explanation"},
+                                "meaning": {"type": "string", "description": "Meaning in TARGET_LANG based on the context - concise, just a few independent words, not a full sentence explanation"},
+                            },
+                            "required": ["text", "phonetic", "morphology", "meaning"],
+                        },
+                    },
+                    "tokenized_translation": {"type": "string", "description": "完整自然的 TARGET_LANG 翻译，正常句子格式"},
+                    "translation_phrases": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "将 tokenized_translation 按目标语言的词（token）进行分词后的结果，用于翻译排序练习。必须至少拆分为2个片段",
+                    },
+                    "grammar_explanation": {"type": "string", "description": "整个文本的一个完整语法解释，用 TARGET_LANG"},
+                    "redundant_tokens": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "4个与原文相关的合理冗余tokens，用于测验目的，必须全部使用TARGET_LANG。每个冗余token必须是单个独立的词",
+                    },
+                },
+                "required": ["original", "translation", "tokenized_translation", "translation_phrases", "grammar_explanation", "redundant_tokens"],
+            },
+        },
+    }]
+
+    context_section = ""
+    if context_sentences:
+        before = context_sentences.get("before", [])
+        after = context_sentences.get("after", [])
+        parts = []
+        if before:
+            parts.append("前文：\n" + "\n".join(before))
+        if after:
+            parts.append("后文：\n" + "\n".join(after))
+        if parts:
+            context_section = "\n【上下文】\n" + "\n".join(parts) + "\n"
+
+    system_prompt = f"""处理以下 {source_lang_name} 文本，并翻译成 {target_lang_name}。
+
+【非常非常重要的说明！！！】
+1. 所有翻译和解释都必须使用 {target_lang_name}（目标语言）。
+2. 不要单独给每个词语法解释 - 只给整个句子一个完整的语法解释。
+3. 词性标注（morphology）只能使用以下缩写，不要加其他文字：
+   - n (名词), v (动词), adj (形容词), adv (副词), pron (代词), prep (介词), conj (连词), interj (感叹词), det (限定词)
+4. morphology 字段必须只包含缩写，不要有其他内容！
+5. 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可。
+
+═══════════════════════════════════════════════════════════
+【最最最重要！！！translation 数组的分词原则！！！】
+═══════════════════════════════════════════════════════════
+
+translation 数组中每个条目的 text 字段代表原文中的一个"词"。
+
+【核心原则：遵循源语言的自然词边界】
+你是一个语言专家，你精通所有语言的正字法和语法规则。请根据 {source_lang_name} 自身的语言规则来判断什么是"一个词"，而不是套用其他语言的分词标准。
+
+【什么是一个"词"？】
+一个"词"是原文中连续出现的、在该语言的词典中可以查到的最小意义单位。
+判断标准：这个形式能否作为独立条目出现在该语言的词典中？
+
+【关键规则】
+1. 遵循该语言的正字法惯例
+2. 变位/屈折形式是单个词：不要将变位形式拆分为词干+词缀
+3. 尊重该语言的自然词边界
+4. 【极其重要·固定搭配与多词表达】当整体含义不等于各组成部分字面含义的简单叠加时，必须将整个多词表达作为一个 token
+5. 【极其重要·标点禁令】text 字段绝对禁止包含任何标点符号
+6. 所有条目的 text 去除标点后按顺序拼接必须等于原文去除标点后的内容
+7. 【极其重要·禁止增减原则】translation 数组中的 text 条目必须与原文中的词语一一对应
+8. 绝对禁止将一个完整的词拆分成字符、音节或语素
+
+按照以下结构处理文本：
+- original: 原文文本
+- translation: 对象数组，每个对象包含 text, phonetic, morphology, meaning
+- tokenized_translation: 完整自然的 {target_lang_name} 翻译
+- translation_phrases: 分词结果
+- grammar_explanation: 语法解释
+- redundant_tokens: 冗余词
+
+【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
+
+    user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=0.0, max_tokens=4096,
+        request_type="process_text", tools=tools,
+    )
+
+    # 解析 tool call 响应
+    try:
+        choice = response.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+        if tool_calls:
+            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
+            result = json.loads(arguments_str)
+            return result
+        # 如果没有 tool_calls，尝试从 content 解析 JSON
+        content = message.get("content", "")
+        if content:
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        print(f"[WARN] process_text_with_dictionary tool call parse failed: {e}")
+    return {}
+
+
+async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning, context, target_lang, source_lang, temperature):
+    """通过 gateway.call() 实现单词多选生成（tool call 模式）。"""
+    source_lang_name = get_lang_name(source_lang)
+    target_lang_name = get_lang_name(target_lang)
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "generate_multiple_choice",
+            "description": "Generate enriched word information with multiple choice options",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "word": {"type": "string"},
+                    "enriched_meaning": {"type": "string", "description": "单词的完整释义，包含多个母语单词的常见含义"},
+                    "variants_detail": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "form": {"type": "string"},
+                                "type": {"type": "string"},
+                            },
+                        },
+                        "description": "词形变化 + 类型说明，只包含确实存在的词形变化",
+                    },
+                    "examples": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sentence": {"type": "string"},
+                                "translation": {"type": "string"},
+                            },
+                        },
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "description": "两个全新的例句（绝不能复用原文句子，必须是不同的句子。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同）",
+                    },
+                    "memory_hint": {"type": "string", "description": "记忆辅助（联想/对比母语）"},
+                    "multiple_choice": {
+                        "type": "object",
+                        "properties": {
+                            "options": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {"type": "string", "description": "A concrete, meaningful translation or definition. MUST NOT be a placeholder like 'meaning 1', '释义1', '含义1', etc."},
+                                        "is_correct": {"type": "boolean"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                "required": ["word", "enriched_meaning", "variants_detail", "examples", "memory_hint", "multiple_choice"],
+            },
+        },
+    }]
+
+    system_prompt = f"""为单词 '{word}' 生成丰富的信息，使用 {target_lang_name} 输出。
+
+【极其重要】这个单词属于 {source_lang_name}（学习语言）：
+- 词形变化（variants_detail）必须是 {source_lang_name} 语法规则下的词形变化
+- 例句（examples）必须使用 {source_lang_name} 编写
+- 所有语言相关的内容都必须遵循 {source_lang_name} 的语法和用法规范
+
+上下文释义：{correct_meaning}
+
+上下文：{context}
+
+请生成以下信息：
+
+1. enriched_meaning: 单词的完整释义，包含多个常见含义，用分号分隔。每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等）
+2. variants_detail: {source_lang_name} 词形变化列表，带类型说明。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
+3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户的母语）。绝不能反过来用母语写例句再用学习语言翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
+4. memory_hint: 记忆辅助（与用户母语的联想或对比）
+5. multiple_choice: 选择题，包含：
+   - options: 4个选项，【极其重要】第一个选项必须是正确答案，其余3个是错误答案
+
+要求：
+- 所有输出必须使用 {target_lang_name}
+- 【极其重要】例句必须使用 {source_lang_name} 编写，翻译使用 {target_lang_name}。绝不能用母语写例句再用学习语言翻译
+- 例句要自然，尽量使用简单常见的词汇，不需要与原文中的意思相同
+- 记忆辅助对语言学习者要有帮助
+- 选择题选项要清晰且合理
+- 【重要】正确答案必须是单词的常见、正常释义，不是上下文特定释义
+- 【重要】错误答案必须是该单词所没有的意思，而不是非句子中的意思
+- 【重要】选项必须是纯单词或短语，不能是完整句子
+- 【重要】选项必须与单词本身的意思无关，不能包含单词的任何含义
+- 【重要】词形变化必须是 {source_lang_name} 中确实存在的，不要硬加不存在的词形
+- 【重要】四个选项的格式和词性必须保持一致：如果正确答案包含两个释义，错误选项也必须各包含两个释义；如果正确答案只有一个释义，错误选项也各只有一个释义。所有选项的词性范围应尽量一致
+- 【极其重要】enriched_meaning 中不能包含占位符文本（如"释义1"、"含义1"、"meaning 1"等），必须全部是具体的、有意义的翻译内容
+- 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可。"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Word: {word}"},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=temperature, max_tokens=4096,
+        request_type="generate_multiple_choice", tools=tools,
+    )
+
+    # 解析 tool call 响应
+    try:
+        choice = response.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+        if tool_calls:
+            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
+            result = json.loads(arguments_str)
+            result["word"] = result.get("word", word)
+            return result
+        # 如果没有 tool_calls，尝试从 content 解析 JSON
+        content = message.get("content", "")
+        if content:
+            try:
+                result = json.loads(content)
+                result["word"] = result.get("word", word)
+                return result
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        print(f"[WARN] generate_multiple_choice tool call parse failed: {e}")
+    return {"word": word, "enriched_meaning": correct_meaning, "multiple_choice": {"options": [{"text": correct_meaning, "is_correct": True}]}}
+
+
+async def _gateway_process_remaining_words(user_id, tier, words, source_lang, target_lang, context):
+    """通过 gateway.call() 实现遗漏单词处理（tool call 模式）。"""
+    target_lang_name = get_lang_name(target_lang)
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "generate_remaining_words",
+            "description": "为遗漏的单词生成词信息",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "words": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "phonetic": {"type": "string", "description": "Pronunciation of this word. Use the most commonly used and widely recognized pronunciation notation for the source language — this may be IPA, pinyin, romaji, or any other standard system that native speakers and learners would expect. For tonal languages, include tone information."},
+                                "morphology": {"type": "string", "description": "Meaning in TARGET_LANG based on the context - concise, just a few independent words, not a full sentence explanation"},
+                                "meaning": {"type": "string", "description": "Meaning in TARGET_LANG based on the context - concise, just a few independent words, not a full sentence explanation"},
+                            },
+                            "required": ["text", "phonetic", "morphology", "meaning"],
+                        },
+                    },
+                },
+                "required": ["words"],
+            },
+        },
+    }]
+
+    words_str = ", ".join(words)
+    system_prompt = f"""以下单词在之前的处理中被遗漏了，请为它们生成词信息，使用 {target_lang_name} 输出。
+
+遗漏的单词：
+{words_str}
+
+上下文句子：
+{context}
+
+请为每个单词提供：
+1. text: 单词本身
+2. phonetic: 发音标注。使用该语言最常用、最被广泛认可的注音系统——可以是 IPA、拼音、罗马字或其他母语者和学习者期望的标准注音方式。声调语言需标注声调信息
+3. morphology: 词性缩写（如 n, v, adj, adv, prep, conj, pron, det 等）
+4. meaning: 基于上下文的 {target_lang_name} 释义，简洁的几个独立词，不需要用完整句子解释
+
+【重要】必须为每一个遗漏的单词都生成条目，不要遗漏任何一个！
+【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Generate info for these words: {words_str}"},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=0.0, max_tokens=4096,
+        request_type="process_remaining_words", tools=tools,
+    )
+
+    # 解析 tool call 响应
+    try:
+        choice = response.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+        if tool_calls:
+            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
+            result = json.loads(arguments_str)
+            entries = result.get("words", [])
+            if isinstance(entries, list):
+                print(f"[DEBUG] process_remaining_words returned {len(entries)} valid entries")
+                return entries
+        # 如果没有 tool_calls，尝试从 content 解析 JSON
+        content = message.get("content", "")
+        if content:
+            try:
+                result = json.loads(content)
+                entries = result.get("words", [])
+                if isinstance(entries, list):
+                    return entries
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        print(f"Process remaining words failed: {e}")
+    return []
+
+
+async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, user_id: str = None, tier: str = "free"):
     try:
         t_total_start = time.time()
-        app_prefs = storage.load_user_preferences()
-        retry_interval = app_prefs.get("retry_interval", 1.0)
+        app_prefs = storage.load_user_preferences(user_id=user_id)
+        retry_interval = 1.0  # Admin 全局设置，暂固定为 1.0
         print(f"[DEBUG] 开始处理文件 {file_id}, 请求间隔={retry_interval}s")
         _preserve = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
         processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, **_preserve}
@@ -57,11 +423,12 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
 
             t_llm_start = time.time()
             print(f"[DEBUG] 正在翻译句子 {idx+1}/{total_sentences}: {repr(sentence)}")
+            llm_shim = _LLMApiShim(user_id, tier)
             sentence_translation_result = await text_processor.process_translation(
                 sentence,
                 source_lang,
                 target_lang,
-                llm_api,
+                llm_shim,
                 context_sentences
             )
             t_llm_end = time.time()
@@ -107,8 +474,8 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             if missing_words:
                 print(f"[DEBUG] 发现遗漏单词: {missing_words}, 正在补充处理...")
                 t_missing_start = time.time()
-                remaining_entries = await llm_api.process_remaining_words(
-                    missing_words, source_lang, target_lang, sentence
+                remaining_entries = await _gateway_process_remaining_words(
+                    user_id, tier, missing_words, source_lang, target_lang, sentence
                 )
                 t_missing_end = time.time()
                 print(f"[TIMING] 句子 {idx+1} 遗漏单词补充LLM调用: {t_missing_end - t_missing_start:.3f}s")
@@ -284,10 +651,16 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 "vocab": all_vocab,
                 "priority_queue": [],
                 "task": None,
-                "processing_words": set()
+                "processing_words": set(),
+                "user_id": user_id,
+                "tier": tier,
             }
         state = word_gen_state[file_id]
         state["vocab"] = all_vocab
+        if user_id:
+            state["user_id"] = user_id
+        if tier:
+            state["tier"] = tier
         if "processing_words" not in state:
             state["processing_words"] = set()
         if "plan_position" not in state:
@@ -316,7 +689,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         raise  # ponytail: 让调用方也知道失败了，避免写入历史
 
 
-async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, temperature=0):
+async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, temperature=0, user_id=None, tier="free"):
     state = word_gen_state.get(file_id)
     if not state:
         return
@@ -367,9 +740,37 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                     elif "context_meaning" in word_entry:
                         correct_meaning = word_entry["context_meaning"]
 
+                # --- 词汇缓存查询：优先 user_vocab → global_vocab，命中则跳过 LLM ---
+                vocab_hit = None
+                if user_id:
+                    vocab_hit = user_vocab.lookup(user_id, word_to_gen, source_lang, target_lang)
+                if not vocab_hit:
+                    vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
+
+                if vocab_hit:
+                    print(f"[CACHE] 词汇缓存命中: {word_to_gen}，跳过 LLM 调用")
+                    cache_data = {
+                        "word": word_to_gen,
+                        "ipa": word_entry.get("ipa", "") or vocab_hit.get("phonetic", ""),
+                        "meaning": correct_meaning or vocab_hit.get("meaning", ""),
+                        "enriched_meaning": vocab_hit.get("enriched_meaning") or correct_meaning,
+                        "variants_detail": vocab_hit.get("variants_detail", []),
+                        "examples": vocab_hit.get("examples", []),
+                        "memory_hint": vocab_hit.get("memory_hint", ""),
+                        "multiple_choice": vocab_hit.get("multiple_choice", {}),
+                        "context": context,
+                        "context_sentences": context_sentences,
+                        "morphology": word_entry.get("morphology", "") or vocab_hit.get("morphology", ""),
+                    }
+                    if "context_translations" in cache_data:
+                        del cache_data["context_translations"]
+                    storage.save_word_cache(file_id, word_to_gen, cache_data)
+                    return
+                # --- 缓存未命中，走 LLM ---
+
                 print(f"[DEBUG] Background word gen: {word_to_gen} (attempt {attempt + 1})")
-                options_result = await llm_api.generate_multiple_choice(
-                    word_to_gen,
+                options_result = await _gateway_generate_multiple_choice(
+                    user_id, tier, word_to_gen,
                     correct_meaning,
                     context,
                     target_lang,
@@ -381,8 +782,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 enriched = options_result.get("enriched_meaning", "")
                 if placeholder_pattern.search(enriched):
                     print(f"[WARN] Detected placeholder text in word gen for '{word_to_gen}', retrying...")
-                    options_result = await llm_api.generate_multiple_choice(
-                        word_to_gen,
+                    options_result = await _gateway_generate_multiple_choice(
+                        user_id, tier, word_to_gen,
                         correct_meaning,
                         context,
                         target_lang,
@@ -434,6 +835,8 @@ async def background_word_gen(file_id: str):
     target_lang = language_settings["target_lang"]
     source_lang = language_settings.get("source_lang", "en")
     vocab = state["vocab"]
+    uid = state.get("user_id")
+    tier = state.get("tier", "free")
 
     plan = storage.load_learning_plan(file_id)
     plan_word_order = []
@@ -482,6 +885,43 @@ async def background_word_gen(file_id: str):
         if storage.load_word_cache(file_id, word_to_gen):
             continue
 
+        # 词汇缓存查询：user_vocab → global_vocab → 旧 find_global_word_cache
+        uid = state.get("user_id")
+        vocab_hit = None
+        if uid:
+            vocab_hit = user_vocab.lookup(uid, word_to_gen, source_lang, target_lang)
+        if not vocab_hit:
+            vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
+
+        if vocab_hit:
+            import copy
+            cached = copy.deepcopy(vocab_hit)
+            # 补充 context_sentences
+            context_sents = []
+            all_sentences = storage.load_pipeline_data(file_id)
+            if all_sentences:
+                try:
+                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
+                except re.error:
+                    word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
+                for sent_idx, sentence_data in enumerate(all_sentences):
+                    if "sentence" in sentence_data:
+                        if word_pattern.search(sentence_data["sentence"]):
+                            translation = ""
+                            if "translation_result" in sentence_data:
+                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                            context_sents.append({
+                                "sentence": sentence_data["sentence"],
+                                "translation": translation,
+                                "sentence_index": sent_idx
+                            })
+            if context_sents:
+                cached["context_sentences"] = context_sents
+                cached["context"] = context_sents[0]["sentence"]
+            storage.save_word_cache(file_id, word_to_gen, cached)
+            print(f"[CACHE] background_word_gen: 词汇缓存命中 {word_to_gen}")
+            continue
+
         existing_cache = storage.find_global_word_cache(word_to_gen, source_lang)
         if existing_cache:
             import copy
@@ -511,7 +951,7 @@ async def background_word_gen(file_id: str):
         if word_to_gen.lower() in {w.lower() for w in processing}:
             continue
 
-        asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang))
+        asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid, tier=tier))
         await asyncio.sleep(0.1)
 
     state["task"] = None
@@ -785,13 +1225,13 @@ def generate_and_save_learning_plan(file_id: str, vocab, sentences):
     storage.save_learning_plan(file_id, final_plan)
 
 
-async def generate_title(text: str, source_lang: str) -> str:
+async def generate_title(text: str, source_lang: str, user_id: str = None, tier: str = "free") -> str:
     try:
         messages = [
             {"role": "system", "content": "You are a title generator. Generate a very short title (max 20 characters) that summarizes the given text. If the text already has a clear title in the first line, use that as the title. Output ONLY the title, nothing else."},
             {"role": "user", "content": f"Generate a short title for this text (language: {get_lang_name(source_lang)}):\n\n{text[:500]}"}
         ]
-        result = await llm_api.call_llm(messages, temperature=0.3)
+        result = await gateway.call(user_id or "system", tier, messages, temperature=0.3, max_tokens=64, request_type="generate_title")
         title = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         if title and len(title) <= 50:
             return title
@@ -806,6 +1246,10 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
         language_settings = storage.load_language_settings(file_id)
         target_lang = language_settings["target_lang"]
         source_lang = language_settings.get("source_lang", "en")
+
+        state = word_gen_state.get(file_id, {})
+        uid = state.get("user_id")
+        tier = state.get("tier", "free")
 
         plan = storage.load_learning_plan(file_id)
         if not plan:
@@ -861,8 +1305,8 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
 
         print(f"[DEBUG] 后台预生成单词信息: {word}")
 
-        options_result = await llm_api.generate_multiple_choice(
-            word,
+        options_result = await _gateway_generate_multiple_choice(
+            uid, tier, word,
             correct_meaning,
             context,
             target_lang,
