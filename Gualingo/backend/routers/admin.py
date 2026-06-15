@@ -407,17 +407,18 @@ class QuotaAdjustRequest(BaseModel):
 @router.put("/users/{user_id}/quota")
 async def adjust_user_quota(user_id: str, req: QuotaAdjustRequest, admin: AdminTokenData = Depends(require_admin)):
     conn = get_user_conn()
-    row = conn.execute("SELECT quota_max FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = conn.execute("SELECT quota_used, quota_max FROM users WHERE id = ?", (user_id,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="用户不存在")
-    current = row["quota_max"] or 50
+    current = row["quota_max"] or 200
+    used = row["quota_used"] or 0
     if req.action == "add":
         new_max = min(current + req.value, 10000)
     elif req.action == "subtract":
-        new_max = max(current - req.value, 0)
+        new_max = max(current - req.value, used)
     elif req.action == "set":
-        new_max = req.value
+        new_max = used + req.value
     else:
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid action")
@@ -510,7 +511,7 @@ async def batch_adjust_quota(req: BatchQuotaRequest, admin: AdminTokenData = Dep
     elif req.action == "subtract":
         conn.execute(f"UPDATE users SET quota_max = MAX(quota_max - ?, 0) {where}", [req.value] + params)
     elif req.action == "set":
-        conn.execute(f"UPDATE users SET quota_max = ? {where}", [req.value] + params)
+        conn.execute(f"UPDATE users SET quota_max = quota_used + ? {where}", [req.value] + params)
     else:
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid action")
@@ -533,9 +534,9 @@ async def batch_adjust_quota_by_ids(req: BatchQuotaByIdsRequest, admin: AdminTok
         if req.action == "add":
             new_max = row["quota_max"] + req.value
         elif req.action == "subtract":
-            new_max = max(0, row["quota_max"] - req.value)
+            new_max = max(row["quota_used"], row["quota_max"] - req.value)
         elif req.action == "set":
-            new_max = req.value
+            new_max = row["quota_used"] + req.value
         else:
             continue
         conn.execute("UPDATE users SET quota_max = ? WHERE id = ?", (new_max, uid))
