@@ -2,8 +2,9 @@
 
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
+from auth.deps import require_auth, TokenData
 
 from utils.state import llm_api, storage
 from utils.helpers import fix_llm_options_result
@@ -457,9 +458,9 @@ async def get_file_info(file_id: str):
 
 
 @router.get("/word-list")
-async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional[str] = None):
+async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional[str] = None, current_user: TokenData = Depends(require_auth)):
     try:
-        records = storage.load_history()
+        records = storage.load_history(user_id=current_user.user_id)
         if source_lang:
             filtered = []
             for r in records:

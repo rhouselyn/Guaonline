@@ -5,9 +5,10 @@ import asyncio
 import os
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel
+from auth.deps import require_auth, TokenData
 
 from llm_api import get_settings as get_llm_settings_raw, save_configs, set_active_index, get_lang_name, call_with_rotation
 from ui_translations import UI_TRANSLATION_SCHEMA, TRANSLATION_PROMPT
@@ -106,18 +107,18 @@ async def update_settings(req: SettingsUpdate):
 
 
 @router.get("/user-preferences")
-async def get_user_preferences():
+async def get_user_preferences(current_user: TokenData = Depends(require_auth)):
     try:
-        prefs = storage.load_user_preferences()
+        prefs = storage.load_user_preferences(user_id=current_user.user_id)
         return prefs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/user-preferences")
-async def update_user_preferences(req: UserPreferencesUpdate):
+async def update_user_preferences(req: UserPreferencesUpdate, current_user: TokenData = Depends(require_auth)):
     try:
-        current = storage.load_user_preferences()
+        current = storage.load_user_preferences(user_id=current_user.user_id)
         if req.source_lang is not None:
             current["source_lang"] = req.source_lang
         if req.target_lang is not None:
@@ -138,7 +139,7 @@ async def update_user_preferences(req: UserPreferencesUpdate):
             current["only_new_words"] = req.only_new_words
         if req.auto_update is not None:
             current["auto_update"] = req.auto_update
-        storage.save_user_preferences(current)
+        storage.save_user_preferences(current, user_id=current_user.user_id)
         return current
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

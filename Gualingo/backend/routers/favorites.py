@@ -1,29 +1,30 @@
 """收藏单词路由"""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from utils.state import storage
+from auth.deps import require_auth, TokenData
 
 router = APIRouter(prefix="/api/favorites", tags=["favorites"])
 
 @router.post("/toggle")
-async def toggle_favorite(request: dict):
+async def toggle_favorite(request: dict, current_user: TokenData = Depends(require_auth)):
     word = request.get("word", "")
     source_lang = request.get("source_lang", "en")
     if not word:
         raise HTTPException(status_code=400, detail="Word is required")
-    is_fav = storage.is_favorite_word(word, source_lang)
+    is_fav = storage.is_favorite_word(word, source_lang, user_id=current_user.user_id)
     if is_fav:
-        storage.remove_favorite_word(word, source_lang)
+        storage.remove_favorite_word(word, source_lang, user_id=current_user.user_id)
         return {"favorited": False}
     else:
-        storage.add_favorite_word(word, source_lang)
+        storage.add_favorite_word(word, source_lang, user_id=current_user.user_id)
         return {"favorited": True}
 
 @router.get("")
-async def get_favorites(source_lang: str = None):
-    words = storage.get_favorite_words(source_lang)
+async def get_favorites(source_lang: str = None, current_user: TokenData = Depends(require_auth)):
+    words = storage.get_favorite_words(source_lang, user_id=current_user.user_id)
     return {"words": words}
 
 @router.get("/check")
-async def check_favorite(word: str, source_lang: str = "en"):
-    is_fav = storage.is_favorite_word(word, source_lang)
+async def check_favorite(word: str, source_lang: str = "en", current_user: TokenData = Depends(require_auth)):
+    is_fav = storage.is_favorite_word(word, source_lang, user_id=current_user.user_id)
     return {"favorited": is_fav}
