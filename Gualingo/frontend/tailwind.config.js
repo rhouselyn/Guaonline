@@ -7,6 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        'display': ['Bangers', 'Noto Sans SC', 'cursive'],
+        'pop':     ['Outfit', 'Noto Sans SC', 'system-ui', 'sans-serif'],
         sans: [
           '"DM Sans"',
           '"PingFang SC"',
@@ -36,6 +38,13 @@ export default {
         ],
       },
       colors: {
+        // Pop Neo-Brutalist 色板
+        'pop-red':    '#FF006E',
+        'pop-yellow': '#FFD700',
+        'pop-blue':   '#00BFFF',
+        'pop-green':  '#39FF14',
+        'pop-pink':   '#FF69B4',
+        'pop-cream':  '#FFF8E7',
         // 复古羊皮纸 - 主背景
         parchment: {
           50:  '#F5ECD7',
@@ -102,6 +111,11 @@ export default {
         '4xl': '14px',
       },
       boxShadow: {
+        // Pop Neo-Brutalist 硬阴影
+        'pop-sm': '2px 2px 0 #000',
+        'pop':    '4px 4px 0 #000',
+        'pop-lg': '6px 6px 0 #000',
+        'pop-xl': '8px 8px 0 #000',
         // 复古阴影
         'retro-sm': '2px 2px 0px rgba(58, 46, 28, 0.12)',
         'retro':    '3px 3px 0px rgba(58, 46, 28, 0.15)',
@@ -121,6 +135,8 @@ export default {
         'warm-radial': 'radial-gradient(ellipse at top, #EDE0C8 0%, #F5ECD7 60%, #E0CEAA 100%)',
       },
       animation: {
+        'float':  'float 3s ease-in-out infinite',
+        'wiggle': 'wiggle 0.5s ease-in-out',
         'fade-in': 'fadeIn 0.4s ease-out',
         'slide-up': 'slideUp 0.4s ease-out',
         'shimmer': 'shimmer 3s ease-in-out infinite',
@@ -129,6 +145,14 @@ export default {
         'typewriter': 'typewriter 0.5s steps(1) infinite',
       },
       keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-12px)' },
+        },
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(-3deg)' },
+          '50%': { transform: 'rotate(3deg)' },
+        },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
