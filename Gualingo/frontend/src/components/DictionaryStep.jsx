@@ -417,39 +417,43 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     setLoadingWords(prev => ({ ...prev, [wordKey]: true }))
     try {
+      // 先尝试直接获取缓存数据
       try {
-        await fetch(`/api/learn/${currentFileId}/priority-word-gen`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ word: wordKey })
-        })
-      } catch (_) {}
-
-      const waitForDetail = async (retries = 30) => {
-        const response = await fetch(`/api/word/${currentFileId}/${wordKey}`)
-        let data
-        try {
-          data = await response.json()
-        } catch {
-          if (retries > 0) {
-            await new Promise(r => setTimeout(r, 2000))
-            return waitForDetail(retries - 1)
-          }
-          return null
-        }
+        const data = await api.getWordDetails(currentFileId, wordKey)
         if (data && (data.enriched_meaning || data.meaning || data.multiple_choice)) {
+          setWordDetails(prev => ({ ...prev, [wordKey]: data }))
+          setWordDetailCache(prev => ({ ...prev, [wordKey]: data }))
           return data
         }
+      } catch (e) {
+        // 缓存未命中，触发生成
+      }
+
+      // 触发后台生成
+      try {
+        await api.priorityWordGen(currentFileId, wordKey)
+      } catch (_) {}
+
+      // 轮询等待生成完成
+      const waitForDetail = async (retries = 30) => {
+        try {
+          const data = await api.getWordDetails(currentFileId, wordKey)
+          if (data && (data.enriched_meaning || data.meaning || data.multiple_choice)) {
+            return data
+          }
+        } catch (_) {}
         if (retries > 0) {
           await new Promise(r => setTimeout(r, 2000))
           return waitForDetail(retries - 1)
         }
-        return data
+        return null
       }
 
       const data = await waitForDetail()
-      setWordDetails(prev => ({ ...prev, [wordKey]: data }))
-      setWordDetailCache(prev => ({ ...prev, [wordKey]: data }))
+      if (data) {
+        setWordDetails(prev => ({ ...prev, [wordKey]: data }))
+        setWordDetailCache(prev => ({ ...prev, [wordKey]: data }))
+      }
       return data
     } catch (e) {
       console.error('Failed to load word details:', e)
