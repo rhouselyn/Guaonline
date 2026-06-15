@@ -82,14 +82,14 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 3. 更新语言设置和历史记录
         storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
-        app_settings = storage.load_user_preferences()
+        app_settings = storage.load_user_preferences(user_id=user_id)
         recent_langs = app_settings.get("recent_languages", [])
         if source_lang in recent_langs:
             recent_langs.remove(source_lang)
         recent_langs.insert(0, source_lang)
         recent_langs = recent_langs[:10]
         app_settings["recent_languages"] = recent_langs
-        storage.save_user_preferences(app_settings)
+        storage.save_user_preferences(app_settings, user_id=user_id)
 
         # 4. 生成标题
         title = await generate_title(text, source_lang)
