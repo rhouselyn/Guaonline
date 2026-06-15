@@ -175,16 +175,18 @@ class DatabaseStorage:
             );
 
             CREATE TABLE IF NOT EXISTS user_preferences (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
+                user_id TEXT NOT NULL,
                 prefs TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id)
             );
 
             CREATE TABLE IF NOT EXISTS favorite_words (
+                user_id TEXT NOT NULL,
                 word TEXT NOT NULL,
                 source_lang TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                PRIMARY KEY (word, source_lang)
+                PRIMARY KEY (user_id, word, source_lang)
             );
         """)
         conn.commit()
@@ -696,59 +698,117 @@ class DatabaseStorage:
 
     # ── user_preferences ───────────────────────────────────
 
-    def save_user_preferences(self, prefs: Dict):
+    def save_user_preferences(self, prefs: Dict, user_id: str = None):
         conn = self._get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO user_preferences (id, prefs, updated_at) VALUES (1, ?, datetime('now'))",
-            (json.dumps(prefs, ensure_ascii=False),)
-        )
+        # 兼容旧表结构
+        self._ensure_prefs_user_id(conn)
+        if user_id:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_preferences (user_id, prefs, updated_at) VALUES (?, ?, datetime('now'))",
+                (user_id, json.dumps(prefs, ensure_ascii=False))
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_preferences (user_id, prefs, updated_at) VALUES ('__default__', ?, datetime('now'))",
+                (json.dumps(prefs, ensure_ascii=False),)
+            )
         conn.commit()
 
-    def load_user_preferences(self) -> Dict:
+    def load_user_preferences(self, user_id: str = None) -> Dict:
         conn = self._get_conn()
-        row = conn.execute("SELECT prefs FROM user_preferences WHERE id = 1").fetchone()
+        self._ensure_prefs_user_id(conn)
+        uid = user_id or "__default__"
+        row = conn.execute("SELECT prefs FROM user_preferences WHERE user_id = ?", (uid,)).fetchone()
         if row:
-            data = json.loads(row["prefs"])
-            return data
+            return json.loads(row["prefs"])
         return {"source_lang": "auto", "target_lang": "zh", "rpm": 60, "skip_listening": False}
+
+    def _ensure_prefs_user_id(self, conn):
+        """兼容旧表：如果 user_preferences 没有 user_id 列则迁移。"""
+        try:
+            cursor = conn.execute("PRAGMA table_info(user_preferences)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE user_preferences RENAME TO user_preferences_old")
+                conn.execute("""CREATE TABLE user_preferences (
+                    user_id TEXT NOT NULL,
+                    prefs TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id)
+                )""")
+                conn.execute("INSERT OR IGNORE INTO user_preferences (user_id, prefs, updated_at) SELECT '__default__', prefs, updated_at FROM user_preferences_old")
+                conn.execute("DROP TABLE user_preferences_old")
+                conn.commit()
+        except Exception:
+            pass
 
     # ── favorite_words ─────────────────────────────────────
 
-    def add_favorite_word(self, word: str, source_lang: str):
+    def add_favorite_word(self, word: str, source_lang: str, user_id: str = None):
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         conn.execute(
-            "INSERT OR IGNORE INTO favorite_words (word, source_lang) VALUES (?, ?)",
-            (word, source_lang)
+            "INSERT OR IGNORE INTO favorite_words (user_id, word, source_lang) VALUES (?, ?, ?)",
+            (uid, word, source_lang)
         )
         conn.commit()
 
-    def remove_favorite_word(self, word: str, source_lang: str):
+    def remove_favorite_word(self, word: str, source_lang: str, user_id: str = None):
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         conn.execute(
-            "DELETE FROM favorite_words WHERE word = ? AND source_lang = ?",
-            (word, source_lang)
+            "DELETE FROM favorite_words WHERE user_id = ? AND word = ? AND source_lang = ?",
+            (uid, word, source_lang)
         )
         conn.commit()
 
-    def get_favorite_words(self, source_lang: str = None) -> List[str]:
+    def get_favorite_words(self, source_lang: str = None, user_id: str = None) -> List[str]:
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         if source_lang:
             rows = conn.execute(
-                "SELECT word FROM favorite_words WHERE source_lang = ? ORDER BY created_at DESC",
-                (source_lang,)
+                "SELECT word FROM favorite_words WHERE user_id = ? AND source_lang = ? ORDER BY created_at DESC",
+                (uid, source_lang)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT word FROM favorite_words ORDER BY created_at DESC"
+                "SELECT word FROM favorite_words WHERE user_id = ? ORDER BY created_at DESC",
+                (uid,)
             ).fetchall()
         return [row["word"] for row in rows]
 
-    def is_favorite_word(self, word: str, source_lang: str) -> bool:
+    def is_favorite_word(self, word: str, source_lang: str, user_id: str = None) -> bool:
         conn = self._get_conn()
+        self._ensure_fav_user_id(conn)
+        uid = user_id or "__default__"
         row = conn.execute(
-            "SELECT 1 FROM favorite_words WHERE word = ? AND source_lang = ?",
-            (word, source_lang)
+            "SELECT 1 FROM favorite_words WHERE user_id = ? AND word = ? AND source_lang = ?",
+            (uid, word, source_lang)
         ).fetchone()
         return row is not None
 
-    
+    def _ensure_fav_user_id(self, conn):
+        """兼容旧表：如果 favorite_words 没有 user_id 列则迁移。"""
+        try:
+            cursor = conn.execute("PRAGMA table_info(favorite_words)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE favorite_words RENAME TO favorite_words_old")
+                conn.execute("""CREATE TABLE favorite_words (
+                    user_id TEXT NOT NULL,
+                    word TEXT NOT NULL,
+                    source_lang TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id, word, source_lang)
+                )""")
+                conn.execute("INSERT OR IGNORE INTO favorite_words (user_id, word, source_lang, created_at) SELECT '__default__', word, source_lang, created_at FROM favorite_words_old")
+                conn.execute("DROP TABLE favorite_words_old")
+                conn.commit()
+        except Exception:
+            pass
+
+
+
