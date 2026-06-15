@@ -61,7 +61,7 @@ class AdminLoginRequest(BaseModel):
 
 @router.post("/login")
 async def admin_login(req: AdminLoginRequest):
-    if req.email != "admin" or req.password != ADMIN_PASSWORD:
+    if req.email != "admin@mail.com" or req.password != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="管理员账号或密码错误")
     return create_admin_tokens()
 
