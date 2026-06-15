@@ -270,6 +270,16 @@ async def call_with_rotation(messages: List[Dict], tools: List[Dict] = None, tem
 
         idx = (active_index + attempt) % num_configs
         config = configs[idx]
+        # Environment variables take priority over file-based settings
+        env_api_key = os.environ.get("PLATFORM_API_KEY")
+        env_base_url = os.environ.get("PLATFORM_BASE_URL")
+        env_model = os.environ.get("PLATFORM_MODEL")
+        if env_api_key:
+            config["api_key"] = env_api_key
+        if env_base_url:
+            config["base_url"] = env_base_url
+        if env_model:
+            config["model"] = env_model
         # 提交请求的同时开始计算间隔
         api = LLMAPI(config_index=idx)
         request_task = asyncio.create_task(api.call_llm(messages, tools=tools, temperature=temperature, max_tokens=max_tokens))
@@ -362,6 +372,16 @@ class LLMAPI:
         self.api_key = config.get("api_key", "")
         self.base_url = config.get("base_url", "https://api.siliconflow.cn/v1")
         self.model = config.get("model", "Qwen/Qwen3.6-27B")
+        # Environment variables take priority over file-based settings
+        env_api_key = os.environ.get("PLATFORM_API_KEY")
+        env_base_url = os.environ.get("PLATFORM_BASE_URL")
+        env_model = os.environ.get("PLATFORM_MODEL")
+        if env_api_key:
+            self.api_key = env_api_key
+        if env_base_url:
+            self.base_url = env_base_url
+        if env_model:
+            self.model = env_model
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

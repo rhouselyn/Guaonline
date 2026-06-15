@@ -151,7 +151,7 @@ const STEPS = [
 const PLANS = [
   {
     id: 'free', name: '免费版', price: '¥0', period: '', highlight: false,
-    features: ['自带 API Key', '本地存储', '基础学习功能', '多 Key 轮询', 'Web + 桌面端'],
+    features: ['免费 50 句额度', '每日恢复 10 句', '基础学习功能', '全局词汇缓存', 'Web 端'],
     cta: '免费开始',
   },
   {
@@ -286,12 +286,6 @@ export default function LandingPage() {
               登录
             </button>
           </motion.div>
-
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="mt-6 text-xs text-[#8b7e5e]/50">
-            也可以跳过登录，直接使用自己的 API Key
-          </motion.p>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.8 }} className="mt-16">
@@ -543,7 +537,7 @@ export default function LandingPage() {
             准备好了吗？
           </h2>
           <p className="text-[#b5ae8e] mb-2">
-            只需一个 API Key，无需数据库，纯 LLM 能力驱动一切。
+            注册即可免费使用，AI 驱动一切。
           </p>
           <p className="text-[#b5ae8e]/70 text-sm mb-8">
             任何语言 → 任何语言，你的素材你做主。

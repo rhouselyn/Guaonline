@@ -4,6 +4,7 @@ import axios from 'axios';
 
 const TOKEN_KEY = 'gualingo_tokens';
 const USER_KEY = 'gualingo_user';
+const QUOTA_KEY = 'gualingo_quota';
 
 export const auth = {
   getTokens() {
@@ -17,6 +18,7 @@ export const auth = {
   clearTokens() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(QUOTA_KEY);
   },
 
   getAccessToken() {
@@ -29,6 +31,14 @@ export const auth = {
 
   setUser(user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+  },
+
+  getQuota() {
+    try { return JSON.parse(localStorage.getItem(QUOTA_KEY)); } catch { return null; }
+  },
+
+  setQuota(quota) {
+    localStorage.setItem(QUOTA_KEY, JSON.stringify(quota));
   },
 
   isLoggedIn() {
@@ -57,6 +67,13 @@ export const auth = {
         headers: { Authorization: `Bearer ${token}` }
       });
       this.setUser(response.data);
+      // Fetch quota info
+      try {
+        const quotaResp = await axios.get('/api/auth/quota', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.setQuota(quotaResp.data);
+      } catch { /* quota fetch is non-critical */ }
       return response.data;
     } catch {
       this.clearTokens();

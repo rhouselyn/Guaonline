@@ -9,6 +9,7 @@ import time
 from llm_api import get_settings, get_lang_name
 from text_processor import TextProcessor, BACKUP_VOCAB, BACKUP_VOCAB_BY_LANG, is_punctuation_only, is_source_lang_text, strip_edge_punctuation, NO_SPACE_LANGUAGES
 from utils.state import llm_api, text_processor, storage, processing_status, word_gen_state
+from vocab import global_vocab, user_vocab
 from utils.helpers import (
     RateLimiter, vocab_sort_key, is_speaker_label, is_punctuation_only as _is_punct,
     get_translation_phrases, split_translation_to_phrases, select_key_tokens,
@@ -20,7 +21,7 @@ from utils.helpers import (
 )
 
 
-async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, rpm: int = 20):
+async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, rpm: int = 20, user_id: str = None):
     try:
         t_total_start = time.time()
         app_prefs = storage.load_user_preferences()
@@ -284,10 +285,13 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 "vocab": all_vocab,
                 "priority_queue": [],
                 "task": None,
-                "processing_words": set()
+                "processing_words": set(),
+                "user_id": user_id,
             }
         state = word_gen_state[file_id]
         state["vocab"] = all_vocab
+        if user_id:
+            state["user_id"] = user_id
         if "processing_words" not in state:
             state["processing_words"] = set()
         if "plan_position" not in state:
@@ -316,7 +320,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         raise  # ponytail: 让调用方也知道失败了，避免写入历史
 
 
-async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, temperature=0):
+async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, temperature=0, user_id=None):
     state = word_gen_state.get(file_id)
     if not state:
         return
@@ -366,6 +370,34 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                         correct_meaning = word_entry["translation"]
                     elif "context_meaning" in word_entry:
                         correct_meaning = word_entry["context_meaning"]
+
+                # --- 词汇缓存查询：优先 user_vocab → global_vocab，命中则跳过 LLM ---
+                vocab_hit = None
+                if user_id:
+                    vocab_hit = user_vocab.lookup(user_id, word_to_gen, source_lang, target_lang)
+                if not vocab_hit:
+                    vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
+
+                if vocab_hit:
+                    print(f"[CACHE] 词汇缓存命中: {word_to_gen}，跳过 LLM 调用")
+                    cache_data = {
+                        "word": word_to_gen,
+                        "ipa": word_entry.get("ipa", "") or vocab_hit.get("phonetic", ""),
+                        "meaning": correct_meaning or vocab_hit.get("meaning", ""),
+                        "enriched_meaning": vocab_hit.get("enriched_meaning") or correct_meaning,
+                        "variants_detail": vocab_hit.get("variants_detail", []),
+                        "examples": vocab_hit.get("examples", []),
+                        "memory_hint": vocab_hit.get("memory_hint", ""),
+                        "multiple_choice": vocab_hit.get("multiple_choice", {}),
+                        "context": context,
+                        "context_sentences": context_sentences,
+                        "morphology": word_entry.get("morphology", "") or vocab_hit.get("morphology", ""),
+                    }
+                    if "context_translations" in cache_data:
+                        del cache_data["context_translations"]
+                    storage.save_word_cache(file_id, word_to_gen, cache_data)
+                    return
+                # --- 缓存未命中，走 LLM ---
 
                 print(f"[DEBUG] Background word gen: {word_to_gen} (attempt {attempt + 1})")
                 options_result = await llm_api.generate_multiple_choice(
@@ -482,6 +514,43 @@ async def background_word_gen(file_id: str):
         if storage.load_word_cache(file_id, word_to_gen):
             continue
 
+        # 词汇缓存查询：user_vocab → global_vocab → 旧 find_global_word_cache
+        uid = state.get("user_id")
+        vocab_hit = None
+        if uid:
+            vocab_hit = user_vocab.lookup(uid, word_to_gen, source_lang, target_lang)
+        if not vocab_hit:
+            vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
+
+        if vocab_hit:
+            import copy
+            cached = copy.deepcopy(vocab_hit)
+            # 补充 context_sentences
+            context_sents = []
+            all_sentences = storage.load_pipeline_data(file_id)
+            if all_sentences:
+                try:
+                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
+                except re.error:
+                    word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
+                for sent_idx, sentence_data in enumerate(all_sentences):
+                    if "sentence" in sentence_data:
+                        if word_pattern.search(sentence_data["sentence"]):
+                            translation = ""
+                            if "translation_result" in sentence_data:
+                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                            context_sents.append({
+                                "sentence": sentence_data["sentence"],
+                                "translation": translation,
+                                "sentence_index": sent_idx
+                            })
+            if context_sents:
+                cached["context_sentences"] = context_sents
+                cached["context"] = context_sents[0]["sentence"]
+            storage.save_word_cache(file_id, word_to_gen, cached)
+            print(f"[CACHE] background_word_gen: 词汇缓存命中 {word_to_gen}")
+            continue
+
         existing_cache = storage.find_global_word_cache(word_to_gen, source_lang)
         if existing_cache:
             import copy
@@ -511,7 +580,7 @@ async def background_word_gen(file_id: str):
         if word_to_gen.lower() in {w.lower() for w in processing}:
             continue
 
-        asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang))
+        asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid))
         await asyncio.sleep(0.1)
 
     state["task"] = None

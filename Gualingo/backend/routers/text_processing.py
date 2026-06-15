@@ -5,16 +5,19 @@ import time
 import asyncio
 import datetime
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 
 from llm_api import detect_language, get_lang_name
 from utils.state import llm_api, storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title
+from auth.deps import get_current_user, require_auth, TokenData
+from auth.quota import check_and_refill_quota, consume_quota
+from vocab import global_vocab, user_vocab
 
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str):
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
         # 直接输入模式：原文就是用户输入的文本，立即保存
@@ -95,11 +98,29 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             processing_status[file_id]["title"] = title
 
         # 5. 执行文本处理
-        await process_text_background(file_id, text, source_lang, target_lang)
+        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id)
 
         # 6. 处理成功后才写入历史记录
         text_preview = text.strip()[:100]
         storage.add_history_record(file_id, title, source_lang, target_lang, text_preview)
+
+        # 7. 扣减额度
+        if user_id:
+            # 估算句子数（按句号/问号/感叹号分割）
+            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
+            sentence_count = min(sentence_count, 50)  # 上限保护
+            consume_quota(user_id, sentence_count)
+
+            # 8. 写入词汇缓存（从处理结果中提取）
+            try:
+                file_data = storage.load_file_data(file_id)
+                if file_data and "dictionary" in file_data:
+                    words = file_data["dictionary"]
+                    if isinstance(words, list):
+                        user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
+                        global_vocab.batch_upsert(words, source_lang, target_lang)
+            except Exception as e:
+                print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:
         print(f"[ERROR] 预处理或处理出错: {str(e)}")
         import traceback
@@ -121,7 +142,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
 
 @router.post("/process-text")
-async def process_text(request: dict, background_tasks: BackgroundTasks):
+async def process_text(request: dict, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_auth)):
     try:
         text = request.get("text", "")
         source_lang = request.get("source_language", "en")
@@ -131,10 +152,10 @@ async def process_text(request: dict, background_tasks: BackgroundTasks):
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        # 检查 API Key 是否已配置
-        llm_api.reload()
-        if not llm_api.api_key:
-            raise HTTPException(status_code=400, detail="API Key 未配置，请先在设置中填写 API Key")
+        # 额度检查
+        quota = check_and_refill_quota(current_user.user_id)
+        if quota["max"] != -1 and quota["available"] <= 0:
+            raise HTTPException(status_code=429, detail=f"额度已用完（{quota['used']}/{quota['max']}），明天恢复或升级套餐")
 
         now = datetime.datetime.now()
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
@@ -157,7 +178,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks):
         }
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id)
 
         return {
             "file_id": file_id,

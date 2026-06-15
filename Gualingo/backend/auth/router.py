@@ -7,6 +7,7 @@ import bcrypt
 from auth.models import UserCreate, UserLogin, User, Token, UserTier
 from auth.jwt_utils import create_tokens, decode_token
 from auth.deps import require_auth, get_current_user, TokenData
+from auth.quota import init_quota, check_and_refill_quota, consume_quota
 from config import DATA_DIR
 import sqlite3
 
@@ -59,6 +60,7 @@ async def register(user_data: UserCreate):
     )
     conn.commit()
     conn.close()
+    init_quota(user_id)
     return create_tokens(user_id, UserTier.free)
 
 
@@ -89,7 +91,7 @@ async def refresh_token(refresh_token: str):
 async def get_me(current_user: TokenData = Depends(require_auth)):
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, email, name, tier, api_key, base_url, model, created_at FROM users WHERE id = ?",
+        "SELECT id, email, name, tier, api_key, base_url, model, created_at, quota_used, quota_max FROM users WHERE id = ?",
         (current_user.user_id,)
     ).fetchone()
     conn.close()
@@ -99,8 +101,14 @@ async def get_me(current_user: TokenData = Depends(require_auth)):
         id=row["id"], email=row["email"], name=row["name"],
         tier=UserTier(row["tier"]), api_key=row["api_key"],
         base_url=row["base_url"], model=row["model"],
-        created_at=row["created_at"]
+        created_at=row["created_at"],
+        quota_used=row["quota_used"] or 0, quota_max=row["quota_max"] or 50
     )
+
+
+@router.get("/quota")
+async def get_quota(current_user: TokenData = Depends(require_auth)):
+    return check_and_refill_quota(current_user.user_id)
 
 
 @router.put("/me/api-key")

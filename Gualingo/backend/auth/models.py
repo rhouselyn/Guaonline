@@ -33,6 +33,8 @@ class User(UserBase):
     base_url: Optional[str] = None
     model: Optional[str] = None
     created_at: Optional[str] = None
+    quota_used: int = 0
+    quota_max: int = 50
 
     class Config:
         from_attributes = True
