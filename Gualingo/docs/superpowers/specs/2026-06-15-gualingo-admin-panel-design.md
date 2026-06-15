@@ -67,16 +67,59 @@
 ## 4. 全局 API Key `/admin/api-keys`
 
 ### 功能
-- 配置多个 API Key（复用现有 `llm_api.py` 的多配置机制）
-- 设置活跃配置索引
+- 按 Tier 分组配置 API Key：Free / Basic / Pro 三个独立的 Key 池
+- 每个 Key 池支持配置多个 API Key（轮换使用）
+- 每个 Key 配置：api_key、base_url、model、是否启用
+- 设置每个 Key 池的活跃配置索引
 - 测试 API Key 是否可用（发一个简单请求验证连通性）
-- 显示每个 Key 的配置信息（base_url、model、是否活跃）
+
+### 按 Tier 分离的 Key 池
+```
+Free Key 池:  [Key1, Key2, Key3]  → 免费用户轮换使用
+Basic Key 池: [Key4, Key5]        → 基础版用户轮换使用
+Pro Key 池:   [Key6, Key7, Key8]  → 专业版用户轮换使用
+```
 
 ### 关键逻辑
-用户提交文本时，如果用户自己没设 API Key，则使用 admin 配置的全局 Key 调用 LLM。用户消耗自己的额度计数，但 LLM 调用走平台 Key。这就是「有额度的用户直接消耗全局的」——额度是用户的，API Key 是平台的。
+用户提交文本时，如果用户自己没设 API Key：
+1. 根据用户的 tier 选择对应的 Key 池
+2. 从该 Key 池中轮换选择一个 Key 调用 LLM
+3. 用户消耗自己的额度计数，但 LLM 调用走平台对应 tier 的 Key
+
+这样 admin 可以给付费用户配更好的模型/更快的 Key，免费用户用便宜的 Key。
 
 ### 数据存储
-复用现有 `llm_api.py` 的 JSON 配置文件（`data/llm_settings.json`）。
+扩展现有 `llm_api.py` 的配置结构，按 tier 分组存储：
+```json
+{
+  "tier_keys": {
+    "free": {
+      "configs": [
+        {"api_key": "sk-xxx", "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
+        {"api_key": "sk-yyy", "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"}
+      ],
+      "active_index": 0
+    },
+    "basic": {
+      "configs": [
+        {"api_key": "sk-aaa", "base_url": "https://api.openai.com/v1", "model": "gpt-4o"}
+      ],
+      "active_index": 0
+    },
+    "pro": {
+      "configs": [
+        {"api_key": "sk-bbb", "base_url": "https://api.openai.com/v1", "model": "gpt-4o"}
+      ],
+      "active_index": 0
+    }
+  }
+}
+```
+
+### LLM 调用路由
+修改 `llm_api.py` 的 `call_with_rotation` 方法，新增 `tier` 参数：
+- 如果用户自带 API Key → 使用用户的 Key
+- 否则 → 从 `tier_keys[tier]` 的 configs 中轮换选择
 
 ## 5. 用户管理 `/admin/users`
 
@@ -196,9 +239,9 @@ CREATE TABLE IF NOT EXISTS token_usage (
 ```
 POST /api/admin/login              — admin 登录
 GET  /api/admin/dashboard          — 仪表盘数据
-GET  /api/admin/api-keys           — 获取全局 API Key 配置
-PUT  /api/admin/api-keys           — 更新全局 API Key 配置
-POST /api/admin/api-keys/test      — 测试 API Key 可用性
+GET  /api/admin/api-keys           — 获取所有 Tier 的 API Key 配置
+PUT  /api/admin/api-keys/:tier     — 更新指定 Tier 的 API Key 配置
+POST /api/admin/api-keys/:tier/test — 测试指定 Tier 的 API Key 可用性
 GET  /api/admin/users              — 用户列表（分页、搜索、排序、筛选）
 GET  /api/admin/users/:id          — 用户详情
 PUT  /api/admin/users/:id          — 修改用户（tier）
