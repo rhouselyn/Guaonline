@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "api_key": "sk-tszhvcglvfqiivwqqtqwkxmxsneyuymjjywtfxteofmfvkct",
+      "api_key": "",
       "base_url": "https://api.siliconflow.cn/v1",
       "model": "Qwen/Qwen3.6-27B"
     },

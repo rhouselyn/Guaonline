@@ -24,8 +24,7 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
         <motion.h2
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}
-          className="text-3xl font-bold text-[#3d3929] mb-4"
+          className="text-3xl font-bold font-display text-ink-700 mb-4"
         >
           {t.selectPhase}
         </motion.h2>
@@ -46,27 +45,20 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
             >
               <button
                 onClick={() => onPhaseSelect(phase.phase_number)}
-                className="w-full p-6 border-2 border-[#d4c9a8] bg-[#faf8f0] hover:border-[#d4a853] hover:shadow-[2px_2px_0_#d4c9a8] rounded-md shadow-[2px_2px_0_#8b7e5e] transition-all relative"
+                className="w-full p-6 border-2 border-aged-200 bg-parchment-50 hover:border-ink-400 hover:shadow-retro-sm rounded-md transition-all"
               >
-                <div className="absolute inset-0 opacity-[0.03] pointer-events-none rounded-md" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-                <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md" />
-                <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md" />
-                <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md" />
-                <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md" />
-                <div className="relative">
-                  <h3 style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }} className="text-xl font-bold text-[#3d3929] mb-2">
-                    {phase.phase_number === 1 ? t.phase1 : t.phase2}
-                  </h3>
-                  <p className="text-ink-600 mb-2">{phase.units_count} {t.unit}s</p>
-                  <div className="text-sm font-bold">
-                    {phase.progress.current_unit > 0 ? (
-                      <span className="text-[#d4a853]">
-                        已完成 {phase.progress.current_unit}/{phase.units_count} {t.unit}s
-                      </span>
-                    ) : (
-                      <span className="text-ink-400">{t.notStarted}</span>
-                    )}
-                  </div>
+                <h3 className="text-xl font-bold font-display text-ink-800 mb-2">
+                  {phase.phase_number === 1 ? t.phase1 : t.phase2}
+                </h3>
+                <p className="text-ink-600 mb-2">{phase.units_count} {t.unit}s</p>
+                <div className="text-sm font-bold">
+                  {phase.progress.current_unit > 0 ? (
+                    <span className="text-amber-500">
+                      已完成 {phase.progress.current_unit}/{phase.units_count} {t.unit}s
+                    </span>
+                  ) : (
+                    <span className="text-ink-400">{t.notStarted}</span>
+                  )}
                 </div>
               </button>
             </motion.div>

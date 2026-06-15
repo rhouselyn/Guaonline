@@ -15,7 +15,7 @@ function WordDetailCard({ word, sourceLang, detailLoading, t }) {
       transition={{ duration: 0.25, ease: 'easeInOut' }}
       className="overflow-hidden"
     >
-      <div className="px-5 pb-4 pt-2 border-t border-[#d4c9a8]/40">
+      <div className="px-5 pb-4 pt-2 border-t border-parchment-100">
         {detailLoading ? (
           <div className="pt-4 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
@@ -87,7 +87,7 @@ function WordDetailCard({ word, sourceLang, detailLoading, t }) {
                   <Lightbulb className="w-3 h-3 text-amber-500" />
                   {t.memoryHint || '记忆辅助'}
                 </h3>
-                <p className="text-[13px] text-ink-600 leading-relaxed bg-[#d4a853]/10 px-3 py-2 rounded-md border-2 border-[#d4a853]/30">
+                <p className="text-[13px] text-ink-600 leading-relaxed bg-amber-50/70 px-3 py-2 rounded-sm border-2 border-amber-100">
                   {word.memory_hint}
                 </p>
               </div>
@@ -298,14 +298,14 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
   const renderPagination = () => {
     if (totalPages <= 1) return null
     return (
-      <div className="flex items-center justify-center gap-1 py-2 border-t border-[#d4c9a8]/60 bg-[#faf8f0]/40">
+      <div className="flex items-center justify-center gap-1 py-2 border-t border-aged-200/60 bg-parchment-50/40">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-          className={`p-1 rounded transition-colors ${page <= 1 ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-[#f0ead6]'}`}>
+          className={`p-1 rounded transition-colors ${page <= 1 ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100'}`}>
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
         <span className="text-[11px] text-ink-400 px-2">{page} / {totalPages}</span>
         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-          className={`p-1 rounded transition-colors ${page >= totalPages ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-[#f0ead6]'}`}>
+          className={`p-1 rounded transition-colors ${page >= totalPages ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100'}`}>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -345,7 +345,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
     return (
       <div className="flex h-full">
         {allLetterIndex.length > 1 && !searchQuery && (
-          <div className="flex flex-col items-center gap-px py-1 border-r border-[#d4c9a8]/40 bg-[#faf8f0]/50 shrink-0 w-5">
+          <div className="flex flex-col items-center gap-px py-1 border-r border-parchment-100 bg-parchment-50/50 shrink-0 w-5">
             {allLetterIndex.map(letter => {
               const onCurrentPage = letterIndex.includes(letter)
               return (
@@ -367,29 +367,29 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
         <div className="flex-1 min-w-0 overflow-y-auto" ref={listRef}>
           {groupedWords.map(([letter, groupWords]) => (
             <div key={letter} id={`letter-${letter}`}>
-              <div className="sticky top-0 z-10 px-5 py-1.5 bg-[#faf8f0]/90 backdrop-blur-sm border-b border-[#d4c9a8]/40 flex items-baseline gap-1.5">
+              <div className="sticky top-0 z-10 px-5 py-1.5 bg-parchment-50/90 backdrop-blur-sm border-b border-parchment-100 flex items-baseline gap-1.5">
                 <span className="text-xs font-bold text-ink-400 tracking-wider uppercase">{letter}</span>
                 <span className="text-[10px] text-aged-300">{groupWords.length}</span>
               </div>
               {groupWords.map((word) => (
-                <div key={word.word} ref={el => { wordRefs.current[word.word] = el }} className="border-b border-[#d4c9a8]/40 last:border-b-0">
+                <div key={word.word} ref={el => { wordRefs.current[word.word] = el }} className="border-b border-parchment-50 last:border-b-0">
                   <div
                     role="button"
                     tabIndex={0}
                     onClick={() => handleWordClick(word.word)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleWordClick(word.word) }}
-                    className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-[#faf8f0]/80 transition-colors text-left cursor-pointer"
+                    className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-parchment-50/80 transition-colors text-left cursor-pointer"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold font-display text-[#3d3929] ${displayMode === 2 && expandedWord !== word.word ? 'invisible' : ''}`} style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{word.word}</span>
+                        <span className={`text-sm font-bold font-display text-ink-800 ${displayMode === 2 && expandedWord !== word.word ? 'invisible' : ''}`}>{word.word}</span>
                         {word.ipa && (
                           <span className={`text-xs text-ink-400 ipa-font ${displayMode === 2 && expandedWord !== word.word ? 'invisible' : ''}`}>
                             {word.ipa.startsWith('/') ? word.ipa : `/${word.ipa}/`}
                           </span>
                         )}
                         {word.part_of_speech && (
-                          <span className="badge-ochre text-[10px] px-1.5 py-0.5 bg-[#f0ead6] text-ink-500 rounded font-bold">
+                          <span className="badge-ochre text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-bold">
                             {word.part_of_speech}
                           </span>
                         )}
@@ -404,7 +404,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
                       ) : expandedWord === word.word ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleRegenerateWord(word.word) }}
-                          className="p-1.5 text-aged-300 hover:text-amber-500 hover:bg-amber-50 rounded-md transition-colors"
+                          className="p-1.5 text-aged-300 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors"
                           title={t.regenerate || '重新生成'}
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
@@ -413,7 +413,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
                       <FavoriteButton word={word.word} sourceLang={sourceLang} t={t} favoritesMode={favoritesMode} initialFavorited={favoritesMode ? true : favoriteWords.includes(word.word.toLowerCase())} />
                       <button
                         onClick={(e) => { e.stopPropagation(); speakText(word.word, sourceLang) }}
-                        className="p-1.5 text-aged-300 hover:text-amber-500 hover:bg-amber-50 rounded-md transition-colors"
+                        className="p-1.5 text-aged-300 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
                       </button>
@@ -442,20 +442,15 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
 
   if (onBack) {
     return (
-      <div className="h-full flex flex-col bg-[#faf8f0] rounded-md border-2 border-[#d4c9a8] shadow-[2px_2px_0_#8b7e5e] overflow-hidden min-h-0 relative">
-        <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md z-10" />
-        <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md z-10" />
-        <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md z-10" />
-        <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md z-10" />
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#d4c9a8]/60 bg-gradient-to-r from-[#d4a853]/10 to-[#faf8f0] relative">
+      <div className="h-full flex flex-col bg-parchment-50 rounded-sm border-2 border-aged-200/60 shadow-retro-sm overflow-hidden min-h-0">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-aged-200/60 bg-gradient-to-r from-amber-50/50 to-parchment-50">
           <div className="flex items-center gap-2.5">
             {favoritesMode ? (
               <Star className="w-5 h-5 text-amber-400 fill-current" />
             ) : (
               <BookOpen className={`w-5 h-5 cursor-pointer transition-colors ${displayMode !== 0 ? 'text-amber-500' : 'text-amber-500 hover:text-amber-500'}`} onClick={() => setDisplayMode(v => (v + 1) % 3)} title={displayMode === 0 ? (t.showAll || '显示全部') : displayMode === 1 ? (t.hideMeaning || '隐藏释义') : (t.hideWord || '隐藏单词')} />
             )}
-            <span className="text-base font-bold font-display text-[#3d3929]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+            <span className="text-base font-bold font-display text-ink-800">
               {favoritesMode ? (t.favorites || '收藏') : (t.vocabOverview || '词汇总览')}
             </span>
             {!loading && displayWords.length > 0 && (
@@ -471,7 +466,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-[#d4c9a8]/40">
+        <div className="px-4 py-3 border-b border-parchment-100">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" />
             <input
@@ -479,7 +474,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t.searchWordOrMeaning || '搜索单词或释义...'}
-              className="input-warm w-full pl-9 pr-9 py-2 text-sm bg-[#faf8f0] border-2 border-[#d4c9a8]/80 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder-ink-400 transition-all"
+              className="input-warm w-full pl-9 pr-9 py-2 text-sm bg-parchment-50 border-2 border-aged-200/80 rounded-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder-ink-400 transition-all"
             />
             {searchQuery && (
               <button
@@ -505,11 +500,11 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.99 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-[#faf8f0]/80 backdrop-blur-sm rounded-md border-2 border-[#d4c9a8] hover:border-[#d4a853] transition-all shadow-[2px_2px_0_#d4c9a8]"
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-parchment-50/80 backdrop-blur-sm rounded-sm border-2 border-aged-200/60 hover:border-amber-200/60 transition-all shadow-retro-sm"
       >
         <div className="flex items-center gap-2.5">
           <BookOpen className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-bold font-display text-[#3d3929]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{t.vocabOverview || '词汇总览'}</span>
+          <span className="text-sm font-bold font-display text-ink-700">{t.vocabOverview || '词汇总览'}</span>
           {!isOpen && words.length > 0 && (
             <span className="badge-ochre ml-1">{words.length} {t.wordCount || '词'}</span>
           )}
@@ -531,13 +526,8 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-3 bg-[#faf8f0]/80 backdrop-blur-sm rounded-md border-2 border-[#d4c9a8] shadow-[2px_2px_0_#8b7e5e] relative">
-              <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md z-10" />
-              <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md z-10" />
-              <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md z-10" />
-              <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md z-10" />
-              <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-              <div className="p-4 border-b border-[#d4c9a8]/40">
+            <div className="mt-3 bg-parchment-50/80 backdrop-blur-sm rounded-sm border-2 border-aged-200/60 shadow-retro-sm">
+              <div className="p-4 border-b border-parchment-100">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" />
                   <input
@@ -545,7 +535,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t.searchWordOrMeaning || '搜索单词或释义...'}
-                    className="input-warm w-full pl-9 pr-9 py-2.5 text-sm bg-[#faf8f0] border-2 border-[#d4c9a8]/80 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder-ink-400 transition-all"
+                    className="input-warm w-full pl-9 pr-9 py-2.5 text-sm bg-parchment-50 border-2 border-aged-200/80 rounded-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder-ink-400 transition-all"
                   />
                   {searchQuery && (
                     <button

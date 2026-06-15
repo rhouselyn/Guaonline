@@ -98,14 +98,14 @@ function AllUnitsStep({
         whileTap={!isLocked ? { scale: 0.97 } : {}}
         onClick={isLocked ? undefined : onClick}
         disabled={isLocked}
-        className={`relative flex flex-col items-center justify-center rounded-md border-2 transition-all duration-200 ${
+        className={`relative flex flex-col items-center justify-center rounded-sm transition-all duration-200 ${
           isCompleted
-            ? 'bg-[#faf8f0] border-[#d4c9a8] hover:border-[#d4a853]'
+            ? 'bg-olive-50 border-olive-200/50 hover:bg-olive-50'
             : isLocked
-            ? 'bg-[#faf8f0]/50 border-[#d4c9a8]/50 cursor-not-allowed'
+            ? 'bg-parchment-100 border-aged-200/30 cursor-not-allowed'
             : isCurrent
-            ? 'bg-[#faf8f0] border-[#d4a853] shadow-[2px_2px_0_#d4c9a8]'
-            : 'bg-[#faf8f0]/60 border-[#d4c9a8] hover:border-[#d4a853]'
+            ? 'bg-amber-50 border-amber-300/70 shadow-retro-sm'
+            : 'bg-amber-50/40 border-amber-200/40 hover:border-amber-300/60'
         }`}
         style={{ width: '5rem', height: '5rem' }}
       >
@@ -113,7 +113,7 @@ function AllUnitsStep({
           <Lock className="w-3.5 h-3.5 text-aged-300" />
         ) : isCompleted ? (
           <>
-            <span className="text-base font-bold text-[#3d3929]">{index + 1}</span>
+            <span className="text-base font-bold text-olive-600">{index + 1}</span>
             {typeof starCount === 'number' && (
               <div className="flex items-center justify-center gap-px mt-0.5">
                 {[0, 1, 2].map((i) => (
@@ -121,7 +121,7 @@ function AllUnitsStep({
                     key={i}
                     className={`w-3 h-3 ${
                       i < starCount
-                        ? 'text-[#d4a853] fill-[#d4a853]'
+                        ? 'text-amber-400 fill-amber-400'
                         : 'text-aged-300 fill-aged-300'
                     }`}
                   />
@@ -131,11 +131,11 @@ function AllUnitsStep({
           </>
         ) : (
           <>
-            <span className={`text-base font-bold text-[#d4a853]`}>{index + 1}</span>
+            <span className={`text-base font-bold text-amber-500`}>{index + 1}</span>
             {isGenerating ? (
-              <Loader2 className="w-3 h-3 animate-spin text-[#d4a853] mt-0.5" />
+              <Loader2 className="w-3 h-3 animate-spin text-amber-300 mt-0.5" />
             ) : (
-              <div className={`w-4 h-[2px] rounded-md mt-0.5 ${isCurrent ? 'bg-[#d4a853]' : 'bg-[#d4a853]/60'}`} />
+              <div className={`w-4 h-[2px] rounded-none mt-0.5 ${isCurrent ? 'bg-amber-400' : 'bg-amber-300/60'}`} />
             )}
           </>
         )}
@@ -163,7 +163,7 @@ function AllUnitsStep({
     if (!units || units.length === 0 || (phaseNumber === 2 && units.length === 1 && units[0]?.no_eligible_sentences)) {
       return (
         <div className="py-12 text-center">
-          <p className="text-xs text-[#524d3c]">{t.noPracticeContent || '暂无可练习内容'}</p>
+          <p className="text-xs text-ink-400">{t.noPracticeContent || '暂无可练习内容'}</p>
         </div>
       );
     }
@@ -172,24 +172,24 @@ function AllUnitsStep({
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-[#3d3929] tabular-nums">{completed}<span className="text-aged-300">/{total}</span></span>
+            <span className="text-[11px] font-bold text-ink-400 tabular-nums">{completed}<span className="text-aged-300">/{total}</span></span>
           </div>
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
                 disabled={currentPage === 0}
-                className="p-1 text-[#3d3929] hover:text-[#3d3929] disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
+                className="p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[11px] text-[#3d3929] tabular-nums min-w-[60px] text-center">
+              <span className="text-[11px] text-ink-400 tabular-nums min-w-[60px] text-center">
                 {currentPage + 1}/{totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={currentPage >= totalPages - 1}
-                className="p-1 text-[#3d3929] hover:text-[#3d3929] disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
+                className="p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -197,12 +197,14 @@ function AllUnitsStep({
           )}
         </div>
 
-        <div className="w-full h-1.5 bg-[#f0ead6] rounded-md overflow-hidden mb-5">
+        <div className="w-full h-1.5 bg-parchment-100 rounded-none overflow-hidden mb-5">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="h-full rounded-md bg-[#d4a853]"
+            className={`h-full rounded-none ${
+              phaseNumber === 1 ? 'bg-olive-400' : 'bg-blue-400'
+            }`}
           />
         </div>
 
@@ -239,7 +241,7 @@ function AllUnitsStep({
         </button>
 
         {fileTitle && (
-          <span className="text-base font-bold text-[#3d3929] truncate max-w-[240px]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+          <span className="text-base font-bold text-ink-500 truncate max-w-[240px]">
             {fileTitle}
           </span>
         )}
@@ -247,7 +249,7 @@ function AllUnitsStep({
         <div className="flex-1 min-w-0" />
 
         <label className="flex items-center gap-1.5 cursor-pointer select-none group mr-1">
-          <span className="text-xs text-[#524d3c] group-hover:text-[#3d3929] transition-colors flex items-center gap-1">
+          <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
             <Sparkles className="w-3 h-3" />
             {t.onlyNewWords || '只学新词'}
           </span>
@@ -258,13 +260,13 @@ function AllUnitsStep({
               onChange={(e) => onOnlyNewWordsChange?.(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="toggle-warm-off peer-checked:bg-[#d4a853] peer-focus:outline-none" />
+            <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
             <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
           </div>
         </label>
 
         <label className="flex items-center gap-1.5 cursor-pointer select-none group mr-1">
-          <span className="text-xs text-[#524d3c] group-hover:text-[#3d3929] transition-colors flex items-center gap-1">
+          <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
             <Headphones className="w-3 h-3" />
             {t.skipListening || '跳过听力'}
           </span>
@@ -275,7 +277,7 @@ function AllUnitsStep({
               onChange={(e) => onSkipListeningChange?.(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="toggle-warm-off peer-checked:bg-[#d4a853] peer-focus:outline-none" />
+            <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
             <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
           </div>
         </label>
@@ -291,29 +293,23 @@ function AllUnitsStep({
 
       <div className="max-w-3xl mx-auto">
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-bold text-[#3d3929]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+          <h2 className="text-xl font-bold font-display text-ink-800">
             {t.learningUnits || '学习单元'}
           </h2>
-          <p className="text-xs text-[#524d3c] mt-1">{t.completeUnitsInOrder || '按顺序完成单元，解锁下一单元'}</p>
+          <p className="text-xs text-ink-400 mt-1">{t.completeUnitsInOrder || '按顺序完成单元，解锁下一单元'}</p>
         </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-[#d4a853]" />
-            <p className="text-xs text-[#524d3c]">{t.loading}</p>
+            <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+            <p className="text-xs text-ink-400">{t.loading}</p>
           </div>
         ) : (
-          <div className="relative bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md shadow-[2px_2px_0_#8b7e5e] overflow-hidden">
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-            <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md" />
-            <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md" />
-            <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md" />
-            <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md" />
-
-            <div className="bg-[#f0ead6]/70 backdrop-blur-md border-b border-[#d4c9a8]/60 px-3 pt-2.5">
+          <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden">
+            <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5">
               <div className="flex gap-1 relative">
                 <motion.div
-                  className="absolute top-0 bottom-0 bg-[#faf8f0] rounded-t-xl shadow-[2px_2px_0_#d4c9a8]"
+                  className="absolute top-0 bottom-0 bg-parchment-50 rounded-t-xl shadow-retro-sm"
                   style={{ width: 'calc(50% - 4px)' }}
                   animate={{ left: activeTab === 0 ? '2px' : 'calc(50% + 2px)' }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
@@ -328,13 +324,13 @@ function AllUnitsStep({
                       className="relative z-10 flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13px] font-bold"
                     >
                       <div className={`flex items-center gap-1.5 transition-colors duration-300 ${
-                        isActive ? 'text-[#3d3929]' : 'text-[#524d3c] hover:text-[#3d3929]'
+                        isActive ? 'text-ink-700' : 'text-ink-400 hover:text-ink-500'
                       }`}>
                         <Icon className="w-3.5 h-3.5" />
                         <span>{tab.label}</span>
                         {tab.total > 0 && (
-                          <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-md transition-colors duration-300 ${
-                            isActive ? 'bg-[#f0ead6] text-[#3d3929]' : 'text-[#524d3c]'
+                          <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-none transition-colors duration-300 ${
+                            isActive ? 'bg-parchment-100 text-ink-500' : 'text-ink-400'
                           }`}>
                             {tab.completed}/{tab.total}
                           </span>
@@ -346,7 +342,7 @@ function AllUnitsStep({
               </div>
             </div>
 
-            <div className="px-5 pb-5 pt-4 relative z-10">
+            <div className="px-5 pb-5 pt-4">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
