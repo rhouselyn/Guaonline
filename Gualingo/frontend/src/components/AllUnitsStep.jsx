@@ -100,12 +100,12 @@ function AllUnitsStep({
         disabled={isLocked}
         className={`relative flex flex-col items-center justify-center rounded-sm transition-all duration-200 ${
           isCompleted
-            ? 'retro-card bg-olive-50 border-olive-200/50 hover:bg-olive-50'
+            ? 'bg-olive-50 border-olive-200/50 hover:bg-olive-50'
             : isLocked
-            ? 'retro-card bg-parchment-100 border-aged-200/30 cursor-not-allowed'
+            ? 'bg-parchment-100 border-aged-200/30 cursor-not-allowed'
             : isCurrent
-            ? 'retro-card-highlight shadow-retro-sm'
-            : 'retro-card bg-amber-50/40 border-amber-200/40 hover:border-amber-300/60'
+            ? 'bg-amber-50 border-amber-300/70 shadow-retro-sm'
+            : 'bg-amber-50/40 border-amber-200/40 hover:border-amber-300/60'
         }`}
         style={{ width: '5rem', height: '5rem' }}
       >
@@ -121,7 +121,7 @@ function AllUnitsStep({
                     key={i}
                     className={`w-3 h-3 ${
                       i < starCount
-                        ? 'text-amber-500 fill-amber-400'
+                        ? 'text-amber-400 fill-amber-400'
                         : 'text-aged-300 fill-aged-300'
                     }`}
                   />
@@ -172,14 +172,14 @@ function AllUnitsStep({
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="retro-badge-ink text-[11px] tabular-nums">{completed}<span className="text-aged-300">/{total}</span></span>
+            <span className="text-[11px] font-bold text-ink-400 tabular-nums">{completed}<span className="text-aged-300">/{total}</span></span>
           </div>
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
                 disabled={currentPage === 0}
-                className="retro-btn p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
+                className="p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -189,7 +189,7 @@ function AllUnitsStep({
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={currentPage >= totalPages - 1}
-                className="retro-btn p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
+                className="p-1 text-ink-400 hover:text-ink-600 disabled:text-aged-300 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -197,13 +197,13 @@ function AllUnitsStep({
           )}
         </div>
 
-        <div className="w-full h-1.5 bg-parchment-100 rounded-sm overflow-hidden mb-5 retro-corners">
+        <div className="w-full h-1.5 bg-parchment-100 rounded-none overflow-hidden mb-5">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
-            className={`h-full rounded-sm ${
-              phaseNumber === 1 ? 'bg-amber-400' : 'bg-amber-400'
+            className={`h-full rounded-none ${
+              phaseNumber === 1 ? 'bg-olive-400' : 'bg-blue-400'
             }`}
           />
         </div>
@@ -230,12 +230,12 @@ function AllUnitsStep({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="w-full dotted-bg relative"
+      className="w-full"
     >
       <div className="flex items-center gap-2 mb-6">
         <button
           onClick={onBack}
-          className="retro-btn btn-ghost p-2"
+          className="btn-ghost p-2"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -284,7 +284,7 @@ function AllUnitsStep({
 
         <button
           onClick={onHome}
-          className="retro-btn btn-ghost p-2"
+          className="btn-ghost p-2"
           title={t.backToHome || '返回主页'}
         >
           <Home className="w-5 h-5" />
@@ -293,11 +293,10 @@ function AllUnitsStep({
 
       <div className="max-w-3xl mx-auto">
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-bold font-serif text-ink-800">
+          <h2 className="text-xl font-bold font-display text-ink-800">
             {t.learningUnits || '学习单元'}
           </h2>
           <p className="text-xs text-ink-400 mt-1">{t.completeUnitsInOrder || '按顺序完成单元，解锁下一单元'}</p>
-          <div className="retro-divider mt-3" />
         </div>
 
         {loading ? (
@@ -306,7 +305,7 @@ function AllUnitsStep({
             <p className="text-xs text-ink-400">{t.loading}</p>
           </div>
         ) : (
-          <div className="bg-parchment-50 rounded-sm shadow-retro overflow-hidden retro-corners">
+          <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden">
             <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5">
               <div className="flex gap-1 relative">
                 <motion.div
@@ -330,8 +329,8 @@ function AllUnitsStep({
                         <Icon className="w-3.5 h-3.5" />
                         <span>{tab.label}</span>
                         {tab.total > 0 && (
-                          <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-sm transition-colors duration-300 ${
-                            isActive ? 'retro-badge-amber' : 'text-ink-400'
+                          <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-none transition-colors duration-300 ${
+                            isActive ? 'bg-parchment-100 text-ink-500' : 'text-ink-400'
                           }`}>
                             {tab.completed}/{tab.total}
                           </span>
