@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { adminApi } from '../../utils/adminApi'
 
 const LineChart = ({ data }) => {
+  const [hoverIdx, setHoverIdx] = useState(-1)
   if (!data.length) return <div className="text-[#e8d5b7]/40 text-sm">暂无数据</div>
   const maxCost = Math.max(...data.map(d => d.cost || 0), 0.001)
   const width = 100
@@ -21,10 +22,22 @@ const LineChart = ({ data }) => {
         {data.map((d, i) => {
           const x = (i / Math.max(data.length - 1, 1)) * width
           const y = height - ((d.cost || 0) / maxCost) * height
-          return <circle key={i} cx={x} cy={y} r="0.8" fill="#c9a96e" />
+          return (
+            <circle key={i} cx={x} cy={y} r={hoverIdx === i ? 2 : 0.8}
+              fill={hoverIdx === i ? '#fff' : '#c9a96e'} stroke="#c9a96e" strokeWidth={hoverIdx === i ? 0.5 : 0}
+              onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(-1)}
+              style={{ cursor: 'pointer' }} />
+          )
         })}
       </svg>
-      {/* X轴标签 */}
+      {hoverIdx >= 0 && hoverIdx < data.length && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-[#1a1a2e] border border-[#c9a96e]/30 rounded px-3 py-1.5 text-xs pointer-events-none z-10 whitespace-nowrap"
+          style={{ marginBottom: '24px' }}>
+          <span className="text-[#e8d5b7]/60">{data[hoverIdx].date}</span>
+          <span className="text-[#c9a96e] font-bold ml-2">${(data[hoverIdx].cost || 0).toFixed(4)}</span>
+          <span className="text-[#e8d5b7]/40 ml-2">{(data[hoverIdx].tokens || 0).toLocaleString()} tokens</span>
+        </div>
+      )}
       <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
         <span>{data[0]?.date?.slice(5)}</span>
         <span>{data[data.length - 1]?.date?.slice(5)}</span>
