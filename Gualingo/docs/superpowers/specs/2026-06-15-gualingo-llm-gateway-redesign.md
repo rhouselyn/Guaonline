@@ -29,62 +29,83 @@ class LLMGateway:
         """
 ```
 
-### Key 轮换策略：顺序限速
+### Key 轮换策略：始终轮换 + 批量并发
 
-不是简单的 round-robin，而是**顺序使用直到限速再换**：
+始终按顺序轮换 Key，每个 Key 同时处理 N 个请求（N 可在 Admin 全局设置中配置），一批处理完后等待 interval 再切换下一个 Key。
 
 ```
-Free 池: [KeyA, KeyB]
+Free 池: [KeyA, KeyB]，batch_size=3，interval=1.0s
 
-1. 使用 KeyA 发请求
-2. 成功 → 继续用 KeyA
-3. 收到 429 (Rate Limit) → 等待 request_interval 秒
-4. 再试 KeyA → 还是 429 → 切换到 KeyB
-5. 使用 KeyB 发请求
-6. 成功 → 继续用 KeyB
-7. KeyB 也 429 → 等待 → 切换回 KeyA
-8. 所有 Key 连续 10 分钟无有效输出 → 返回错误
+1. KeyA 接收 3 个并发请求（batch）
+2. 3 个请求全部完成 → 等待 1.0s
+3. 切换到 KeyB → 接收 3 个并发请求
+4. 3 个请求全部完成 → 等待 1.0s
+5. 切换回 KeyA → 循环
+
+特殊情况：
+- 当前 batch 未满（只有 2 个请求在等）→ 也立即处理，完成后等 interval 切换
+- 429 → 标记 Key 限速，跳过等 interval 后切换下一个
+- 401 → 标记 Key 无效 5 分钟，跳过切换下一个
+- 所有 Key 都不可用 → 返回 503
+- 连续 10 分钟无有效输出 → 返回 503
 ```
 
-### 原子计数器
+### 原子计数器 + 信号量
 
 ```python
 import threading
+import asyncio
 
 class TierKeyPool:
-    def __init__(self, tier: str, configs: list):
+    def __init__(self, tier: str, configs: list, batch_size: int = 3, interval: float = 1.0):
         self.tier = tier
         self.configs = configs  # [{api_key, base_url, model, input_price, output_price}]
         self.current_index = 0
         self.lock = threading.Lock()
-        self.rate_limited_until = {}  # key_index -> timestamp（限速到什么时候）
-        self.fail_counts = {}  # key_index -> 连续失败次数
+        self.rate_limited_until = {}  # key_index -> timestamp
+        self.batch_size = batch_size
+        self.interval = interval
+        self.active_count = 0  # 当前 Key 正在处理的请求数
+        self.last_switch_time = 0  # 上次切换时间
     
     def get_current(self) -> dict | None:
-        """获取当前活跃 Key（跳过限速中的）。"""
+        """获取当前活跃 Key。"""
         with self.lock:
             now = time.time()
             for _ in range(len(self.configs)):
                 idx = self.current_index % len(self.configs)
-                # 检查是否在限速期
                 if idx in self.rate_limited_until and now < self.rate_limited_until[idx]:
                     self.current_index += 1
                     continue
+                self.active_count += 1
                 return self.configs[idx], idx
-            return None  # 所有 Key 都在限速
+            return None
     
     def mark_rate_limited(self, idx: int, retry_after: float = None):
-        """标记 Key 被限速。"""
+        """标记 Key 被限速，立即切换。"""
         with self.lock:
-            wait = retry_after or 60  # 默认等60秒
+            wait = retry_after or 60
             self.rate_limited_until[idx] = time.time() + wait
-            self.current_index += 1  # 切换到下一个
+            self.active_count = 0
+            self.current_index += 1
     
-    def mark_success(self, idx: int):
-        """标记 Key 成功。"""
+    def mark_complete(self, idx: int):
+        """单个请求完成。当 batch 全部完成时，等 interval 后切换。"""
         with self.lock:
-            self.fail_counts[idx] = 0
-            # 不切换，继续用同一个 Key
+            self.active_count -= 1
+            if self.active_count <= 0:
+                self.active_count = 0
+                # batch 完成，等 interval 后切换
+                self.last_switch_time = time.time()
+                self.current_index += 1
+    
+    async def wait_for_interval(self):
+        """等待 interval（如果刚切换完 batch）。"""
+        with self.lock:
+            elapsed = time.time() - self.last_switch_time
+            remaining = self.interval - elapsed
+        if remaining > 0:
+            await asyncio.sleep(remaining)
 ```
 
 ### 错误处理
@@ -218,9 +239,8 @@ response = await gateway.call(user_id, tier, messages, temperature, max_tokens, 
 
 ## 7. 全局设置集成
 
-`global_settings.json` 中的 `request_interval` 被 `LLMGateway` 读取，用于：
-- 429 后等待时间
-- 5xx 后重试间隔
-- 请求之间的最小间隔
+`global_settings.json` 中的配置被 `LLMGateway` 读取：
+- `request_interval`：batch 完成后切换 Key 的等待时间
+- `batch_size`：每个 Key 同时处理的请求数
 
 Gateway 启动时加载一次，Admin 更新时通知 Gateway 刷新。
