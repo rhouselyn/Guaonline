@@ -53,8 +53,18 @@ def init_quota(user_id: str, tier: str = "free"):
     conn.close()
 
 
+def _tier_max(tier: str) -> int:
+    """返回会员等级规定的额度上限。"""
+    if tier == "pro":
+        return -1
+    elif tier == "basic":
+        return BASIC_MONTHLY_QUOTA
+    else:
+        return FREE_MAX_QUOTA
+
+
 def check_and_refill_quota(user_id: str) -> dict:
-    """检查额度，自动每日恢复（free）/每月重置（basic）。返回 {used, max, available}。"""
+    """检查额度，自动每日恢复（free）/每月重置（basic）。返回 {used, max, available, tier_max}。"""
     conn = _get_conn()
     try:
         _ensure_quota_columns(conn)
@@ -79,7 +89,7 @@ def check_and_refill_quota(user_id: str) -> dict:
 
     if tier == "pro":
         conn.close()
-        return {"used": used, "max": -1, "available": -1}
+        return {"used": used, "max": -1, "available": -1, "tier_max": -1}
 
     elif tier == "basic":
         # Basic: 每月重置额度
@@ -107,7 +117,7 @@ def check_and_refill_quota(user_id: str) -> dict:
             conn.commit()
         conn.close()
         available = max(max_q - used, 0)
-        return {"used": used, "max": max_q, "available": available}
+        return {"used": used, "max": max_q, "available": available, "tier_max": _tier_max(tier)}
 
     else:  # free
         # Free: 每日恢复50句，上限200
@@ -138,8 +148,7 @@ def check_and_refill_quota(user_id: str) -> dict:
             conn.commit()
         conn.close()
         available = max(max_q - used, 0)
-        return {"used": used, "max": max_q, "available": available}
-
+        return {"used": used, "max": max_q, "available": available, "tier_max": _tier_max(tier)}
 
 def consume_quota(user_id: str, count: int) -> bool:
     """消费额度。返回是否成功。"""

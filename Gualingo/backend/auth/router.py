@@ -1,15 +1,18 @@
 """用户认证路由。"""
 
 import uuid
+import httpx
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 import bcrypt
 from auth.models import UserCreate, UserLogin, User, Token, UserTier
 from auth.jwt_utils import create_tokens, decode_token
 from auth.deps import require_auth, get_current_user, TokenData
 from auth.quota import init_quota, check_and_refill_quota, consume_quota
-from config import DATA_DIR
+from config import DATA_DIR, HOST, PORT
 import sqlite3
+import os
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -131,6 +134,142 @@ async def get_me(current_user: TokenData = Depends(require_auth)):
 @router.get("/quota")
 async def get_quota(current_user: TokenData = Depends(require_auth)):
     return check_and_refill_quota(current_user.user_id)
+
+
+# ── OAuth 配置 ──────────────────────────────────────────
+
+def _get_oauth_config(provider: str) -> dict:
+    """从环境变量读取 OAuth 配置。"""
+    prefix = provider.upper()
+    client_id = os.getenv(f"{prefix}_CLIENT_ID", "")
+    client_secret = os.getenv(f"{prefix}_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        return None
+    if provider == "google":
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        token_url = "https://oauth2.googleapis.com/token"
+        userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+        scope = "openid email profile"
+    elif provider == "github":
+        auth_url = "https://github.com/login/oauth/authorize"
+        token_url = "https://github.com/login/oauth/access_token"
+        userinfo_url = "https://api.github.com/user"
+        scope = "user:email"
+    else:
+        return None
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "auth_url": auth_url,
+        "token_url": token_url,
+        "userinfo_url": userinfo_url,
+        "scope": scope,
+    }
+
+
+def _get_callback_url(provider: str) -> str:
+    base = os.getenv("OAUTH_CALLBACK_BASE", f"http://localhost:{PORT}")
+    return f"{base}/api/auth/oauth/{provider}/callback"
+
+
+@router.get("/oauth/{provider}")
+async def oauth_login(provider: str):
+    """发起 OAuth 登录，重定向到提供商授权页面。"""
+    config = _get_oauth_config(provider)
+    if not config:
+        raise HTTPException(status_code=400, detail=f"OAuth {provider} 未配置")
+    import urllib.parse
+    params = {
+        "client_id": config["client_id"],
+        "redirect_uri": _get_callback_url(provider),
+        "response_type": "code",
+        "scope": config["scope"],
+    }
+    url = f"{config['auth_url']}?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url)
+
+
+@router.get("/oauth/{provider}/callback")
+async def oauth_callback(provider: str, code: str = Query(...)):
+    """OAuth 回调，用 code 换 token，获取用户信息，登录或注册。"""
+    config = _get_oauth_config(provider)
+    if not config:
+        raise HTTPException(status_code=400, detail=f"OAuth {provider} 未配置")
+
+    async with httpx.AsyncClient() as client:
+        # 用 code 换 access_token
+        token_resp = await client.post(config["token_url"], data={
+            "client_id": config["client_id"],
+            "client_secret": config["client_secret"],
+            "code": code,
+            "redirect_uri": _get_callback_url(provider),
+            "grant_type": "authorization_code",
+        }, headers={"Accept": "application/json"})
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="OAuth 授权失败")
+
+        # 获取用户信息
+        if provider == "google":
+            resp = await client.get(config["userinfo_url"], headers={"Authorization": f"Bearer {access_token}"})
+            info = resp.json()
+            email = info.get("email", "")
+            name = info.get("name", info.get("given_name", email.split("@")[0]))
+        elif provider == "github":
+            resp = await client.get(config["userinfo_url"], headers={"Authorization": f"Bearer {access_token}"})
+            info = resp.json()
+            email = info.get("email", "")
+            name = info.get("name", info.get("login", ""))
+            # GitHub 可能不返回 email，需要额外请求
+            if not email:
+                email_resp = await client.get("https://api.github.com/user/emails", headers={"Authorization": f"Bearer {access_token}"})
+                emails = email_resp.json()
+                for e in emails:
+                    if isinstance(e, dict) and e.get("primary"):
+                        email = e.get("email", "")
+                        break
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的 OAuth 提供商: {provider}")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="无法获取邮箱地址")
+
+    # 查找或创建用户
+    conn = _get_conn()
+    row = conn.execute("SELECT id, tier, banned, banned_reason FROM users WHERE email = ?", (email,)).fetchone()
+
+    if row:
+        # 已有用户，检查封禁
+        if row["banned"]:
+            conn.close()
+            reason = row["banned_reason"] or "账号已被封禁"
+            raise HTTPException(status_code=403, detail=f"账号已被封禁：{reason}")
+        user_id = row["id"]
+        tier = UserTier(row["tier"])
+    else:
+        # 新用户，自动注册
+        user_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        # OAuth 用户用随机密码
+        random_pw = uuid.uuid4().hex
+        conn.execute(
+            "INSERT INTO users (id, email, name, password_hash, tier, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, email, name, _hash_password(random_pw), UserTier.free.value, now)
+        )
+        conn.commit()
+        tier = UserTier.free
+        init_quota(user_id, "free")
+
+    conn.close()
+
+    # 生成 JWT
+    tokens = create_tokens(user_id, tier)
+    import urllib.parse
+    # 重定向前端页面，携带 token
+    base = os.getenv("OAUTH_FRONTEND_URL", f"http://localhost:{PORT}")
+    redirect_url = f"{base}/oauth-callback?{urllib.parse.urlencode(tokens)}"
+    return RedirectResponse(redirect_url)
 
 
 

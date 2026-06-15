@@ -135,9 +135,33 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         }
 
 
+# 每用户每分钟最高请求数
+_RATE_LIMIT_MAX = 3
+_rate_limit_store: dict = {}  # user_id -> [timestamp, ...]
+
+
+def _check_rate_limit(user_id: str) -> bool:
+    """检查用户是否超过限流。返回 True 表示允许，False 表示拒绝。"""
+    import time
+    now = time.time()
+    window = 60  # 60秒窗口
+    if user_id not in _rate_limit_store:
+        _rate_limit_store[user_id] = []
+    # 清理过期记录
+    _rate_limit_store[user_id] = [t for t in _rate_limit_store[user_id] if now - t < window]
+    if len(_rate_limit_store[user_id]) >= _RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[user_id].append(now)
+    return True
+
+
 @router.post("/process-text")
 async def process_text(request: dict, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_auth)):
     try:
+        # 限流检查
+        if not _check_rate_limit(current_user.user_id):
+            raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试（每分钟最多3次）")
+
         text = request.get("text", "")
         source_lang = request.get("source_language", "en")
         target_lang = request.get("target_language", "en")

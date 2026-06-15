@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import LearningApp from './pages/LearningApp'
+import OAuthCallback from './pages/OAuthCallback'
 
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'))
@@ -24,6 +25,7 @@ function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/oauth-callback" element={<OAuthCallback />} />
       <Route path="/learn" element={<LearningApp />} />
       <Route path="/learn/:fileId" element={<LearningApp />} />
       <Route path="/admin" element={<AdminSuspense><AdminPage /></AdminSuspense>}>

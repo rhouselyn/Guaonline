@@ -153,6 +153,11 @@ export const adminApi = {
     return response.data;
   },
 
+  getUserGrowth: async (days = 30) => {
+    const response = await axios.get(`${baseUrl}/api/admin/user-growth`, { params: { days } });
+    return response.data;
+  },
+
   getKeyStatuses: async (tier) => {
     const response = await axios.get(`${baseUrl}/api/admin/api-keys/${tier}/status`);
     return response.data;

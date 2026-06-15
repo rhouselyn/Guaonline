@@ -118,6 +118,47 @@ async def get_dashboard(admin: AdminTokenData = Depends(require_admin)):
     }
 
 
+@router.get("/user-growth")
+async def get_user_growth(days: int = Query(30, ge=1, le=3650), admin: AdminTokenData = Depends(require_admin)):
+    """获取用户增长趋势数据。返回每天的累计用户数和新增用户数。"""
+    conn = get_user_conn()
+    now = datetime.now(timezone.utc)
+
+    # 获取所有用户的注册日期
+    rows = conn.execute(
+        "SELECT date(created_at) as d, COUNT(*) as c FROM users GROUP BY date(created_at) ORDER BY d"
+    ).fetchall()
+    conn.close()
+
+    # 构建日期->新增映射
+    daily_new = {}
+    for row in rows:
+        daily_new[row["d"]] = row["c"]
+
+    # 生成指定天数的数据
+    result = []
+    total = 0
+    from datetime import timedelta
+    start_date = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    # 先计算 start_date 之前的累计
+    for d, c in daily_new.items():
+        if d < start_date:
+            total += c
+
+    for i in range(days + 1):
+        d = (now - timedelta(days=days - i)).strftime("%Y-%m-%d")
+        new_count = daily_new.get(d, 0)
+        total += new_count
+        result.append({
+            "date": d,
+            "new_users": new_count,
+            "total_users": total,
+        })
+
+    return {"growth": result}
+
+
 # ── API Key 管理 ────────────────────────────────────────────
 
 @router.get("/api-keys")

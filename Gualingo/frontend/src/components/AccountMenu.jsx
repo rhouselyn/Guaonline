@@ -50,7 +50,7 @@ export default function AccountMenu({ t }) {
   }
 
   const available = quota?.available ?? 0;
-  const max = quota?.max ?? 200;
+  const max = quota?.tier_max ?? quota?.max ?? 200;
   const isUnlimited = max === -1;
   const isLow = !isUnlimited && typeof available === 'number' && available <= 10;
 
