@@ -21,12 +21,6 @@ BASE_DIR = Path(os.environ.get("BASE_DIR", str(Path(__file__).resolve().parent.p
 # 数据目录
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))
 
-# 配置目录
-CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", str(BASE_DIR / "config")))
-
-# UI 翻译缓存目录
-UI_TRANSLATIONS_DIR = CONFIG_DIR / "ui_translations"
-
 # 前端静态文件目录
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", str(BASE_DIR / "frontend" / "dist")))
 

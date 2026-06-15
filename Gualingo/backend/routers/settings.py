@@ -80,21 +80,7 @@ async def translate_ui(lang_code: str):
         db_storage.save_ui_translations(lang_code, result)
         return result
 
-    # 3. 尝试从旧文件缓存迁移
-    from config import UI_TRANSLATIONS_DIR
-    UI_TRANSLATIONS_DIR.mkdir(parents=True, exist_ok=True)
-    cache_file = UI_TRANSLATIONS_DIR / f"{lang_code}.json"
-    if cache_file.exists():
-        try:
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                result = json.load(f)
-            # 迁移到数据库
-            db_storage.save_ui_translations(lang_code, result)
-            return result
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    # 4. 用 LLM 生成（同步等待，不再用后台任务）
+    # 3. 用 LLM 生成（同步等待，不再用后台任务）
     return await _do_translate_ui(lang_code, db_storage)
 
 

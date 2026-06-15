@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
+import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 
@@ -140,10 +140,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const [activeSection, setActiveSection] = useState('general')
   const [saveError, setSaveError] = useState('')
 
-  // Version check state
-  const [versionChecking, setVersionChecking] = useState(false)
-  const [versionInfo, setVersionInfo] = useState(null)
-  const [autoUpdate, setAutoUpdate] = useState(false)
+  // Learning options state
   const [skipListening, setSkipListening] = useState(false)
   const [onlyNewWords, setOnlyNewWords] = useState(false)
 
@@ -157,7 +154,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         if (prefs.ui_lang) setLocalUiLang(prefs.ui_lang)
         else if (prefs.target_lang) setLocalUiLang(prefs.target_lang)
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
-        if (prefs.auto_update !== undefined) setAutoUpdate(prefs.auto_update)
         if (prefs.skip_listening !== undefined) setSkipListening(prefs.skip_listening)
         if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
         setLoading(false)
@@ -166,19 +162,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
       })
     }
   }, [isOpen])
-
-  const handleCheckUpdates = async () => {
-    setVersionChecking(true)
-    setVersionInfo(null)
-    try {
-      const data = await api.checkForUpdates()
-      setVersionInfo(data)
-    } catch (e) {
-      setVersionInfo({ current_version: '', latest_version: null, has_update: false, error: t.updateCheckFailed || '检查更新失败' })
-    } finally {
-      setVersionChecking(false)
-    }
-  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -191,7 +174,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         ui_lang: localUiLang,
         page_size: localPageSize,
         recent_languages: updatedRecentLangs,
-        auto_update: autoUpdate,
         skip_listening: skipListening,
         only_new_words: onlyNewWords,
       })
@@ -300,94 +282,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
               <svg className="w-8 h-5 text-aged-300" viewBox="0 0 32 20" fill="currentColor"><rect x="0" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="white"/></svg>
             )}
           </button>
-        </div>
-      </div>
-
-      {/* Version Check */}
-      <div className="pt-2 border-t border-aged-200/60">
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-3">
-          <RefreshCw className="w-3 h-3" />
-          {t.currentVersion || '当前版本'}
-        </label>
-
-        <div className="space-y-3">
-          {/* Current version display */}
-          {versionInfo?.current_version && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-500">{t.currentVersion || '当前版本'}:</span>
-              <span className="text-xs font-bold text-ink-800">v{versionInfo.current_version}</span>
-              {versionInfo.has_update && (
-                <span className="badge-ochre">{t.updateAvailable || '发现新版本'}</span>
-              )}
-            </div>
-          )}
-
-          {/* Check updates button */}
-          <button
-            onClick={handleCheckUpdates}
-            disabled={versionChecking}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-ink-600 bg-parchment-100 hover:bg-parchment-200 border-2 border-aged-200 rounded-sm transition-colors disabled:opacity-50"
-          >
-            {versionChecking ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3.5 h-3.5" />
-            )}
-            {versionChecking ? (t.checkingForUpdates || '检查中...') : (t.checkForUpdates || '检查更新')}
-          </button>
-
-          {/* Version check result */}
-          {versionInfo && !versionChecking && (
-            <div className={`text-xs p-2.5 rounded-sm border-2 ${
-              versionInfo.has_update
-                ? 'bg-amber-50 border-amber-200 text-amber-700'
-                : versionInfo.error
-                  ? 'bg-rust-50 border-rust-200 text-rust-500'
-                  : 'bg-olive-50 border-olive-200 text-olive-600'
-            }`}>
-              {versionInfo.has_update ? (
-                <div className="space-y-1.5">
-                  <p className="font-bold">{(t.updateAvailable || '发现新版本 {0}').replace('{0}', `v${versionInfo.latest_version}`)}</p>
-                  {versionInfo.release_notes && (
-                    <p className="text-[11px] opacity-80 line-clamp-3">{versionInfo.release_notes}</p>
-                  )}
-                  {versionInfo.download_url && (
-                    <a
-                      href={versionInfo.download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 hover:text-amber-700 underline"
-                    >
-                      <Download className="w-3 h-3" />
-                      {t.downloadUpdate || '下载更新'}
-                    </a>
-                  )}
-                </div>
-              ) : versionInfo.error ? (
-                <p>{t.updateCheckFailed || '检查更新失败'}</p>
-              ) : (
-                <p>{t.noUpdateAvailable || '已是最新版本'}</p>
-              )}
-            </div>
-          )}
-
-          {/* Auto Update Toggle */}
-          <div className="flex items-center justify-between py-1">
-            <div>
-              <p className="text-xs font-medium text-ink-700">{t.autoUpdate || '自动更新'}</p>
-              <p className="text-[10px] text-ink-400">{t.autoUpdateDesc || '有新版本时自动下载并安装'}</p>
-            </div>
-            <button
-              onClick={() => setAutoUpdate(v => !v)}
-              className="transition-colors"
-            >
-              {autoUpdate ? (
-                <ToggleRight className="w-8 h-5 text-amber-500" />
-              ) : (
-                <ToggleLeft className="w-8 h-5 text-aged-300" />
-              )}
-            </button>
-          </div>
         </div>
       </div>
     </div>

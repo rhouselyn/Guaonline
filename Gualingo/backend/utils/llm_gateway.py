@@ -153,7 +153,10 @@ class LLMGateway:
         """
         统一 LLM 调用入口。
         """
+        # 查找对应 tier 的 Key 池，无则回退到 free
         pool = self.pools.get(tier)
+        if not pool and tier != "free":
+            pool = self.pools.get("free")
         if not pool:
             raise Exception(f"No API Key configured for tier: {tier}")
 
@@ -188,6 +191,8 @@ class LLMGateway:
             **({"temperature": temperature} if temperature is not None else {}),
             **({"max_tokens": max_tokens} if max_tokens is not None else {}),
             **({"tools": tools} if tools is not None else {}),
+            # 禁用 Qwen3 等模型的思考模式，避免 reasoning_content 消耗 token
+            "enable_thinking": False,
         }
 
         try:
