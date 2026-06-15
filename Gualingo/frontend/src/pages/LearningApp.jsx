@@ -490,6 +490,8 @@ function App() {
         if (inputMode === 'direct') {
           setOriginalText(text.trim())
         }
+        // 刷新额度信息
+        auth.fetchUser().catch(() => {})
         api.getUserPreferences().then(prefs => {
           if (prefs.recent_languages) setRecentLanguages(prefs.recent_languages)
         }).catch(() => {})
@@ -508,6 +510,9 @@ function App() {
         } else {
           showAlert(t.badRequest || '请求参数错误')
         }
+      } else if (error.response && error.response.status === 429) {
+        const detail = error.response.data?.detail || '额度已用完'
+        showAlert(detail, '额度不足')
       } else if (error.response && error.response.status === 504) {
         showAlert(t.networkTimeout || '网络连接超时，请检查网络连接后重试')
       } else if (error.message && error.message.includes('timeout')) {
