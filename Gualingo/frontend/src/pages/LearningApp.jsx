@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2, Home } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -1296,20 +1296,12 @@ function App() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate('/')}
-                    className="absolute top-3 right-20 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
-                  >
-                    <Home className="w-5 h-5" />
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
                     onClick={() => setShowSettings(true)}
-                    className="absolute top-3 right-4 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
+                    className="absolute top-3 right-12 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
                   >
                     <Settings className="w-5 h-5" />
                   </motion.button>
-                  <div className="absolute top-3 right-36 z-10">
+                  <div className="absolute top-3 right-28 z-10">
                     {currentUser ? (
                       <AccountMenu t={t} />
                     ) : (
