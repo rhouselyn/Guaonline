@@ -8,13 +8,13 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-3xl mx-auto"
+      className="max-w-3xl mx-auto dotted-bg relative"
     >
       <motion.button
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         onClick={onBack}
-        className="btn-ghost flex items-center gap-2 px-4 py-2 mb-8"
+        className="retro-btn btn-ghost flex items-center gap-2 px-4 py-2 mb-8"
       >
         <ArrowLeft className="w-4 h-4" />
         {t.back}
@@ -24,10 +24,11 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
         <motion.h2
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-3xl font-bold font-display text-ink-700 mb-4"
+          className="text-3xl font-bold font-serif text-ink-800 mb-4"
         >
           {t.selectPhase}
         </motion.h2>
+        <div className="retro-divider" />
       </div>
 
       {loading ? (
@@ -35,7 +36,7 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
           <p className="text-lg text-ink-600">{t.loading}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 retro-corners">
           {phases.map((phase, index) => (
             <motion.div
               key={phase.phase_number}
@@ -45,19 +46,19 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
             >
               <button
                 onClick={() => onPhaseSelect(phase.phase_number)}
-                className="w-full p-6 border-2 border-aged-200 bg-parchment-50 hover:border-ink-400 hover:shadow-retro-sm rounded-md transition-all"
+                className="w-full p-6 retro-card hover:border-ink-400 hover:shadow-retro-sm rounded-sm transition-all"
               >
-                <h3 className="text-xl font-bold font-display text-ink-800 mb-2">
+                <h3 className="text-xl font-bold font-serif text-ink-800 mb-2">
                   {phase.phase_number === 1 ? t.phase1 : t.phase2}
                 </h3>
                 <p className="text-ink-600 mb-2">{phase.units_count} {t.unit}s</p>
                 <div className="text-sm font-bold">
                   {phase.progress.current_unit > 0 ? (
-                    <span className="text-amber-500">
+                    <span className="retro-badge-amber">
                       已完成 {phase.progress.current_unit}/{phase.units_count} {t.unit}s
                     </span>
                   ) : (
-                    <span className="text-ink-400">{t.notStarted}</span>
+                    <span className="retro-badge-ink">{t.notStarted}</span>
                   )}
                 </div>
               </button>
