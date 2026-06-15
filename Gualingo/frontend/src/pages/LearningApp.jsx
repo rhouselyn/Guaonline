@@ -1302,16 +1302,7 @@ function App() {
                     <Settings className="w-5 h-5" />
                   </motion.button>
                   <div className="absolute top-3 right-28 z-10">
-                    {currentUser ? (
-                      <AccountMenu t={t} />
-                    ) : (
-                      <button
-                        onClick={() => navigate('/login')}
-                        className="px-3 py-1.5 text-sm text-amber-600 hover:text-amber-700 transition-colors"
-                      >
-                        登录
-                      </button>
-                    )}
+                    <AccountMenu t={t} />
                   </div>
                   {translatingUI && (
                     <div className="absolute inset-0 bg-parchment-50/80 backdrop-blur-sm z-20 flex items-center justify-center">

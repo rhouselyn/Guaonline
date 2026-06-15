@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth } from '../utils/auth';
+import { User } from 'lucide-react';
 
 export default function AccountMenu({ t }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const user = auth.getUser();
@@ -14,20 +17,29 @@ export default function AccountMenu({ t }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (!user) return null;
+  // 未登录：圆圈里显示人像图标，点击跳转登录
+  if (!user) {
+    return (
+      <button
+        onClick={() => navigate('/login')}
+        className="w-8 h-8 rounded-full border-2 border-ink-300 flex items-center justify-center text-ink-400 hover:text-ink-600 hover:border-ink-500 transition-colors"
+        title="登录"
+      >
+        <User className="w-4 h-4" />
+      </button>
+    );
+  }
 
   const tierLabel = { free: t?.freeTier || '免费版', basic: t?.basicTier || '基础版', pro: t?.proTier || '专业版' };
 
+  // 已登录：圆圈里显示首字母，无外边框
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-sm hover:bg-parchment-200/60 transition-colors"
+        className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-medium hover:bg-amber-600 transition-colors"
       >
-        <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-medium">
-          {(user.name || user.email)[0].toUpperCase()}
-        </div>
-        <span className="text-sm text-ink-700 hidden sm:inline">{user.name || user.email}</span>
+        {(user.name || user.email)[0].toUpperCase()}
       </button>
 
       {open && (
@@ -37,7 +49,7 @@ export default function AccountMenu({ t }) {
             <p className="text-xs text-amber-600 mt-0.5">{tierLabel[user.tier] || user.tier}</p>
           </div>
           <button
-            onClick={() => { auth.logout(); setOpen(false); window.location.href = '/'; }}
+            onClick={() => { auth.logout(); setOpen(false); navigate('/'); }}
             className="w-full text-left px-4 py-2 text-sm text-ink-600 hover:bg-parchment-100 transition-colors"
           >
             {t?.logout || '退出登录'}
