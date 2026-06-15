@@ -36,6 +36,9 @@ def _get_conn():
         )
     """)
     conn.commit()
+    # 确保旧表也有新列
+    from auth.quota import _ensure_quota_columns
+    _ensure_quota_columns(conn)
     return conn
 
 

@@ -14,6 +14,7 @@ MAX_QUOTA = 100
 def _get_conn():
     conn = sqlite3.connect(USER_DB_PATH)
     conn.row_factory = sqlite3.Row
+    _ensure_quota_columns(conn)
     return conn
 
 

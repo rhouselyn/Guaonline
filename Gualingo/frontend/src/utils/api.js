@@ -270,5 +270,14 @@ export const api = {
   triggerAutoUpdate: async () => {
     const response = await axios.post(`${baseUrl}/api/auto-update`);
     return response.data;
+  },
+
+  updateApiKey: async (apiKey, baseUrl_val, model) => {
+    const params = new URLSearchParams();
+    if (apiKey !== undefined) params.append('api_key', apiKey);
+    if (baseUrl_val !== undefined) params.append('base_url', baseUrl_val);
+    if (model !== undefined) params.append('model', model);
+    const response = await axios.put(`${baseUrl}/api/auth/me/api-key?${params.toString()}`);
+    return response.data;
   }
 };

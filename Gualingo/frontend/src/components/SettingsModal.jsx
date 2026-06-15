@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Globe, Cpu, Check, Loader2, Gauge, Languages, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
+import { Settings, X, Globe, Cpu, Check, Loader2, Gauge, Languages, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle, Key } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 
@@ -122,7 +122,7 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
   )
 }
 
-const SECTIONS = ['general', 'nativeLang']
+const SECTIONS = ['api', 'general', 'nativeLang']
 
 const slideVariants = {
   enter: (dir) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -140,7 +140,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const [retryInterval, setRetryInterval] = useState(1)
   const [localUiLang, setLocalUiLang] = useState(uiLang || 'zh')
   const [localPageSize, setLocalPageSize] = useState(50)
-  const [activeSection, setActiveSection] = useState('general')
+  const [activeSection, setActiveSection] = useState('api')
   const [saveError, setSaveError] = useState('')
 
   // Version check state
@@ -153,7 +153,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
       setLoading(true)
       setSaved(false)
       setSaveError('')
-      setActiveSection('general')
+      setActiveSection('api')
       Promise.all([
         fetch('/api/settings').then(res => res.json()),
         api.getUserPreferences().catch(() => ({}))
@@ -319,11 +319,13 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const isLast = currentIndex === configs.length - 1
 
   const sectionLabels = {
+    api: t.settingsApi || 'API',
     general: t.settingsGeneral || '通用',
     nativeLang: t.settingsNativeLang || '母语',
   }
 
   const sectionIcons = {
+    api: Key,
     general: Settings,
     nativeLang: Languages,
   }
@@ -499,8 +501,69 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     </div>
   )
 
+  const renderApiSection = () => (
+    <div className="space-y-5">
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm">
+        <p className="text-[11px] text-amber-700">
+          {t?.apiSectionNote || '测试用：配置 API Key 后可使用自己的 LLM 服务。正式版将使用平台统一额度。'}
+        </p>
+      </div>
+      {/* API Key */}
+      <div>
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Key className="w-3 h-3" />
+          API Key
+        </label>
+        <div className="relative">
+          <input
+            type="password"
+            value={current.api_key}
+            onChange={e => {
+              const next = [...configs]; next[currentIndex] = { ...current, api_key: e.target.value }; setConfigs(next)
+            }}
+            placeholder={current.has_key ? `当前: ${current.masked_key}` : 'sk-...'}
+            className="input-retro w-full pr-8"
+          />
+        </div>
+      </div>
+      {/* Base URL */}
+      <div>
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Globe className="w-3 h-3" />
+          Base URL
+        </label>
+        <input
+          type="text"
+          value={current.base_url}
+          onChange={e => {
+            const next = [...configs]; next[currentIndex] = { ...current, base_url: e.target.value }; setConfigs(next)
+          }}
+          placeholder="https://api.openai.com/v1"
+          className="input-retro w-full"
+        />
+      </div>
+      {/* Model */}
+      <div>
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Cpu className="w-3 h-3" />
+          Model
+        </label>
+        <input
+          type="text"
+          value={current.model}
+          onChange={e => {
+            const next = [...configs]; next[currentIndex] = { ...current, model: e.target.value }; setConfigs(next)
+          }}
+          placeholder="gpt-4o-mini"
+          className="input-retro w-full"
+        />
+      </div>
+    </div>
+  )
+
   const renderContent = () => {
     switch (activeSection) {
+      case 'api': return renderApiSection()
       case 'general': return renderGeneralSection()
       case 'nativeLang': return renderNativeLangSection()
       default: return null
