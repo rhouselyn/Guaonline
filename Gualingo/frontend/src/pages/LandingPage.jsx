@@ -151,12 +151,12 @@ const STEPS = [
 const PLANS = [
   {
     id: 'free', name: '免费版', price: '¥0', period: '', highlight: false,
-    features: ['免费 50 句额度', '每日恢复 10 句', '基础学习功能', '全局词汇缓存', 'Web 端'],
+    features: ['免费 50 句额度', '每日恢复 10 句', '基础学习功能'],
     cta: '免费开始',
   },
   {
     id: 'basic', name: '基础版', price: '¥19', period: '/月', highlight: true,
-    features: ['平台 API 额度（50次/月）', '云同步', 'SRS 间隔复习', '跨设备使用'],
+    features: ['1000 句/月', '更优模型', '云同步', 'SRS 间隔复习', '跨设备使用'],
     cta: '即将推出', disabled: true,
   },
   {
