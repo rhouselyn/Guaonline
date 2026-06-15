@@ -78,14 +78,18 @@ export default function LoginPage() {
     try {
       if (isRegister) {
         await auth.register(email, password, name);
+        navigate('/learn');
+      } else if (email === 'admin@mail.com') {
+        // Admin 登录走专用端点
+        const { adminApi } = await import('../utils/adminApi');
+        const tokens = await adminApi.login(email, password);
+        auth.setTokens(tokens);
+        auth.setUser({ role: 'admin', email: 'admin@mail.com' });
+        window.location.href = '/admin';
       } else {
         await auth.login(email, password);
+        navigate('/learn');
       }
-      if (auth.isAdmin()) {
-        window.location.href = '/admin';
-        return;
-      }
-      navigate('/learn');
     } catch (err) {
       const detail = err.response?.data?.detail;
       setError(detail || (isRegister ? '注册失败' : '登录失败'));
