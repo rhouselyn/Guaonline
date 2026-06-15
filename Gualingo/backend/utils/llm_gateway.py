@@ -148,7 +148,7 @@ class LLMGateway:
         self._reload_pools()
 
     async def call(self, user_id: str, tier: str, messages: List[Dict],
-                   temperature: float = 0.0, max_tokens: int = 4096,
+                   temperature: float = 0.0, max_tokens: int = 65536,
                    request_type: str = "llm_call", tools: List[Dict] = None) -> dict:
         """
         统一 LLM 调用入口。
@@ -196,12 +196,18 @@ class LLMGateway:
         }
 
         try:
+            import time as _t
+            _t0 = _t.time()
+            print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_idx={idx}")
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(url, headers=headers, json=payload)
 
             if resp.status_code == 200:
                 result_data = resp.json()
                 pool.mark_complete(idx)
+                _elapsed = _t.time() - _t0
+                _usage = result_data.get("usage", {})
+                print(f"[GATEWAY] <<< OK user={user_id} tier={tier} type={request_type} key_idx={idx} elapsed={_elapsed:.1f}s tokens={_usage.get('total_tokens','?')}")
                 # 记录 token 使用量
                 if user_id and result_data.get("usage"):
                     try:

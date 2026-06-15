@@ -114,7 +114,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
             # 8. 写入词汇缓存（从处理结果中提取）
             try:
-                file_data = storage.load_file_data(file_id)
+                file_data = storage.load_pipeline_data(file_id)
                 if file_data and "dictionary" in file_data:
                     words = file_data["dictionary"]
                     if isinstance(words, list):
