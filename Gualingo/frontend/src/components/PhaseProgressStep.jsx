@@ -24,7 +24,8 @@ function PhaseProgressStep({ units, currentUnit, phaseNumber, onUnitClick, onBac
         <motion.h2
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-3xl font-bold font-display text-ink-700 mb-4"
+          style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}
+          className="text-3xl font-bold text-[#3d3929] mb-4"
         >
           {phaseNumber === 1 ? t.phase1 : t.phase2}
         </motion.h2>
@@ -49,20 +50,27 @@ function PhaseProgressStep({ units, currentUnit, phaseNumber, onUnitClick, onBac
               <button
                 onClick={() => onUnitClick(unit.unit_id)}
                 disabled={!unit.completed && index !== currentUnit}
-                className={`w-full p-6 border rounded-md transition-all ${unit.completed ? 'bg-olive-50 border-olive-200' : index === currentUnit ? 'bg-amber-50 border-amber-300 hover:shadow-retro-sm' : 'bg-parchment-100 border-aged-200 cursor-not-allowed opacity-50'}`}
+                className={`w-full p-6 border-2 rounded-md transition-all relative ${unit.completed ? 'bg-[#faf8f0] border-[#d4c9a8] shadow-[2px_2px_0_#8b7e5e]' : index === currentUnit ? 'bg-[#faf8f0] border-[#d4a853] shadow-[2px_2px_0_#8b7e5e] hover:shadow-[2px_2px_0_#d4c9a8]' : 'bg-[#faf8f0] border-[#d4c9a8] shadow-[2px_2px_0_#d4c9a8] cursor-not-allowed opacity-50'}`}
               >
-                <h3 className="text-xl font-bold font-display text-ink-800 mb-2">
-                  {t.unit} {unit.unit_id + 1}
-                </h3>
-                <p className="text-ink-600">{unit.sentences_count} sentences</p>
-                <div className="mt-4 text-sm font-bold">
-                  {unit.completed ? (
-                    <span className="text-olive-600">{t.completed}</span>
-                  ) : index === currentUnit ? (
-                    <span className="text-amber-500">{t.startLearning}</span>
-                  ) : (
-                    <span className="text-ink-400">{t.notStarted}</span>
-                  )}
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none rounded-md" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+                <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md" />
+                <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md" />
+                <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md" />
+                <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md" />
+                <div className="relative">
+                  <h3 style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }} className="text-xl font-bold text-[#3d3929] mb-2">
+                    {t.unit} {unit.unit_id + 1}
+                  </h3>
+                  <p className="text-ink-600">{unit.sentences_count} sentences</p>
+                  <div className="mt-4 text-sm font-bold">
+                    {unit.completed ? (
+                      <span className="text-[#d4a853]">{t.completed}</span>
+                    ) : index === currentUnit ? (
+                      <span className="text-[#d4a853]">{t.startLearning}</span>
+                    ) : (
+                      <span className="text-ink-400">{t.notStarted}</span>
+                    )}
+                  </div>
                 </div>
               </button>
             </motion.div>

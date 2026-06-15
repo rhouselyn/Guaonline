@@ -761,11 +761,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
     return (
-      <div className="flex items-center justify-center gap-1 py-1.5 border-t border-aged-200/60 bg-parchment-50/40">
+      <div className="flex items-center justify-center gap-1 py-1.5 border-t border-[#d4c9a8]/60 bg-[#faf8f0]/40">
         <button
           onClick={() => onPageChange(p => Math.max(1, p - 1))}
           disabled={currentPage <= 1}
-          className={`p-1 rounded-sm transition-colors ${currentPage <= 1 ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100'}`}
+          className={`p-1 rounded-md transition-colors ${currentPage <= 1 ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-[#f0ead6]'}`}
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -785,10 +785,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`min-w-[22px] h-[22px] flex items-center justify-center text-[10px] rounded-sm transition-colors ${
+              className={`min-w-[22px] h-[22px] flex items-center justify-center text-[10px] rounded-md transition-colors ${
                 currentPage === p
                   ? 'bg-amber-100 text-amber-700 font-bold'
-                  : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100'
+                  : 'text-ink-400 hover:text-ink-600 hover:bg-[#f0ead6]'
               }`}
             >
               {p}
@@ -798,7 +798,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         <button
           onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
           disabled={currentPage >= totalPages}
-          className={`p-1 rounded-sm transition-colors ${currentPage >= totalPages ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100'}`}
+          className={`p-1 rounded-md transition-colors ${currentPage >= totalPages ? 'text-aged-200 cursor-not-allowed' : 'text-ink-400 hover:text-ink-600 hover:bg-[#f0ead6]'}`}
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
@@ -895,7 +895,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                     initial={{ width: 0 }}
                     animate={{ width: `${progress}%` }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="progress-warm-bar"
+                    className="progress-warm-bar bg-[#d4a853]"
                   />
                 </div>
                 <span className="text-[10px] text-ink-400 whitespace-nowrap">
@@ -912,7 +912,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                     initial={{ width: 0 }}
                     animate={{ width: `${wordGenProgress.total > 0 ? (wordGenProgress.completed / wordGenProgress.total * 100) : 0}%` }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="progress-warm-bar"
+                    className="progress-warm-bar bg-[#d4a853]"
                   />
                 </div>
                 <span className="text-[10px] text-amber-500 whitespace-nowrap">
@@ -928,7 +928,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
           disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
-          className="btn-primary flex items-center gap-2 shrink-0"
+          className="bg-[#d4a853] text-[#3d3929] font-semibold rounded-md shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] flex items-center gap-2 shrink-0 transition-all"
         >
           {(loading || preprocessStatus) ? (
             <>
@@ -946,16 +946,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
       <div className="flex gap-6 flex-1 min-h-0" style={{ overflow: 'hidden' }}>
         <div className="w-1/2 flex flex-col min-h-0" style={{ overflow: 'hidden' }}>
-          <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+          <div className="bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md shadow-[2px_2px_0_#8b7e5e] overflow-hidden flex flex-col flex-1 min-h-0 relative">
+            <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md z-10" />
+            <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md z-10" />
+            <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md z-10" />
+            <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md z-10" />
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+            <div className="px-5 py-3.5 border-b border-[#d4c9a8]/80 bg-[#faf8f0]/60 relative">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 shrink-0" style={{ minWidth: '140px' }}>
                   <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
-                  <h3 className="text-sm font-bold text-ink-700 font-display">
+                  <h3 className="text-sm font-bold text-[#3d3929] font-display" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
                     <span className="cursor-pointer select-none" onClick={handleToggleShowOriginal}>
-                      <span className={!showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.sentTranslation}</span>
+                      <span className={!showOriginal ? 'border-2 border-[#d4c9a8] rounded-md px-1.5 py-0.5 text-[#3d3929] font-semibold' : 'text-[#8b7e5e] px-1.5 py-0.5'}>{t.sentTranslation}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.showOriginal}</span>
+                      <span className={showOriginal ? 'border-2 border-[#d4c9a8] rounded-md px-1.5 py-0.5 text-[#3d3929] font-semibold' : 'text-[#8b7e5e] px-1.5 py-0.5'}>{t.showOriginal}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1018,7 +1023,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                               className="overflow-hidden"
                             >
-                              <div className="border-t border-aged-200/60 p-4 bg-parchment-50/50">
+                              <div className="border-t border-[#d4c9a8]/60 p-4 bg-[#faf8f0]/50">
                                 <SentenceDetail
                                   sentenceTranslation={safeSentenceTranslations[originalIndex]}
                                   t={t}
@@ -1043,16 +1048,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </div>
 
         <div className="w-1/2 flex flex-col min-h-0" style={{ overflow: 'hidden' }}>
-          <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+          <div className="bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md shadow-[2px_2px_0_#8b7e5e] overflow-hidden flex flex-col flex-1 min-h-0 relative">
+            <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md z-10" />
+            <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md z-10" />
+            <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md z-10" />
+            <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md z-10" />
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+            <div className="px-5 py-3.5 border-b border-[#d4c9a8]/80 bg-[#faf8f0]/60 relative">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 shrink-0" style={{ minWidth: '140px' }}>
                   <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
-                  <h3 className="text-sm font-bold text-ink-700 font-display">
+                  <h3 className="text-sm font-bold text-[#3d3929] font-display" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
                     <span className="cursor-pointer select-none" onClick={handleToggleGlobalVocab}>
-                      <span className={!showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.vocabList}</span>
+                      <span className={!showGlobalVocab ? 'border-2 border-[#d4c9a8] rounded-md px-1.5 py-0.5 text-[#3d3929] font-semibold' : 'text-[#8b7e5e] px-1.5 py-0.5'}>{t.vocabList}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.globalVocabList}</span>
+                      <span className={showGlobalVocab ? 'border-2 border-[#d4c9a8] rounded-md px-1.5 py-0.5 text-[#3d3929] font-semibold' : 'text-[#8b7e5e] px-1.5 py-0.5'}>{t.globalVocabList}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1073,7 +1083,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             </div>
             <div className="flex-1 flex min-h-0">
               {((!showGlobalVocab && allLetterIndex.length > 1) || (showGlobalVocab && allGlobalLetterIndex.length > 1)) && (
-                <div className="flex flex-col items-center gap-px py-1 border-r border-aged-200/60 bg-parchment-50/40 w-5 shrink-0 overflow-y-auto">
+                <div className="flex flex-col items-center gap-px py-1 border-r border-[#d4c9a8]/60 bg-[#faf8f0]/40 w-5 shrink-0 overflow-y-auto">
                   {(showGlobalVocab ? allGlobalLetterIndex : allLetterIndex).map(letter => {
                     const currentIdx = showGlobalVocab ? globalLetterIndex : letterIndex
                     const onCurrentPage = currentIdx.includes(letter)
@@ -1113,11 +1123,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: groupIdx * 0.04 }}
-                        className="sticky top-0 z-10 backdrop-blur-sm bg-parchment-50/80 px-4 py-1.5 border-b border-aged-200/40 mb-1"
+                        className="sticky top-0 z-10 backdrop-blur-sm bg-[#faf8f0]/80 px-4 py-1.5 border-b border-[#d4c9a8]/40 mb-1"
                       >
                         <span className="text-xs font-bold text-amber-500/80 tracking-widest">{letter}</span>
                       </motion.div>
-                      <div className="space-y-px">
+                      <div className="space-y-1">
                         {words.map((word, index) => {
                           const wordKey = word.word
                           const isExpanded = expandedWord === `global-${wordKey}`
@@ -1130,7 +1140,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                               initial={{ opacity: 0, y: 6 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: groupIdx * 0.03 + index * 0.015 }}
-                              className="bg-parchment-50"
+                              className="bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md hover:border-[#d4a853] hover:shadow-[2px_2px_0_#d4a853] transition-all"
                             >
                               <button
                                 onClick={() => handleGlobalVocabWordClick(word)}
@@ -1146,7 +1156,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                     </span>
                                   )}
                                   {word.part_of_speech && (
-                                    <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide shrink-0">
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-[#f0ead6] text-ink-500 rounded font-medium tracking-wide shrink-0">
                                       {word.part_of_speech}
                                     </span>
                                   )}
@@ -1175,7 +1185,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                     transition={{ duration: 0.2 }}
                                     className="overflow-hidden"
                                   >
-                                    <div className="px-4 pb-3.5 border-t border-parchment-100/80">
+                                    <div className="px-4 pb-3.5 border-t border-[#d4c9a8]/40">
                                       {isLoading ? (
                                         <div className="pt-4 flex flex-col items-center justify-center gap-3">
                                           <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
@@ -1226,11 +1236,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: groupIdx * 0.04 }}
-                      className="sticky top-0 z-10 backdrop-blur-sm bg-parchment-50/80 px-4 py-1.5 border-b border-aged-200/40 mb-1"
+                      className="sticky top-0 z-10 backdrop-blur-sm bg-[#faf8f0]/80 px-4 py-1.5 border-b border-[#d4c9a8]/40 mb-1"
                     >
                       <span className="text-xs font-bold text-amber-500/80 tracking-widest">{letter}</span>
                     </motion.div>
-                    <div className="space-y-px">
+                    <div className="space-y-1">
                       {words.map((word, index) => {
                         const wordKey = word.word
                         const isExpanded = expandedWord === wordKey
@@ -1245,7 +1255,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: groupIdx * 0.03 + index * 0.015 }}
-                            className="bg-parchment-50"
+                            className="bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md hover:border-[#d4a853] hover:shadow-[2px_2px_0_#d4a853] transition-all"
                             >
                               <button
                                 onClick={() => handleVocabWordClick(word)}
@@ -1261,7 +1271,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                   </span>
                                 )}
                                 {word.morphology && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide shrink-0">
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-[#f0ead6] text-ink-500 rounded font-medium tracking-wide shrink-0">
                                     {word.morphology}
                                   </span>
                                 )}
@@ -1291,7 +1301,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                   transition={{ duration: 0.2 }}
                                   className="overflow-hidden"
                                 >
-                                  <div className="px-4 pb-3.5 border-t border-parchment-100/80">
+                                  <div className="px-4 pb-3.5 border-t border-[#d4c9a8]/40">
                                     {isLoading ? (
                                       <div className="pt-4 flex flex-col items-center justify-center gap-3">
                                         <Loader2 className="w-5 h-5 animate-spin text-amber-500" />

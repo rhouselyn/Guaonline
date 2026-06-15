@@ -108,7 +108,7 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
           {!isChecked && !isSkipped && (
             <motion.button
               onClick={handleSkipListening}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-ink-400 hover:text-amber-500 hover:bg-amber-50 rounded-sm transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-ink-400 hover:text-[#d4a853] hover:bg-[#d4a853]/10 rounded-md transition-colors"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               title={t.skipListening || '跳过听力'}
@@ -131,156 +131,164 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
         </div>
       </div>
 
-      <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm">
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-500 rounded-none text-sm font-medium mb-4"
-          >
-            <Headphones className="w-4 h-4" />
-            {t.listeningQuizTitle || '听力题'}
-          </motion.div>
-          <div className="flex items-center justify-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang)}
-              className="p-3 text-amber-500 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors"
+      <div className="bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md p-8 shadow-[2px_2px_0_#8b7e5e] relative">
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none rounded-md" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+        <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md" />
+        <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md" />
+        <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md" />
+        <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md" />
+        <div className="relative z-10">
+          <div className="text-center mb-8">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#d4a853]/10 text-[#d4a853] rounded-md text-sm font-medium mb-4"
+              style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}
             >
-              <Volume2 className="w-8 h-8" />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang, true)}
-              className="p-3 text-ink-400 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors"
-              title={t.slowPlay || '慢速播放'}
-            >
-              <Turtle className="w-7 h-7" />
-            </motion.button>
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <div className="p-4 border-2 border-dashed border-aged-300 rounded-sm flex flex-wrap gap-2 bg-parchment-50/50 relative">
-            <div className="flex flex-wrap gap-2 invisible" aria-hidden="true">
-              {correctWords.map((_, i) => (
-                <span key={`ph-${i}`} className="px-4 py-2 rounded-none text-sm font-medium">{correctWords[i]}</span>
-              ))}
+              <Headphones className="w-4 h-4" />
+              {t.listeningQuizTitle || '听力题'}
+            </motion.div>
+            <div className="flex items-center justify-center gap-3">
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang)}
+                className="p-3 text-[#d4a853] hover:text-[#d4a853] hover:bg-[#d4a853]/10 rounded-md transition-colors"
+              >
+                <Volume2 className="w-8 h-8" />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang, true)}
+                className="p-3 text-ink-400 hover:text-[#d4a853] hover:bg-[#d4a853]/10 rounded-md transition-colors"
+                title={t.slowPlay || '慢速播放'}
+              >
+                <Turtle className="w-7 h-7" />
+              </motion.button>
             </div>
-            <div className="absolute inset-0 p-4 flex flex-wrap gap-2 items-center">
-              {selectedWords.length === 0 && (
-                <span className="italic text-ink-400 text-sm pointer-events-none">{t.tapToBuildSentence || '按顺序点击下方单词组成句子'}</span>
-              )}
-              <AnimatePresence mode="popLayout">
-                {selectedWords.map((item, pos) => (
-                  <motion.div
-                    key={`sel-${item.index}`}
-                    layout
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0 }}
-                    transition={{ layout: { type: 'spring', stiffness: 500, damping: 35 }, opacity: { duration: 0.15 }, scale: { duration: 0.15 } }}
-                    className={`px-4 py-2 rounded-none text-sm font-bold cursor-pointer select-none ${
-                      isChecked
-                        ? isCorrect
-                          ? 'bg-olive-50 text-olive-500 border-2 border-olive-400'
-                          : pos < correctWords.length && item.word.toLowerCase() === correctWords[pos].toLowerCase()
-                            ? 'bg-olive-50 text-olive-500 border-2 border-olive-400'
-                            : 'bg-rust-50 text-rust-400 border-2 border-rust-400'
-                        : 'bg-amber-400 text-parchment-50 hover:bg-amber-500 border-2 border-amber-500'
-                    }`}
-                    onClick={() => handleRemoveWord(pos)}
-                  >
-                    {stripPunct(item.word)}
-                  </motion.div>
+          </div>
+
+          <div className="mb-8">
+            <div className="p-4 border-2 border-dashed border-[#d4c9a8] rounded-md flex flex-wrap gap-2 bg-[#faf8f0]/50 relative">
+              <div className="flex flex-wrap gap-2 invisible" aria-hidden="true">
+                {correctWords.map((_, i) => (
+                  <span key={`ph-${i}`} className="px-4 py-2 rounded-md text-sm font-medium">{correctWords[i]}</span>
                 ))}
-              </AnimatePresence>
+              </div>
+              <div className="absolute inset-0 p-4 flex flex-wrap gap-2 items-center">
+                {selectedWords.length === 0 && (
+                  <span className="italic text-ink-400 text-sm pointer-events-none">{t.tapToBuildSentence || '按顺序点击下方单词组成句子'}</span>
+                )}
+                <AnimatePresence mode="popLayout">
+                  {selectedWords.map((item, pos) => (
+                    <motion.div
+                      key={`sel-${item.index}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0 }}
+                      transition={{ layout: { type: 'spring', stiffness: 500, damping: 35 }, opacity: { duration: 0.15 }, scale: { duration: 0.15 } }}
+                      className={`px-4 py-2 rounded-md text-sm font-bold cursor-pointer select-none ${
+                        isChecked
+                          ? isCorrect
+                            ? 'border-[#d4a853] bg-[#d4a853]/10 text-[#3d3929] border-2'
+                            : pos < correctWords.length && item.word.toLowerCase() === correctWords[pos].toLowerCase()
+                              ? 'border-[#d4a853] bg-[#d4a853]/10 text-[#3d3929] border-2'
+                              : 'bg-rust-50 text-rust-500 border-2 border-rust-300'
+                          : 'bg-[#d4a853] text-[#3d3929] hover:bg-[#c49a48] border-2 border-[#d4a853]'
+                      }`}
+                      onClick={() => handleRemoveWord(pos)}
+                    >
+                      {stripPunct(item.word)}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2">
-            {options.map((word, index) => {
-              const isSelected = selectedWords.some(w => w.index === index)
-              return (
-                <motion.button
-                  key={`opt-${index}`}
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{ opacity: isSelected ? 0 : 1, scale: isSelected ? 0 : 1 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={() => handleWordSelect(word, index)}
-                  disabled={isSelected || isChecked}
-                  className={`px-4 py-2 rounded-none text-sm font-bold select-none ${
-                    isSelected
-                      ? 'pointer-events-none invisible'
-                      : isChecked
-                        ? 'pointer-events-none bg-amber-400 text-parchment-50 opacity-50 border-2 border-amber-500'
-                        : 'bg-amber-400 text-parchment-50 hover:bg-amber-500 border-2 border-amber-500'
-                  }`}
-                >
-                  {stripPunct(word)}
-                </motion.button>
-              )
-            })}
-          </div>
-        </div>
-
-        {isChecked && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`p-5 rounded-sm mb-6 ${isCorrect ? 'bg-olive-50 border-4 border-olive-400' : 'bg-rust-50 border-4 border-rust-400'}`}
-          >
-            <div className="flex items-center gap-3 mb-2">
-              {isCorrect ? <CheckCircle2 className="w-6 h-6 text-olive-600" /> : <XCircle className="w-6 h-6 text-rust-500" />}
-              <span className={`font-bold text-lg ${isCorrect ? 'text-olive-600' : 'text-rust-500'}`}>
-                {isSkipped ? (t.skipped || '已跳过') : isCorrect ? t.correct : t.incorrect}
-              </span>
+          <div className="mb-8">
+            <div className="flex flex-wrap gap-2">
+              {options.map((word, index) => {
+                const isSelected = selectedWords.some(w => w.index === index)
+                return (
+                  <motion.button
+                    key={`opt-${index}`}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: isSelected ? 0 : 1, scale: isSelected ? 0 : 1 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => handleWordSelect(word, index)}
+                    disabled={isSelected || isChecked}
+                    className={`px-4 py-2 rounded-md text-sm font-bold select-none ${
+                      isSelected
+                        ? 'pointer-events-none invisible'
+                        : isChecked
+                          ? 'pointer-events-none text-[#524d3c] opacity-50 border-2 border-[#d4c9a8]'
+                          : 'border-2 border-[#d4c9a8] text-[#524d3c] hover:border-[#d4a853] hover:bg-[#faf8f0]'
+                    }`}
+                  >
+                    {stripPunct(word)}
+                  </motion.button>
+                )
+              })}
             </div>
-            {(isSkipped || !isCorrect) && (
-              <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{correctWords.map(w => stripPunct(w)).join(' ')}
-              </p>
-            )}
-          </motion.div>
-        )}
+          </div>
 
-        <div className="flex gap-4">
-          {!isChecked ? (
-            <motion.button
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={checkAnswer}
-              disabled={selectedWords.length === 0}
-              className="flex-1 py-4 btn-primary text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          {isChecked && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-5 rounded-md mb-6 ${isCorrect ? 'bg-[#d4a853]/10 border-2 border-[#d4a853]' : 'bg-rust-50 border-2 border-rust-200'}`}
             >
-              {t.checkAnswer}
-            </motion.button>
-          ) : (
-            <motion.button
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleNextQuestion}
-              disabled={loading}
-              className="flex-1 py-4 btn-primary text-lg rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {t.loading}
-                </>
-              ) : (
-                <>
-                  {t.nextQuestion}
-                  <ChevronRight className="w-5 h-5" />
-                </>
+              <div className="flex items-center gap-3 mb-2">
+                {isCorrect ? <CheckCircle2 className="w-6 h-6 text-[#d4a853]" /> : <XCircle className="w-6 h-6 text-rust-500" />}
+                <span className={`font-bold text-lg ${isCorrect ? 'text-[#d4a853]' : 'text-rust-500'}`} style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+                  {isSkipped ? (t.skipped || '已跳过') : isCorrect ? t.correct : t.incorrect}
+                </span>
+              </div>
+              {(isSkipped || !isCorrect) && (
+                <p className="text-ink-600 font-medium">
+                  {t.correctAnswer || '正确答案'}：{correctWords.map(w => stripPunct(w)).join(' ')}
+                </p>
               )}
-            </motion.button>
+            </motion.div>
           )}
+
+          <div className="flex gap-4">
+            {!isChecked ? (
+              <motion.button
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={checkAnswer}
+                disabled={selectedWords.length === 0}
+                className="flex-1 py-4 bg-[#d4a853] text-[#3d3929] font-semibold rounded-md shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {t.checkAnswer}
+              </motion.button>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleNextQuestion}
+                disabled={loading}
+                className="flex-1 py-4 bg-[#d4a853] text-[#3d3929] font-semibold rounded-md shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {t.loading}
+                  </>
+                ) : (
+                  <>
+                    {t.nextQuestion}
+                    <ChevronRight className="w-5 h-5" />
+                  </>
+                )}
+              </motion.button>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

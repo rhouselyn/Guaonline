@@ -39,30 +39,32 @@ body {
     @apply card-warm hover:shadow-retro hover:border-aged-300 transition-all duration-200;
   }
 
-  /* 主按钮 - 琥珀棕 */
+  /* 主按钮 - 琥珀金 + 硬阴影 */
   .btn-primary {
-    @apply bg-amber-400 hover:bg-amber-500 text-parchment-50 font-bold rounded-sm
-           px-6 py-3 transition-all duration-200 shadow-retro
-           hover:shadow-retro-lg active:translate-x-[1px] active:translate-y-[1px] active:shadow-retro-sm
+    @apply bg-amber-400 hover:bg-amber-500 text-parchment-50 font-bold rounded-md
+           px-6 py-3 transition-all duration-200
+           shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px]
+           active:shadow-none active:translate-x-[2px] active:translate-y-[2px]
            disabled:opacity-50 disabled:cursor-not-allowed border-2 border-amber-500;
   }
 
   /* 次要按钮 - 橄榄 */
   .btn-secondary {
-    @apply bg-olive-50 hover:bg-olive-100 text-olive-500 font-bold rounded-sm
+    @apply bg-olive-50 hover:bg-olive-100 text-olive-500 font-bold rounded-md
            border-2 border-olive-200 px-6 py-3 transition-all duration-200
-           active:translate-x-[1px] active:translate-y-[1px] active:shadow-none shadow-retro-sm;
+           shadow-[2px_2px_0_#d4c9a8] hover:shadow-[1px_1px_0_#d4c9a8] hover:translate-x-[1px] hover:translate-y-[1px]
+           active:shadow-none active:translate-x-[2px] active:translate-y-[2px];
   }
 
   /* 幽灵按钮 */
   .btn-ghost {
     @apply text-ink-500 hover:text-ink-700 hover:bg-parchment-200/60
-           rounded-sm px-3 py-2 transition-all duration-200 font-medium;
+           rounded-md px-3 py-2 transition-all duration-200 font-medium;
   }
 
   /* 输入框 */
   .input-warm {
-    @apply w-full px-4 py-3 rounded-sm border-2 border-aged-200 bg-parchment-50
+    @apply w-full px-4 py-3 rounded-md border-2 border-aged-200 bg-parchment-50
            text-ink-700 placeholder-ink-400/60 focus:outline-none
            focus:border-amber-300 focus:shadow-glow-amber
            transition-all duration-200 hover:border-aged-300;
@@ -83,10 +85,10 @@ body {
 
   /* 标签页 */
   .tab-warm {
-    @apply px-4 py-2 rounded-sm text-sm font-bold transition-all duration-200;
+    @apply px-4 py-2 rounded-md text-sm font-bold transition-all duration-200;
   }
   .tab-warm-active {
-    @apply tab-warm bg-parchment-50 text-ink-700 shadow-retro-sm border-2 border-aged-200;
+    @apply tab-warm bg-parchment-50 text-ink-700 shadow-[2px_2px_0_#8b7e5e] border-2 border-aged-200;
   }
   .tab-warm-inactive {
     @apply tab-warm text-ink-400 hover:text-ink-500 hover:bg-parchment-100/50;
@@ -121,6 +123,34 @@ body {
   }
   .badge-ember {
     @apply badge-warm bg-rust-100/80 text-rust-500;
+  }
+
+  /* 复古装饰角标 */
+  .retro-corners {
+    @apply relative;
+  }
+  .retro-corners::before,
+  .retro-corners::after {
+    content: '';
+    @apply absolute w-4 h-4 pointer-events-none;
+  }
+  .retro-corners::before {
+    @apply top-0 left-0 border-t-2 border-l-2 border-amber-400;
+  }
+  .retro-corners::after {
+    @apply bottom-0 right-0 border-b-2 border-r-2 border-amber-400;
+  }
+
+  /* 复古标题 - 衬线体 */
+  .heading-retro {
+    font-family: 'Noto Serif SC', 'Georgia', serif;
+    @apply text-[#3d3929] font-bold;
+  }
+
+  /* 波点纹理背景 */
+  .bg-dots {
+    background-image: radial-gradient(circle, #8b7e5e 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 }
 

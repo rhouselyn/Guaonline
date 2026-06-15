@@ -43,34 +43,34 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-sm border-2 border-aged-200 bg-parchment-50 hover:bg-parchment-100 transition-colors text-sm"
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-md border-2 border-[#d4c9a8] bg-[#faf8f0] hover:bg-[#f0ead6] transition-colors text-sm"
       >
         <LangIcon langCode={value} size="sm" />
-        <span className="text-ink-800 flex-1 text-left">{selectedLang?.native || value}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-aged-300 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="text-[#3d3929] flex-1 text-left">{selectedLang?.native || value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-[#8b7e5e] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-parchment-50 rounded-sm border-2 border-aged-200 shadow-xl overflow-hidden">
-          <div className="p-2 border-b border-parchment-100">
+        <div className="absolute z-50 mt-1 w-full bg-[#faf8f0] rounded-md border-2 border-[#d4c9a8] shadow-[4px_4px_0_#8b7e5e] overflow-hidden">
+          <div className="p-2 border-b border-[#d4c9a8]/60">
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full px-2 py-1.5 rounded-sm bg-parchment-50 border-2 border-parchment-100 text-xs text-ink-700 placeholder-ink-400 focus:outline-none focus:border-amber-300"
+              className="w-full px-2 py-1.5 rounded-md bg-[#faf8f0] border-2 border-[#d4c9a8] text-xs text-[#3d3929] placeholder-[#8b7e5e] focus:outline-none focus:border-[#d4a853]"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-y-auto">
             {recentFiltered.length > 0 && (
               <>
-                <div className="px-3 py-1 text-[10px] text-ink-400 font-bold uppercase">Recent</div>
+                <div className="px-3 py-1 text-[10px] text-[#524d3c] font-bold uppercase">Recent</div>
                 {recentFiltered.map(l => (
                   <button
                     key={l.value}
                     type="button"
                     onClick={() => { onChange(l.value); setOpen(false); setSearch('') }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      value === l.value ? 'bg-amber-50 text-amber-600' : 'text-ink-600 hover:bg-parchment-50'
+                      value === l.value ? 'bg-[#f0ead6] text-[#d4a853]' : 'text-[#524d3c] hover:bg-[#f0ead6]'
                     }`}
                   >
                     <LangIcon langCode={l.value} size="sm" />
@@ -81,14 +81,14 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
             )}
             {commonFiltered.length > 0 && (
               <>
-                <div className="px-3 py-1 text-[10px] text-ink-400 font-bold uppercase">Common</div>
+                <div className="px-3 py-1 text-[10px] text-[#524d3c] font-bold uppercase">Common</div>
                 {commonFiltered.map(l => (
                   <button
                     key={l.value}
                     type="button"
                     onClick={() => { onChange(l.value); setOpen(false); setSearch('') }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      value === l.value ? 'bg-amber-50 text-amber-600' : 'text-ink-600 hover:bg-parchment-50'
+                      value === l.value ? 'bg-[#f0ead6] text-[#d4a853]' : 'text-[#524d3c] hover:bg-[#f0ead6]'
                     }`}
                   >
                     <LangIcon langCode={l.value} size="sm" />
@@ -99,14 +99,14 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
             )}
             {otherFiltered.length > 0 && (
               <>
-                <div className="px-3 py-1 text-[10px] text-ink-400 font-bold uppercase border-t border-parchment-100">All Languages</div>
+                <div className="px-3 py-1 text-[10px] text-[#524d3c] font-bold uppercase border-t border-[#d4c9a8]/60">All Languages</div>
                 {otherFiltered.map(l => (
                   <button
                     key={l.value}
                     type="button"
                     onClick={() => { onChange(l.value); setOpen(false); setSearch('') }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      value === l.value ? 'bg-amber-50 text-amber-600' : 'text-ink-600 hover:bg-parchment-50'
+                      value === l.value ? 'bg-[#f0ead6] text-[#d4a853]' : 'text-[#524d3c] hover:bg-[#f0ead6]'
                     }`}
                   >
                     <LangIcon langCode={l.value} size="sm" />
@@ -333,13 +333,13 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const renderApiSection = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold text-ink-500">
+        <span className="text-xs font-bold text-[#3d3929]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
           {t.apiConfig || 'API 配置'} {currentIndex + 1}/{configs.length}
         </span>
         {configs.length > 1 && (
           <button
             onClick={() => removeConfig(currentIndex)}
-            className="flex items-center gap-1 text-[10px] text-ink-400 hover:text-rust-500 transition-colors"
+            className="flex items-center gap-1 text-[10px] text-[#524d3c] hover:text-[#3d3929] transition-colors"
           >
             <Minus className="w-3 h-3" />
             {t.remove || 'Remove'}
@@ -352,16 +352,16 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           <button
             onClick={goPrev}
             disabled={isFirst}
-            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-sm transition-all ${
+            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md transition-all ${
               isFirst
-                ? 'text-aged-200 cursor-not-allowed'
-                : 'text-ink-400 hover:text-ink-600 hover:bg-parchment-100 active:scale-90'
+                ? 'text-[#d4c9a8] cursor-not-allowed'
+                : 'text-[#524d3c] hover:text-[#3d3929] hover:bg-[#f0ead6] active:scale-90'
             }`}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex-1 min-w-0 overflow-hidden rounded-sm border-2 border-aged-200 bg-parchment-50/50">
+          <div className="flex-1 min-w-0 overflow-hidden rounded-md border-2 border-[#d4c9a8] bg-[#faf8f0]/50">
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
                 key={currentIndex}
@@ -374,25 +374,25 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                 className="p-3 space-y-3"
               >
                 <div>
-                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
                     <Key className="w-3 h-3" />
                     API Key
-                    {current?.has_key && <span className="text-[10px] text-olive-500 normal-case tracking-normal">● {t.configured || '已配置'}</span>}
+                    {current?.has_key && <span className="text-[10px] text-[#d4a853] normal-case tracking-normal">● {t.configured || '已配置'}</span>}
                   </label>
                   <input
                     type="password"
                     value={current?.api_key || ''}
                     onChange={e => updateConfig(currentIndex, 'api_key', e.target.value)}
                     placeholder={current?.masked_key || 'sk-...'}
-                    className="input-warm w-full px-3 py-2 text-xs bg-parchment-50 border-2 border-aged-200 rounded-sm focus:outline-none focus:shadow-glow-amber focus:border-amber-300 transition-all placeholder:text-ink-400"
+                    className="input-warm w-full px-3 py-2 text-xs bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md focus:outline-none focus:border-[#d4a853] transition-all placeholder:text-[#8b7e5e]"
                   />
                   {current?.has_key && !current?.api_key && (
-                    <p className="text-[11px] text-ink-400 mt-1">{t.leaveEmptyKeepKey || '留空则保持当前 Key 不变'}</p>
+                    <p className="text-[11px] text-[#524d3c] mt-1">{t.leaveEmptyKeepKey || '留空则保持当前 Key 不变'}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
                     <Globe className="w-3 h-3" />
                     Base URL
                   </label>
@@ -401,12 +401,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                     value={current?.base_url || ''}
                     onChange={e => updateConfig(currentIndex, 'base_url', e.target.value)}
                     placeholder="https://api.siliconflow.cn/v1"
-                    className="input-warm w-full px-3 py-2 text-xs bg-parchment-50 border-2 border-aged-200 rounded-sm focus:outline-none focus:shadow-glow-amber focus:border-amber-300 transition-all placeholder:text-ink-400"
+                    className="input-warm w-full px-3 py-2 text-xs bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md focus:outline-none focus:border-[#d4a853] transition-all placeholder:text-[#8b7e5e]"
                   />
                 </div>
 
                 <div>
-                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+                  <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
                     <Cpu className="w-3 h-3" />
                     Model
                   </label>
@@ -415,7 +415,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                     value={current?.model || ''}
                     onChange={e => updateConfig(currentIndex, 'model', e.target.value)}
                     placeholder="Qwen/Qwen3.6-27B"
-                    className="input-warm w-full px-3 py-2 text-xs bg-parchment-50 border-2 border-aged-200 rounded-sm focus:outline-none focus:shadow-glow-amber focus:border-amber-300 transition-all placeholder:text-ink-400"
+                    className="input-warm w-full px-3 py-2 text-xs bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md focus:outline-none focus:border-[#d4a853] transition-all placeholder:text-[#8b7e5e]"
                   />
                 </div>
               </motion.div>
@@ -425,14 +425,14 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           {isLast ? (
             <button
               onClick={addConfig}
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-sm text-amber-500 hover:text-amber-500 hover:bg-amber-50 transition-all active:scale-90"
+              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-[#d4a853] hover:text-[#d4a853] hover:bg-[#f0ead6] transition-all active:scale-90"
             >
               <Plus className="w-4 h-4" />
             </button>
           ) : (
             <button
               onClick={goNext}
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-sm text-ink-400 hover:text-ink-600 hover:bg-parchment-100 transition-all active:scale-90"
+              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-[#524d3c] hover:text-[#3d3929] hover:bg-[#f0ead6] transition-all active:scale-90"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -450,8 +450,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                 }}
                 className={`rounded-full transition-all duration-200 ${
                   i === currentIndex
-                    ? 'w-4 h-1.5 bg-amber-400'
-                    : 'w-1.5 h-1.5 bg-aged-300 hover:bg-ink-400'
+                    ? 'w-4 h-1.5 bg-[#d4a853]'
+                    : 'w-1.5 h-1.5 bg-[#d4c9a8] hover:bg-[#8b7e5e]'
                 }`}
               />
             ))}
@@ -465,14 +465,14 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     <div className="space-y-5">
       {/* Request Interval */}
       <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
           <Gauge className="w-3 h-3" />
           {t.retryInterval || '请求间隔'}
         </label>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-ink-400">{t.retryIntervalDesc || '每次API请求之间的等待时间'}</span>
-            <span className="text-[11px] font-bold text-amber-500">{retryInterval.toFixed(1)}s</span>
+            <span className="text-[10px] text-[#524d3c]">{t.retryIntervalDesc || '每次API请求之间的等待时间'}</span>
+            <span className="text-[11px] font-bold text-[#d4a853]">{retryInterval.toFixed(1)}s</span>
           </div>
           <div className="relative">
             <input
@@ -482,14 +482,14 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
               step={0.1}
               value={retryInterval}
               onChange={e => setRetryInterval(Number(e.target.value))}
-              className="w-full h-2 rounded-none appearance-none cursor-pointer bg-parchment-100"
+              className="w-full h-2 rounded-md appearance-none cursor-pointer bg-[#f0ead6]"
               style={{
-                background: `linear-gradient(to right, #C08A3A 0%, #C08A3A ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #F5ECD7 ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #F5ECD7 100%)`
+                background: `linear-gradient(to right, #d4a853 0%, #d4a853 ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #f0ead6 ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #f0ead6 100%)`
               }}
             />
             <div className="flex justify-between mt-1">
-              <span className="text-[10px] text-aged-300">0.1s</span>
-              <span className="text-[10px] text-aged-300">20s</span>
+              <span className="text-[10px] text-[#8b7e5e]">0.1s</span>
+              <span className="text-[10px] text-[#8b7e5e]">20s</span>
             </div>
           </div>
         </div>
@@ -497,14 +497,14 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
       {/* Items Per Page */}
       <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
           <BookOpen className="w-3 h-3" />
           {t.itemsPerPage || '每页数量'}
         </label>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-ink-400">{t.wordsPerPage || '每页显示单词数'}</span>
-            <span className="text-[11px] font-bold text-amber-500">{localPageSize}</span>
+            <span className="text-[10px] text-[#524d3c]">{t.wordsPerPage || '每页显示单词数'}</span>
+            <span className="text-[11px] font-bold text-[#d4a853]">{localPageSize}</span>
           </div>
           <div className="relative">
             <input
@@ -514,22 +514,22 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
               step={10}
               value={localPageSize}
               onChange={e => setLocalPageSize(Number(e.target.value))}
-              className="w-full h-2 rounded-none appearance-none cursor-pointer bg-parchment-100"
+              className="w-full h-2 rounded-md appearance-none cursor-pointer bg-[#f0ead6]"
               style={{
-                background: `linear-gradient(to right, #C08A3A 0%, #C08A3A ${((localPageSize - 10) / (200 - 10)) * 100}%, #F5ECD7 ${((localPageSize - 10) / (200 - 10)) * 100}%, #F5ECD7 100%)`
+                background: `linear-gradient(to right, #d4a853 0%, #d4a853 ${((localPageSize - 10) / (200 - 10)) * 100}%, #f0ead6 ${((localPageSize - 10) / (200 - 10)) * 100}%, #f0ead6 100%)`
               }}
             />
             <div className="flex justify-between mt-1">
-              <span className="text-[10px] text-aged-300">10</span>
-              <span className="text-[10px] text-aged-300">200</span>
+              <span className="text-[10px] text-[#8b7e5e]">10</span>
+              <span className="text-[10px] text-[#8b7e5e]">200</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Version Check */}
-      <div className="pt-2 border-t border-aged-200/60">
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-3">
+      <div className="pt-2 border-t border-[#d4c9a8]/60">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-3">
           <RefreshCw className="w-3 h-3" />
           {t.currentVersion || '当前版本'}
         </label>
@@ -538,8 +538,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           {/* Current version display */}
           {versionInfo?.current_version && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-500">{t.currentVersion || '当前版本'}:</span>
-              <span className="text-xs font-bold text-ink-800">v{versionInfo.current_version}</span>
+              <span className="text-xs text-[#524d3c]">{t.currentVersion || '当前版本'}:</span>
+              <span className="text-xs font-bold text-[#3d3929]">v{versionInfo.current_version}</span>
               {versionInfo.has_update && (
                 <span className="badge-ochre">{t.updateAvailable || '发现新版本'}</span>
               )}
@@ -550,7 +550,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           <button
             onClick={handleCheckUpdates}
             disabled={versionChecking}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-ink-600 bg-parchment-100 hover:bg-parchment-200 border-2 border-aged-200 rounded-sm transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#524d3c] bg-[#f0ead6] hover:bg-[#d4c9a8]/50 border-2 border-[#d4c9a8] rounded-md transition-colors disabled:opacity-50"
           >
             {versionChecking ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -562,12 +562,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
           {/* Version check result */}
           {versionInfo && !versionChecking && (
-            <div className={`text-xs p-2.5 rounded-sm border-2 ${
+            <div className={`text-xs p-2.5 rounded-md border-2 ${
               versionInfo.has_update
-                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                ? 'bg-[#faf8f0] border-[#d4a853] text-[#3d3929]'
                 : versionInfo.error
                   ? 'bg-rust-50 border-rust-200 text-rust-500'
-                  : 'bg-olive-50 border-olive-200 text-olive-600'
+                  : 'bg-[#faf8f0] border-[#d4c9a8] text-[#3d3929]'
             }`}>
               {versionInfo.has_update ? (
                 <div className="space-y-1.5">
@@ -580,7 +580,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                       href={versionInfo.download_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 hover:text-amber-700 underline"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#d4a853] hover:text-[#3d3929] underline"
                     >
                       <Download className="w-3 h-3" />
                       {t.downloadUpdate || '下载更新'}
@@ -598,17 +598,17 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           {/* Auto Update Toggle */}
           <div className="flex items-center justify-between py-1">
             <div>
-              <p className="text-xs font-medium text-ink-700">{t.autoUpdate || '自动更新'}</p>
-              <p className="text-[10px] text-ink-400">{t.autoUpdateDesc || '有新版本时自动下载并安装'}</p>
+              <p className="text-xs font-medium text-[#3d3929]">{t.autoUpdate || '自动更新'}</p>
+              <p className="text-[10px] text-[#524d3c]">{t.autoUpdateDesc || '有新版本时自动下载并安装'}</p>
             </div>
             <button
               onClick={() => setAutoUpdate(v => !v)}
               className="transition-colors"
             >
               {autoUpdate ? (
-                <ToggleRight className="w-8 h-5 text-amber-500" />
+                <ToggleRight className="w-8 h-5 text-[#d4a853]" />
               ) : (
-                <ToggleLeft className="w-8 h-5 text-aged-300" />
+                <ToggleLeft className="w-8 h-5 text-[#d4c9a8]" />
               )}
             </button>
           </div>
@@ -620,12 +620,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const renderNativeLangSection = () => (
     <div className="space-y-4">
       <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-[#524d3c] uppercase tracking-widest mb-1.5">
           <Languages className="w-3 h-3" />
           {t.nativeLang || '母语'}
         </label>
         <NativeLangSelector value={localUiLang} onChange={setLocalUiLang} recentLangs={recentLangs} />
-        <p className="text-[10px] text-ink-400 mt-1.5">
+        <p className="text-[10px] text-[#524d3c] mt-1.5">
           {t.retryIntervalDesc ? 'UI language and translation target language' : '界面语言和翻译目标语言'}
         </p>
       </div>
@@ -647,7 +647,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-800/40 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#3d3929]/20 backdrop-blur-sm"
         onClick={onClose}
       >
         <motion.div
@@ -655,27 +655,33 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.15 }}
-          className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-xl w-[580px] h-[520px] overflow-hidden flex flex-col"
+          className="relative bg-[#faf8f0] border-2 border-[#d4c9a8] rounded-md shadow-[4px_4px_0_#8b7e5e] w-[580px] h-[520px] overflow-hidden flex flex-col"
           onClick={e => e.stopPropagation()}
         >
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+          <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-[#d4a853] rounded-tl-md" />
+          <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-[#d4a853] rounded-tr-md" />
+          <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-[#d4a853] rounded-bl-md" />
+          <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-[#d4a853] rounded-br-md" />
+
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60 shrink-0">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#d4c9a8]/80 bg-[#faf8f0]/60 shrink-0 relative z-10">
             <div className="flex items-center gap-2.5">
-              <Settings className="w-4 h-4 text-ink-500" />
-              <h2 className="font-display text-sm font-bold text-ink-800">{t.settings || '设置'}</h2>
+              <Settings className="w-4 h-4 text-[#3d3929]" />
+              <h2 className="text-sm font-bold text-[#3d3929]" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{t.settings || '设置'}</h2>
             </div>
             <button
               onClick={onClose}
-              className="btn-ghost p-1 text-ink-400 hover:text-ink-600 rounded-md transition-colors"
+              className="btn-ghost p-1 text-[#524d3c] hover:text-[#3d3929] rounded-md transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Body: Sidebar + Content */}
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 relative z-10">
             {/* Left Sidebar */}
-            <div className="w-[130px] shrink-0 border-r border-aged-200/60 bg-parchment-100/40 py-2">
+            <div className="w-[130px] shrink-0 border-r border-[#d4c9a8]/60 bg-[#f0ead6]/40 py-2">
               {SECTIONS.map(key => {
                 const Icon = sectionIcons[key]
                 const isActive = activeSection === key
@@ -685,8 +691,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                     onClick={() => setActiveSection(key)}
                     className={`w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
                       isActive
-                        ? 'bg-amber-50/80 text-amber-600 border-r-2 border-amber-400'
-                        : 'text-ink-500 hover:text-ink-700 hover:bg-parchment-50/60'
+                        ? 'bg-[#f0ead6]/80 text-[#d4a853] border-r-2 border-[#d4a853]'
+                        : 'text-[#524d3c] hover:text-[#3d3929] hover:bg-[#f0ead6]/60'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -700,7 +706,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
             <div className="flex-1 min-w-0 overflow-y-auto p-5">
               {loading ? (
                 <div className="py-12 flex justify-center">
-                  <Loader2 className="w-5 h-5 animate-spin text-aged-300" />
+                  <Loader2 className="w-5 h-5 animate-spin text-[#d4c9a8]" />
                 </div>
               ) : (
                 <AnimatePresence mode="wait">
@@ -719,10 +725,10 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           </div>
 
           {/* Footer */}
-          <div className="shrink-0 border-t border-aged-200/80 bg-parchment-50/60 px-5 py-3">
+          <div className="shrink-0 border-t border-[#d4c9a8]/80 bg-[#faf8f0]/60 px-5 py-3 relative z-10">
             {/* Save Error */}
             {saveError && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-rust-50 border-2 border-rust-200 rounded-sm">
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-rust-50 border-2 border-rust-200 rounded-md">
                 <AlertCircle className="w-3.5 h-3.5 text-rust-500 shrink-0" />
                 <span className="text-[11px] text-rust-500">{saveError}</span>
               </div>
@@ -730,7 +736,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={onClose}
-                className="btn-ghost px-4 py-2 text-xs"
+                className="border-2 border-[#d4c9a8] text-[#524d3c] rounded-md hover:bg-[#f0ead6] shadow-[2px_2px_0_#d4c9a8] px-4 py-2 text-xs font-medium transition-colors"
               >
                 {t.cancel || '取消'}
               </button>
@@ -739,7 +745,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                 whileTap={{ scale: 0.99 }}
                 onClick={handleSave}
                 disabled={saving}
-                className="btn-primary px-5 py-2 text-xs flex items-center gap-2"
+                className="bg-[#d4a853] text-[#3d3929] font-semibold rounded-md shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] px-5 py-2 text-xs flex items-center gap-2 transition-all"
               >
                 {saving ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
