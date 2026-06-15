@@ -95,18 +95,6 @@ export default function LoginPage() {
       <DotBackground />
 
       <div className="relative z-10 w-full max-w-md mx-4">
-        {/* 返回按钮 */}
-        <motion.button
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.4 }}
-          onClick={() => navigate('/')}
-          className="absolute -top-12 left-0 flex items-center gap-1.5 text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          返回首页
-        </motion.button>
-
         {/* 主卡片 */}
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
@@ -114,6 +102,17 @@ export default function LoginPage() {
           transition={{ duration: 0.5, ease: 'easeOut' }}
           className="bg-[#faf8f0]/90 backdrop-blur-sm border-2 border-[#d4c9a8] rounded-lg p-8 shadow-[4px_4px_0_#b5ae8e] relative"
         >
+          {/* 返回按钮 */}
+          <motion.button
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4 }}
+            onClick={() => navigate('/')}
+            className="absolute top-4 left-4 p-1.5 text-[#8b7e5e] hover:text-[#3d3929] hover:bg-[#f0ead6] rounded transition-colors"
+            title="返回首页"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </motion.button>
           {/* 装饰角标 */}
           <div className="absolute -top-px -left-px w-6 h-6 border-t-2 border-l-2 border-[#d4a853] rounded-tl-lg" />
           <div className="absolute -top-px -right-px w-6 h-6 border-t-2 border-r-2 border-[#d4a853] rounded-tr-lg" />
