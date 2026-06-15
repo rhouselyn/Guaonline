@@ -2,73 +2,66 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../utils/auth';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, Languages, Wand2, Star, Volume2, GraduationCap, ArrowRight, Github, ChevronRight, Scroll } from 'lucide-react';
+import { BookOpen, Languages, Wand2, Star, Volume2, GraduationCap, ArrowRight, Github, ChevronRight } from 'lucide-react';
 
-// 纸张纹理背景组件
-function PaperTexture({ opacity = 0.06 }) {
+// 装饰点阵背景
+function DotPattern({ color = '#FF69B4', opacity = 0.05 }) {
   return (
     <div
       className="absolute inset-0 pointer-events-none"
       style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.27 0 0 0 0 0.16 0 0 0 ${opacity} 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        opacity: 1,
+        backgroundImage: `radial-gradient(circle, ${color} 1px, transparent 1px)`,
+        backgroundSize: '12px 12px',
+        opacity,
       }}
     />
   );
 }
 
-// 装饰性分隔线
-function DecorativeDivider() {
+// 青蛙吉祥物 SVG
+function FrogMascot({ size = 200 }) {
   return (
-    <div className="flex items-center justify-center gap-4 my-8">
-      <div className="h-px w-16 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
-      <Scroll className="w-5 h-5 text-amber-500" strokeWidth={1.5} />
-      <div className="h-px w-16 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
-    </div>
-  );
-}
-
-// 复古青蛙吉祥物 SVG
-function FrogMascot({ size = 80 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="50" cy="58" rx="38" ry="32" fill="#8E866A" stroke="#524635" strokeWidth="2" />
-      <ellipse cx="50" cy="55" rx="34" ry="28" fill="#B5AE8E" />
-      <circle cx="34" cy="38" r="16" fill="#8E866A" stroke="#524635" strokeWidth="2" />
-      <circle cx="66" cy="38" r="16" fill="#8E866A" stroke="#524635" strokeWidth="2" />
-      <circle cx="34" cy="38" r="13" fill="#F5ECD7" stroke="#524635" strokeWidth="1.5" />
-      <circle cx="66" cy="38" r="13" fill="#F5ECD7" stroke="#524635" strokeWidth="1.5" />
-      <circle cx="36" cy="37" r="5" fill="#3B3225" />
-      <circle cx="68" cy="37" r="5" fill="#3B3225" />
-      <circle cx="38" cy="35" r="1.5" fill="#F5ECD7" />
-      <circle cx="70" cy="35" r="1.5" fill="#F5ECD7" />
-      <ellipse cx="50" cy="62" rx="18" ry="8" fill="#D4A854" stroke="#524635" strokeWidth="1.5" />
-      <path d="M38 60 Q50 68 62 60" stroke="#524635" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <circle cx="42" cy="52" r="4" fill="#D08E7D" opacity="0.4" />
-      <circle cx="58" cy="52" r="4" fill="#D08E7D" opacity="0.4" />
+    <svg width={size} height={size} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="100" cy="120" rx="70" ry="60" fill="#39FF14" stroke="#000" strokeWidth="4" />
+      <ellipse cx="100" cy="115" rx="62" ry="52" fill="#5CFF41" />
+      <circle cx="70" cy="75" r="28" fill="#39FF14" stroke="#000" strokeWidth="4" />
+      <circle cx="130" cy="75" r="28" fill="#39FF14" stroke="#000" strokeWidth="4" />
+      <circle cx="70" cy="75" r="22" fill="#FFF" stroke="#000" strokeWidth="2" />
+      <circle cx="130" cy="75" r="22" fill="#FFF" stroke="#000" strokeWidth="2" />
+      <circle cx="73" cy="73" r="10" fill="#000" />
+      <circle cx="133" cy="73" r="10" fill="#000" />
+      <circle cx="76" cy="70" r="3" fill="#FFF" />
+      <circle cx="136" cy="70" r="3" fill="#FFF" />
+      <ellipse cx="100" cy="128" rx="30" ry="14" fill="#FFD700" stroke="#000" strokeWidth="3" />
+      <path d="M78 125 Q100 140 122 125" stroke="#000" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <circle cx="55" cy="105" r="10" fill="#FF69B4" opacity="0.5" />
+      <circle cx="145" cy="105" r="10" fill="#FF69B4" opacity="0.5" />
     </svg>
   );
 }
 
-// 装饰性图标背景
-function FeatureIcon({ icon: Icon, color }) {
+// 星星装饰
+function StarDeco({ x, y, delay = 0 }) {
   return (
-    <div
-      className="w-12 h-12 flex items-center justify-center border-2 border-amber-400 rounded-sm"
-      style={{ backgroundColor: `${color}20` }}
+    <motion.div
+      className="absolute text-pop-yellow text-2xl"
+      style={{ left: x, top: y }}
+      initial={{ scale: 0, rotate: 0 }}
+      animate={{ scale: [0, 1.2, 1], rotate: [0, 180, 360] }}
+      transition={{ duration: 0.6, delay, ease: 'easeOut' }}
     >
-      <Icon className="w-6 h-6" style={{ color }} strokeWidth={1.5} />
-    </div>
+      ★
+    </motion.div>
   );
 }
 
 const FEATURES = [
-  { icon: Languages, title: '任意语言互学', desc: '支持 120+ 种语言 TTS 朗读，AI 自动检测语种，不再受限于平台资源。', color: '#A06E28' },
-  { icon: Wand2, title: 'AI 自动生成', desc: '粘贴任何文本，AI 自动检测语言、分句翻译、提取词汇，为你量身定制学习内容。', color: '#6E6650' },
-  { icon: BookOpen, title: '完整词汇表', desc: '自动生成完整词汇表，支持字母索引、搜索、逐词详情，随时查阅每个单词。', color: '#9E4533' },
-  { icon: Star, title: '收藏单词', desc: '一键收藏生词，跨文本收藏夹随时复习，重点词汇不再遗漏。', color: '#A06E28' },
-  { icon: Volume2, title: '语音朗读', desc: 'Edge TTS 高质量语音，单词和句子都能朗读，常速/慢速自由切换。', color: '#6E6650' },
-  { icon: GraduationCap, title: '两阶段学习', desc: '阶段一词汇认知，阶段二综合训练，错题自动回顾，循序渐进掌握每个知识点。', color: '#9E4533' },
+  { icon: Languages, title: '任意语言互学', desc: '支持 120+ 种语言 TTS 朗读，AI 自动检测语种，不再受限于平台资源。', color: '#FF006E' },
+  { icon: Wand2, title: 'AI 自动生成', desc: '粘贴任何文本，AI 自动检测语言、分句翻译、提取词汇，为你量身定制学习内容。', color: '#FFD700' },
+  { icon: BookOpen, title: '完整词汇表', desc: '自动生成完整词汇表，支持字母索引、搜索、逐词详情，随时查阅每个单词。', color: '#00BFFF' },
+  { icon: Star, title: '收藏单词', desc: '一键收藏生词，跨文本收藏夹随时复习，重点词汇不再遗漏。', color: '#39FF14' },
+  { icon: Volume2, title: '语音朗读', desc: 'Edge TTS 高质量语音，单词和句子都能朗读，常速/慢速自由切换。', color: '#FF69B4' },
+  { icon: GraduationCap, title: '两阶段学习', desc: '阶段一词汇认知，阶段二综合训练，错题自动回顾，循序渐进掌握每个知识点。', color: '#FFD700' },
 ];
 
 const COMPARES = [
@@ -80,9 +73,9 @@ const COMPARES = [
 ];
 
 const MODES = [
-  { title: '直接输入', subtitle: '我有素材，想直接学', desc: '粘贴一篇文章、一首歌词、一段新闻——任何外语文本丢进来，AI 自动检测语言、分句翻译、提取词汇。' },
-  { title: '自动翻译', subtitle: '我想用母语素材来学外语', desc: '输入你母语的文本，AI 翻译成你想学的语言，然后基于翻译后的文本生成词汇和练习。' },
-  { title: '自由生成', subtitle: '我没有素材，帮我生成', desc: '告诉 AI 你想学什么主题，AI 自动生成目标语言的文本，然后开始学习。没有素材也能学。' },
+  { title: '直接输入', subtitle: '我有素材，想直接学', desc: '粘贴一篇文章、一首歌词、一段新闻——任何外语文本丢进来，AI 自动检测语言、分句翻译、提取词汇。', color: '#FF006E' },
+  { title: '自动翻译', subtitle: '我想用母语素材来学外语', desc: '输入你母语的文本，AI 翻译成你想学的语言，然后基于翻译后的文本生成词汇和练习。', color: '#00BFFF' },
+  { title: '自由生成', subtitle: '我没有素材，帮我生成', desc: '告诉 AI 你想学什么主题，AI 自动生成目标语言的文本，然后开始学习。没有素材也能学。', color: '#39FF14' },
 ];
 
 const STEPS = [
@@ -100,7 +93,7 @@ const PLANS = [
 ];
 
 // 动画变体
-const fadeUp = { initial: { y: 30, opacity: 0 }, whileInView: { y: 0, opacity: 1 }, viewport: { once: true } };
+const fadeUp = { initial: { y: 40, opacity: 0 }, whileInView: { y: 0, opacity: 1 }, viewport: { once: true } };
 const stagger = (i) => ({ ...fadeUp, transition: { delay: i * 0.1 } });
 
 export default function LandingPage() {
@@ -112,115 +105,116 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-parchment-50 font-body text-ink-700 relative">
-      <PaperTexture opacity={0.08} />
-
+    <div className="min-h-screen bg-pop-cream font-pop text-black">
       {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-parchment-100/95 border-b-2 border-aged-200 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b-4 border-black">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FrogMascot size={32} />
-            <span className="font-display text-xl text-ink-800">呱邻国</span>
+            <FrogMascot size={36} />
+            <span className="font-display text-2xl tracking-wider">呱邻国</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
-              className="p-1.5 text-ink-500 hover:text-amber-500 transition-colors">
-              <Github className="w-4 h-4" strokeWidth={1.5} />
+              className="p-2 border-4 border-black shadow-pop-sm hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+              <Github className="w-5 h-5" strokeWidth={3} />
             </a>
             <button
               onClick={() => navigate(user ? '/learn' : '/login')}
-              className="font-body text-sm px-4 py-1.5 bg-amber-300 text-ink-800 border-2 border-amber-400 hover:bg-amber-400 transition-colors rounded-sm"
+              className="font-display text-lg px-6 py-2 bg-pop-red text-white border-4 border-black shadow-pop hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all tracking-wider"
             >
-              {user ? '进入学习' : '登录'}
+              {user ? '开冲' : '登录'}
             </button>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="relative min-h-screen flex items-center pt-14 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-parchment-100 via-parchment-50 to-parchment-100" />
-        <PaperTexture opacity={0.06} />
-        
-        <div className="relative z-10 max-w-5xl mx-auto px-4 py-16">
-          <div className="text-center">
-            <motion.div {...fadeUp} transition={{ delay: 0 }} className="mb-6">
-              <span className="inline-block font-body text-xs tracking-widest text-ink-500 bg-parchment-200 px-4 py-1.5 border border-aged-200 rounded-sm">
-                AI 驱动 · 沉浸式语言学习
+      <section className="relative min-h-screen bg-pop-yellow flex items-center pt-16 overflow-hidden">
+        <DotPattern color="#000" opacity={0.04} />
+        <StarDeco x="10%" y="20%" delay={0.2} />
+        <StarDeco x="85%" y="15%" delay={0.4} />
+        <StarDeco x="75%" y="70%" delay={0.6} />
+        <StarDeco x="15%" y="75%" delay={0.8} />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 py-20 flex flex-col md:flex-row items-center gap-12">
+          <div className="flex-1 text-center md:text-left">
+            <motion.div {...fadeUp} transition={{ delay: 0 }}>
+              <span className="font-display text-sm md:text-base bg-pop-cream text-black px-4 py-2 border-4 border-black shadow-pop-sm tracking-widest inline-block mb-6">
+                AI 驱动 · 全新体验
               </span>
             </motion.div>
-
-            <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="mb-4">
-              <FrogMascot size={100} />
-            </motion.div>
-
-            <motion.h1 {...fadeUp} transition={{ delay: 0.15 }}
-              className="font-display text-5xl md:text-6xl text-ink-800 mb-2"
+            <motion.h1 {...fadeUp} transition={{ delay: 0.1 }}
+              className="font-display text-6xl md:text-8xl tracking-wider mb-4"
             >
-              呱邻国
+              学语言
+            </motion.h1>
+            <motion.h1 {...fadeUp} transition={{ delay: 0.15 }}
+              className="font-display text-6xl md:text-8xl tracking-wider mb-6"
+              style={{ color: '#FF006E' }}
+            >
+              做自己!
             </motion.h1>
             <motion.p {...fadeUp} transition={{ delay: 0.2 }}
-              className="font-display text-2xl md:text-3xl text-amber-500 mb-6"
-            >
-              Gualingo
-            </motion.p>
-
-            <motion.p {...fadeUp} transition={{ delay: 0.25 }}
-              className="font-body text-lg text-ink-600 mb-2 max-w-2xl mx-auto"
+              className="font-pop font-bold text-lg md:text-xl text-black/80 mb-2 max-w-lg"
             >
               粘贴任何文本，AI 自动生成词汇表、分句翻译和多种练习题。
             </motion.p>
-            <motion.p {...fadeUp} transition={{ delay: 0.3 }}
-              className="font-body text-base text-ink-500 mb-10 max-w-xl mx-auto"
+            <motion.p {...fadeUp} transition={{ delay: 0.25 }}
+              className="font-pop font-bold text-base md:text-lg text-black/60 mb-8 max-w-lg"
             >
               任何语言 → 任何语言，你的素材你做主。
             </motion.p>
-
-            <motion.div {...fadeUp} transition={{ delay: 0.35 }} className="flex flex-col sm:flex-row gap-3 justify-center">
+            <motion.div {...fadeUp} transition={{ delay: 0.3 }}>
               <button
                 onClick={() => navigate(user ? '/learn' : '/login')}
-                className="font-body text-base px-8 py-3 bg-amber-400 text-ink-800 border-2 border-amber-500 hover:bg-amber-500 transition-all rounded-sm shadow-retro"
+                className="font-display text-xl md:text-2xl px-8 py-4 bg-pop-red text-white border-4 border-black shadow-pop-lg hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all tracking-wider"
               >
-                开始学习 <ArrowRight className="inline-block w-4 h-4 ml-1" strokeWidth={1.5} />
-              </button>
-              <button
-                onClick={() => navigate('/login')}
-                className="font-body text-base px-8 py-3 bg-transparent text-ink-600 border-2 border-aged-300 hover:border-amber-400 hover:text-amber-600 transition-all rounded-sm"
-              >
-                登录
+                呱！开冲！ →
               </button>
             </motion.div>
           </div>
-        </div>
-
-        {/* 装饰角落元素 */}
-        <div className="absolute bottom-8 left-8 opacity-20">
-          <Scroll className="w-8 h-8 text-amber-500" strokeWidth={1} />
-        </div>
-        <div className="absolute bottom-8 right-8 opacity-20">
-          <Scroll className="w-8 h-8 text-amber-500" strokeWidth={1} />
+          <motion.div
+            className="flex-1 flex justify-center"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200, delay: 0.3 }}
+          >
+            <div className="animate-float">
+              <FrogMascot size={280} />
+            </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="relative py-16 bg-parchment-100/50">
-        <PaperTexture opacity={0.04} />
-        <div className="relative z-10 max-w-5xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mb-2">核心功能</h2>
-            <p className="font-body text-ink-500">从输入到掌握，AI 覆盖全流程</p>
+      <section className="relative py-20 bg-pop-cream border-y-4 border-black">
+        <DotPattern color="#FF006E" opacity={0.03} />
+        <div className="relative z-10 max-w-6xl mx-auto px-4">
+          <motion.div {...fadeUp} className="text-center mb-4">
+            <span className="font-display text-sm md:text-base bg-pop-yellow text-black px-4 py-2 border-4 border-black shadow-pop-sm tracking-widest inline-block">
+              特色功能
+            </span>
           </motion.div>
+          <motion.h2 {...stagger(0)} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-4">
+            多邻国做不到的
+          </motion.h2>
+          <motion.p {...stagger(1)} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-12" style={{ color: '#FF006E' }}>
+            呱邻国做到了
+          </motion.p>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f, i) => (
               <motion.div key={i} {...stagger(i)}
-                className="bg-parchment-50 border-2 border-aged-200 rounded-sm p-5 hover:border-amber-400 hover:shadow-warm transition-all"
+                className="bg-white border-4 border-black shadow-pop-lg p-6 hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all group"
               >
-                <div className="mb-3">
-                  <FeatureIcon icon={f.icon} color={f.color} />
+                <div
+                  className="w-14 h-14 flex items-center justify-center border-4 border-black shadow-pop-sm mb-4 group-hover:shadow-none group-hover:translate-x-[2px] group-hover:translate-y-[2px] transition-all"
+                  style={{ backgroundColor: f.color }}
+                >
+                  <f.icon className="w-7 h-7 text-black" strokeWidth={3} />
                 </div>
-                <h3 className="font-display text-lg text-ink-800 mb-2">{f.title}</h3>
-                <p className="font-body text-sm text-ink-600 leading-relaxed">{f.desc}</p>
+                <h3 className="font-display text-xl md:text-2xl mb-2 tracking-wide uppercase">{f.title}</h3>
+                <p className="font-pop font-bold text-sm md:text-base text-black/70">{f.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -228,23 +222,22 @@ export default function LandingPage() {
       </section>
 
       {/* Compare */}
-      <section className="relative py-16 bg-olive-50">
-        <PaperTexture opacity={0.04} />
+      <section className="relative py-20 border-y-4 border-black" style={{ backgroundColor: '#00BFFF' }}>
+        <DotPattern color="#000" opacity={0.05} />
         <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mb-2">为什么选择呱邻国？</h2>
-          </motion.div>
-
-          <div className="space-y-3">
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-12">
+            为什么选择呱邻国？
+          </motion.h2>
+          <div className="space-y-4">
             {COMPARES.map((c, i) => (
-              <motion.div key={i} {...stagger(i)} className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 bg-parchment-50/80 border-2 border-aged-200 p-4 rounded-sm">
-                  <p className="font-body text-xs text-ink-400 mb-1">多邻国</p>
-                  <p className="font-body text-sm text-ink-600">{c.other}</p>
+              <motion.div key={i} {...stagger(i)} className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 bg-white/30 border-4 border-black p-4 shadow-pop">
+                  <p className="font-pop font-bold text-black/50 text-sm mb-1">多邻国</p>
+                  <p className="font-pop font-bold">{c.other}</p>
                 </div>
-                <div className="flex-1 bg-amber-50 border-2 border-amber-300 p-4 rounded-sm">
-                  <p className="font-body text-xs text-amber-600 mb-1">呱邻国</p>
-                  <p className="font-body text-sm text-ink-700 font-medium">{c.us}</p>
+                <div className="flex-1 bg-pop-yellow border-4 border-black p-4 shadow-pop">
+                  <p className="font-pop font-bold text-black/50 text-sm mb-1">呱邻国</p>
+                  <p className="font-pop font-bold">{c.us}</p>
                 </div>
               </motion.div>
             ))}
@@ -253,26 +246,27 @@ export default function LandingPage() {
       </section>
 
       {/* Three Modes */}
-      <section className="relative py-16 bg-parchment-50">
-        <PaperTexture opacity={0.06} />
-        <div className="relative z-10 max-w-5xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <span className="font-body text-xs tracking-widest text-ink-500 bg-amber-100 px-4 py-1 border border-amber-300 rounded-sm">
+      <section className="relative py-20 bg-pop-cream border-y-4 border-black">
+        <DotPattern color="#BF5FFF" opacity={0.03} />
+        <div className="relative z-10 max-w-6xl mx-auto px-4">
+          <motion.div {...fadeUp} className="text-center mb-4">
+            <span className="font-display text-sm md:text-base bg-pop-blue text-black px-4 py-2 border-4 border-black shadow-pop-sm tracking-widest inline-block">
               三种模式
             </span>
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mt-2">你的素材你做主</h2>
           </motion.div>
-
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-12">
+            你的素材你做主
+          </motion.h2>
           <div className="grid md:grid-cols-3 gap-6">
             {MODES.map((m, i) => (
               <motion.div key={i} {...stagger(i)}
-                className="bg-parchment-100 border-2 border-aged-200 rounded-sm overflow-hidden hover:border-amber-400 transition-all"
+                className="bg-white border-4 border-black shadow-pop-lg overflow-hidden hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all"
               >
-                <div className="h-1 bg-amber-400" />
-                <div className="p-5">
-                  <h3 className="font-display text-xl text-ink-800 mb-1">{m.title}</h3>
-                  <p className="font-body text-xs text-ink-400 mb-3">{m.subtitle}</p>
-                  <p className="font-body text-sm text-ink-600">{m.desc}</p>
+                <div className="h-3" style={{ backgroundColor: m.color }} />
+                <div className="p-6">
+                  <h3 className="font-display text-2xl md:text-3xl tracking-wider mb-1">{m.title}</h3>
+                  <p className="font-pop font-bold text-sm text-black/50 mb-3">{m.subtitle}</p>
+                  <p className="font-pop font-bold text-sm text-black/70">{m.desc}</p>
                 </div>
               </motion.div>
             ))}
@@ -281,68 +275,77 @@ export default function LandingPage() {
       </section>
 
       {/* Learning System */}
-      <section className="relative py-16 bg-olive-50/50">
-        <PaperTexture opacity={0.04} />
-        <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <span className="font-body text-xs tracking-widest text-ink-500 bg-olive-200 px-4 py-1 border border-olive-300 rounded-sm">
+      <section className="relative py-20 bg-pop-cream border-y-4 border-black">
+        <DotPattern color="#FFD700" opacity={0.03} />
+        <div className="relative z-10 max-w-5xl mx-auto px-4">
+          <motion.div {...fadeUp} className="text-center mb-4">
+            <span className="font-display text-sm md:text-base bg-pop-green text-black px-4 py-2 border-4 border-black shadow-pop-sm tracking-widest inline-block">
               学习体系
             </span>
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mt-2">两阶段 + 错题回顾</h2>
           </motion.div>
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-12">
+            两阶段 + 错题回顾
+          </motion.h2>
 
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <motion.div {...stagger(0)} className="bg-parchment-50 border-2 border-aged-200 p-5 rounded-sm">
-              <h3 className="font-display text-lg text-amber-600 mb-3">阶段一 · 词汇认知</h3>
-              <ul className="space-y-2 font-body text-sm text-ink-600">
-                <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-amber-500" strokeWidth={1.5} /> 单词选择 — 四选一，看单词选释义</li>
-                <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-amber-500" strokeWidth={1.5} /> 句子翻译 — 看源语言句子，拼出翻译</li>
-                <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-amber-500" strokeWidth={1.5} /> 听力理解 — 听句子，拼出听到的内容</li>
+          <div className="grid md:grid-cols-2 gap-8 mb-8">
+            <motion.div {...stagger(0)} className="bg-white border-4 border-black shadow-pop p-6">
+              <h3 className="font-display text-2xl tracking-wider mb-4" style={{ color: '#FF006E' }}>
+                阶段一 · 词汇认知
+              </h3>
+              <ul className="space-y-2 font-pop font-bold text-sm text-black/70">
+                <li className="flex items-center gap-2"><ChevronRight className="w-4 h-4" style={{ color: '#FF006E' }} /> 单词选择 — 四选一，看单词选释义</li>
+                <li className="flex items-center gap-2"><ChevronRight className="w-4 h-4" style={{ color: '#FF006E' }} /> 句子翻译 — 看源语言句子，拼出翻译</li>
+                <li className="flex items-center gap-2"><ChevronRight className="w-4 h-4" style={{ color: '#FF006E' }} /> 听力理解 — 听句子，拼出听到的内容</li>
               </ul>
             </motion.div>
-            <motion.div {...stagger(1)} className="bg-parchment-50 border-2 border-aged-200 p-5 rounded-sm">
-              <h3 className="font-display text-lg text-olive-500 mb-3">阶段二 · 综合训练</h3>
-              <ul className="space-y-2 font-body text-sm text-ink-600">
-                <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-olive-400" strokeWidth={1.5} /> 遮蔽填空 — 句子中挖空关键词，选择正确答案</li>
-                <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-olive-400" strokeWidth={1.5} /> 翻译重组 — 看母语翻译，还原原句</li>
+            <motion.div {...stagger(1)} className="bg-white border-4 border-black shadow-pop p-6">
+              <h3 className="font-display text-2xl tracking-wider mb-4" style={{ color: '#00BFFF' }}>
+                阶段二 · 综合训练
+              </h3>
+              <ul className="space-y-2 font-pop font-bold text-sm text-black/70">
+                <li className="flex items-center gap-2"><ChevronRight className="w-4 h-4" style={{ color: '#00BFFF' }} /> 遮蔽填空 — 句子中挖空关键词，选择正确答案</li>
+                <li className="flex items-center gap-2"><ChevronRight className="w-4 h-4" style={{ color: '#00BFFF' }} /> 翻译重组 — 看母语翻译，还原原句</li>
               </ul>
             </motion.div>
           </div>
 
-          <motion.div {...stagger(2)} className="bg-amber-100 border-2 border-amber-300 p-5 rounded-sm text-center">
-            <h3 className="font-display text-lg text-amber-700 mb-1">错题回顾</h3>
-            <p className="font-body text-sm text-ink-600">答错的题自动收集，强化练习直到掌握为止</p>
+          <motion.div {...stagger(2)} className="bg-pop-yellow border-4 border-black shadow-pop p-6 text-center">
+            <h3 className="font-display text-2xl tracking-wider mb-2">错题回顾</h3>
+            <p className="font-pop font-bold text-black/70">答错的题自动收集，强化练习直到掌握为止</p>
           </motion.div>
         </div>
       </section>
 
       {/* Steps */}
-      <section className="relative py-16 bg-parchment-100">
-        <PaperTexture opacity={0.06} />
+      <section className="relative py-20 bg-white border-y-4 border-black">
+        <DotPattern color="#00BFFF" opacity={0.03} />
         <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <span className="font-body text-xs tracking-widest text-ink-500 bg-parchment-200 px-4 py-1 border border-aged-200 rounded-sm">
+          <motion.div {...fadeUp} className="text-center mb-4">
+            <span className="font-display text-sm md:text-base bg-pop-red text-white px-4 py-2 border-4 border-black shadow-pop-sm tracking-widest inline-block">
               使用流程
             </span>
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mt-2">五步搞定</h2>
           </motion.div>
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-12">
+            五步搞定
+          </motion.h2>
 
           <div className="relative">
-            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-aged-300 -translate-x-1/2" />
+            {/* Timeline line */}
+            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-1 bg-black -translate-x-1/2" />
 
             {STEPS.map((s, i) => (
               <motion.div key={i} {...stagger(i)}
-                className={`flex items-center gap-4 mb-6 flex-col md:flex-row ${i % 2 === 1 ? 'md:flex-row-reverse' : ''}`}
+                className={`flex items-center gap-6 mb-8 flex-col md:flex-row ${i % 2 === 1 ? 'md:flex-row-reverse' : ''}`}
               >
                 <div className={`flex-1 ${i % 2 === 1 ? 'md:text-left' : 'md:text-right'}`}>
-                  <div className="bg-parchment-50 border-2 border-aged-200 p-4 rounded-sm inline-block text-left">
-                    <span className="font-display text-2xl text-amber-500">{s.num}</span>
-                    <h3 className="font-display text-base text-ink-800">{s.title}</h3>
-                    <p className="font-body text-xs text-ink-500">{s.desc}</p>
+                  <div className="bg-pop-cream border-4 border-black p-5 shadow-pop inline-block text-left">
+                    <span className="font-display text-3xl md:text-4xl" style={{ color: '#FF006E' }}>{s.num}</span>
+                    <h3 className="font-display text-xl md:text-2xl tracking-wider">{s.title}</h3>
+                    <p className="font-pop font-bold text-sm text-black/70">{s.desc}</p>
                   </div>
                 </div>
-                <div className="hidden md:flex w-8 h-8 border-2 border-amber-400 items-center justify-center shrink-0 rounded-full bg-amber-100">
-                  <span className="font-display text-xs text-amber-600">{s.num}</span>
+                <div className="hidden md:flex w-12 h-12 border-4 border-black items-center justify-center shrink-0 shadow-pop-sm" style={{ backgroundColor: '#FF006E' }}>
+                  <span className="font-display text-white text-sm">{s.num}</span>
                 </div>
                 <div className="flex-1 hidden md:block" />
               </motion.div>
@@ -352,42 +355,40 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section className="relative py-16 bg-parchment-50">
-        <PaperTexture opacity={0.06} />
+      <section className="relative py-20 bg-pop-cream border-y-4 border-black">
+        <DotPattern color="#FFD700" opacity={0.03} />
         <div className="relative z-10 max-w-5xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-8">
-            <h2 className="font-display text-3xl md:text-4xl text-ink-800 mb-2">选择适合你的方案</h2>
-            <p className="font-body text-ink-500">免费开始，随时升级</p>
-          </motion.div>
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-5xl text-center tracking-wider mb-4">
+            选择适合你的方案
+          </motion.h2>
+          <motion.p {...fadeUp} className="font-pop font-bold text-center text-black/60 mb-12">
+            免费开始，随时升级
+          </motion.p>
 
           <div className="grid md:grid-cols-3 gap-6">
             {PLANS.map((plan, i) => (
               <motion.div key={plan.id} {...stagger(i)}
-                className={`bg-parchment-100 border-2 rounded-sm p-5 ${
-                  plan.highlight 
-                    ? 'border-amber-400 bg-amber-50/50' 
-                    : 'border-aged-200 hover:border-amber-300'
-                } transition-all`}
+                className={`bg-white border-4 border-black shadow-pop-lg p-6 hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all ${plan.highlight ? 'ring-4 ring-pop-yellow' : ''}`}
               >
-                <h3 className="font-display text-xl text-ink-800 mb-1">{plan.name}</h3>
+                <h3 className="font-display text-2xl md:text-3xl tracking-wider mb-1">{plan.name}</h3>
                 <div className="mb-4">
-                  <span className="font-display text-3xl text-amber-600">{plan.price}</span>
-                  <span className="font-body text-sm text-ink-500">{plan.period || ''}</span>
+                  <span className="font-display text-4xl md:text-5xl">{plan.price}</span>
+                  <span className="font-pop font-bold text-black/50">{plan.period || ''}</span>
                 </div>
-                <ul className="space-y-1.5 mb-5">
+                <ul className="space-y-2 mb-6">
                   {plan.features.map((f, j) => (
-                    <li key={j} className="font-body text-xs text-ink-600 flex items-start gap-1.5">
-                      <span className="text-amber-500 mt-0.5">✓</span> {f}
+                    <li key={j} className="font-pop font-bold text-sm text-black/70 flex items-start gap-2">
+                      <span style={{ color: '#FF006E' }}>✓</span> {f}
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => !plan.disabled && navigate('/login')}
                   disabled={plan.disabled}
-                  className={`w-full font-body text-sm py-2 rounded-sm transition-all ${
+                  className={`w-full font-display text-lg py-3 border-4 border-black tracking-wider transition-all ${
                     plan.highlight
-                      ? 'bg-amber-400 text-ink-800 border-2 border-amber-500 hover:bg-amber-500'
-                      : 'bg-transparent text-ink-600 border-2 border-aged-300 hover:border-amber-400 hover:text-amber-600'
+                      ? 'bg-pop-red text-white shadow-pop hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]'
+                      : 'bg-pop-cream text-black shadow-pop-sm hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]'
                   } disabled:opacity-50`}
                 >
                   {plan.cta}
@@ -399,36 +400,40 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="relative py-16 bg-amber-100">
-        <PaperTexture opacity={0.04} />
+      <section className="relative py-20 border-y-4 border-black" style={{ backgroundColor: '#FF006E' }}>
+        <DotPattern color="#FFF" opacity={0.05} />
         <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
-          <motion.h2 {...fadeUp} className="font-display text-3xl md:text-4xl text-ink-800 mb-3">准备好了吗？</motion.h2>
-          <motion.p {...fadeUp} className="font-body text-ink-600 mb-2">
+          <motion.h2 {...fadeUp} className="font-display text-4xl md:text-6xl text-white tracking-wider mb-4">
+            准备好了吗？
+          </motion.h2>
+          <motion.p {...fadeUp} className="font-pop font-bold text-white/80 mb-2">
             只需一个 API Key，无需数据库，纯 LLM 能力驱动一切。
           </motion.p>
-          <motion.p {...fadeUp} className="font-body text-ink-500 mb-6">
+          <motion.p {...fadeUp} className="font-pop font-bold text-white/60 mb-8">
             任何语言 → 任何语言，你的素材你做主。
           </motion.p>
-          <motion.button {...fadeUp}
-            onClick={() => navigate(user ? '/learn' : '/login')}
-            className="font-body text-base px-8 py-3 bg-amber-400 text-ink-800 border-2 border-amber-500 hover:bg-amber-500 transition-all rounded-sm shadow-retro"
-          >
-            开始学习 <ArrowRight className="inline-block w-4 h-4 ml-1" strokeWidth={1.5} />
-          </motion.button>
+          <motion.div {...fadeUp}>
+            <button
+              onClick={() => navigate(user ? '/learn' : '/login')}
+              className="font-display text-xl md:text-2xl px-8 py-4 bg-pop-yellow text-black border-4 border-black shadow-pop-lg hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all tracking-wider"
+            >
+              呱！开冲！ →
+            </button>
+          </motion.div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="relative py-8 bg-ink-800 text-parchment-100">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="bg-black text-white py-8 px-4 border-t-4 border-black">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <FrogMascot size={24} />
-            <span className="font-display text-lg">呱邻国 Gualingo</span>
+            <FrogMascot size={28} />
+            <span className="font-display text-xl tracking-wider">呱邻国 Gualingo</span>
           </div>
-          <div className="flex items-center gap-4 font-body text-xs text-parchment-200">
+          <div className="flex items-center gap-6 font-pop font-bold text-sm text-white/60">
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
-              className="hover:text-amber-300 transition-colors flex items-center gap-1">
-              <Github className="w-3 h-3" strokeWidth={1.5} /> GitHub
+              className="hover:text-pop-yellow transition-colors flex items-center gap-1">
+              <Github className="w-4 h-4" /> GitHub
             </a>
             <span>AGPL v3</span>
           </div>

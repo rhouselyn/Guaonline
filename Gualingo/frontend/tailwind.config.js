@@ -7,10 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // 复古风格字体
-        'display': ['"Playfair Display"', '"Noto Serif SC"', 'Georgia', 'serif'],
-        'body':    ['"DM Sans"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
-        'vintage': ['"Playfair Display"', '"Noto Serif SC"', 'serif'],
+        'display': ['Bangers', 'Noto Sans SC', 'cursive'],
+        'pop':     ['Outfit', 'Noto Sans SC', 'system-ui', 'sans-serif'],
         sans: [
           '"DM Sans"',
           '"PingFang SC"',
