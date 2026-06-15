@@ -174,6 +174,11 @@ UI_TRANSLATION_SCHEMA = {
     "cannotGetExercise": {"desc": "Cannot get exercise error", "zh": "无法获取练习，请重试", "en": "Cannot get exercise, please retry"},
     "cannotGetNextExercise": {"desc": "Cannot get next exercise error", "zh": "无法获取下一个练习，请重试", "en": "Cannot get next exercise, please retry"},
     "cannotLoadHistory": {"desc": "Cannot load history error", "zh": "无法加载学习记录，请重试", "en": "Cannot load learning history, please retry"},
+    "quotaInsufficient": {"desc": "Quota insufficient message, {0}=needed, {1}=remaining", "zh": "额度不足：需要 {0} 句，剩余 {1} 句", "en": "Insufficient quota: {0} sentences needed, {1} remaining"},
+    "remainingQuota": {"desc": "Remaining quota label", "zh": "剩余额度", "en": "Remaining Quota"},
+    "dailyRefillInfo": {"desc": "Daily refill info for free tier, {0}=daily, {1}=max", "zh": "每日恢复 {0} 句，上限 {1} 句", "en": "Daily refill {0} sentences, max {1}"},
+    "monthlyQuotaInfo": {"desc": "Monthly quota info for basic tier, {0}=monthly", "zh": "每月 {0} 句额度", "en": "{0} sentences per month"},
+    "unlimitedQuota": {"desc": "Unlimited quota label", "zh": "无限额度", "en": "Unlimited"},
 }
 
 TRANSLATION_PROMPT = """You are a professional UI translator. Translate the following UI strings into {target_lang_name} ({target_lang_code}).

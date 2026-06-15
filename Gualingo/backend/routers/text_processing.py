@@ -157,32 +157,24 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
             sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
             sentence_count = min(sentence_count, 50)
             if quota_info["available"] < sentence_count:
-                # 获取用户界面语言
+                # 获取用户界面语言对应的翻译
                 from db_storage import DatabaseStorage
                 db = DatabaseStorage()
                 prefs = db.load_user_preferences(user_id=current_user.user_id)
                 ui_lang = prefs.get("ui_lang", prefs.get("target_lang", "zh"))
 
-                # 多语言额度不足提示
-                if ui_lang == "zh":
-                    detail = f"额度不足：需要 {sentence_count} 句，剩余 {quota_info['available']} 句"
-                elif ui_lang == "en":
-                    detail = f"Insufficient quota: {sentence_count} sentences needed, {quota_info['available']} remaining"
-                elif ui_lang == "ja":
-                    detail = f"枠不足: {sentence_count}文必要、残り{quota_info['available']}文"
-                elif ui_lang == "ko":
-                    detail = f"할당량 부족: {sentence_count}문장 필요, {quota_info['available']}문장 남음"
-                elif ui_lang == "fr":
-                    detail = f"Quota insuffisant : {sentence_count} phrases nécessaires, {quota_info['available']} restantes"
-                elif ui_lang == "de":
-                    detail = f"Kontingent unzureichend: {sentence_count} Sätze benötigt, {quota_info['available']} verbleibend"
-                elif ui_lang == "es":
-                    detail = f"Cuota insuficiente: {sentence_count} frases necesarias, {quota_info['available']} restantes"
-                elif ui_lang == "ru":
-                    detail = f"Недостаточно квоты: нужно {sentence_count} предложений, осталось {quota_info['available']}"
-                else:
-                    detail = f"Insufficient quota: {sentence_count} sentences needed, {quota_info['available']} remaining"
+                # 从 UI 翻译缓存获取 quotaInsufficient 翻译
+                template = None
+                translations = db.load_ui_translations(ui_lang)
+                if translations:
+                    template = translations.get("quotaInsufficient")
+                # 回退到中文
+                if not template:
+                    from ui_translations import UI_TRANSLATION_SCHEMA
+                    schema = UI_TRANSLATION_SCHEMA.get("quotaInsufficient", {})
+                    template = schema.get(ui_lang) or schema.get("zh", "额度不足：需要 {0} 句，剩余 {1} 句")
 
+                detail = template.replace("{0}", str(sentence_count)).replace("{1}", str(quota_info["available"]))
                 raise HTTPException(status_code=402, detail=detail)
 
             # 额度足够，立即扣减

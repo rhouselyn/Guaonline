@@ -16,7 +16,7 @@ export default function AccountMenu({ t }) {
       if (q) setQuota(q);
     };
     refresh();
-    const interval = setInterval(refresh, 30000); // 每30秒刷新
+    const interval = setInterval(refresh, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -36,7 +36,7 @@ export default function AccountMenu({ t }) {
 
   const user = auth.getUser();
 
-  // 未登录：圆圈里显示人像图标，点击跳转登录
+  // 未登录
   if (!user) {
     return (
       <button
@@ -49,29 +49,31 @@ export default function AccountMenu({ t }) {
     );
   }
 
-  const tierLabel = { free: t?.freeTier || '免费版', basic: t?.basicTier || '基础版', pro: t?.proTier || '专业版' };
   const available = quota?.available ?? 0;
-  const max = quota?.max ?? 100;
+  const max = quota?.max ?? 200;
   const isUnlimited = max === -1;
-  const quotaText = isUnlimited ? '∞' : `${available}/${max}`;
   const isLow = !isUnlimited && typeof available === 'number' && available <= 10;
 
-  // 已登录：圆圈里显示首字母，无外边框
+  // 额度恢复提示
+  const refillInfo = isUnlimited
+    ? (t?.unlimitedQuota || '无限额度')
+    : user.tier === 'basic'
+      ? (t?.monthlyQuotaInfo || '每月 {0} 句额度').replace('{0}', '2000')
+      : (t?.dailyRefillInfo || '每日恢复 {0} 句，上限 {1} 句').replace('{0}', '50').replace('{1}', '200');
+
   return (
     <div className="relative" ref={menuRef}>
       <div className="flex items-center gap-2">
-        {/* 额度显示 */}
+        {/* 额度：直接显示闪电图标+数字 */}
         <button
           onClick={() => setOpen(!open)}
-          className={`flex items-center gap-1 px-2 py-1 rounded-sm text-xs font-medium transition-colors ${
-            isLow
-              ? 'bg-rust-50 text-rust-500 border border-rust-200'
-              : 'bg-amber-50 text-amber-600 border border-amber-200'
+          className={`flex items-center gap-1 text-xs font-medium transition-colors ${
+            isLow ? 'text-rust-500' : 'text-amber-600'
           }`}
-          title="剩余额度"
+          title={t?.remainingQuota || '剩余额度'}
         >
-          <Zap className="w-3 h-3" />
-          {quotaText}
+          <Zap className="w-3.5 h-3.5" />
+          {isUnlimited ? '∞' : available}
         </button>
 
         <button
@@ -86,13 +88,15 @@ export default function AccountMenu({ t }) {
         <div className="absolute right-0 mt-1 w-56 bg-parchment-50 border-2 border-aged-200 rounded-sm shadow-retro z-50">
           <div className="px-4 py-3 border-b border-aged-200">
             <p className="text-sm font-medium text-ink-800">{user.email}</p>
-            <p className="text-xs text-amber-600 mt-0.5">{tierLabel[user.tier] || user.tier}</p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              {{ free: t?.freeTier || '免费版', basic: t?.basicTier || '基础版', pro: t?.proTier || '专业版' }[user.tier] || user.tier}
+            </p>
           </div>
           {/* 额度详情 */}
           {!isUnlimited && (
             <div className="px-4 py-2.5 border-b border-aged-200">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-ink-500">剩余额度</span>
+                <span className="text-xs text-ink-500">{t?.remainingQuota || '剩余额度'}</span>
                 <span className={`text-xs font-bold ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>
                   {available} / {max}
                 </span>
@@ -103,7 +107,7 @@ export default function AccountMenu({ t }) {
                   style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }}
                 />
               </div>
-              <p className="text-[10px] text-ink-400 mt-1">每日恢复 10 句，上限 100 句</p>
+              <p className="text-[10px] text-ink-400 mt-1">{refillInfo}</p>
             </div>
           )}
           <button
