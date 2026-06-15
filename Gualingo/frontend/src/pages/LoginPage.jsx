@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../utils/auth';
+import { ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -32,7 +33,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-parchment-50 px-4">
-      <div className="w-full max-w-md bg-parchment-50 border-2 border-aged-200 rounded-sm p-8 shadow-retro">
+      <div className="w-full max-w-md bg-parchment-50 border-2 border-aged-200 rounded-sm p-8 shadow-retro relative">
+        <button
+          onClick={() => navigate('/')}
+          className="absolute top-4 left-4 p-1.5 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors"
+          title="返回首页"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
         <div className="flex justify-center mb-6">
           <svg width="48" height="48" viewBox="0 0 100 100" fill="none">
             <ellipse cx="50" cy="58" rx="38" ry="32" fill="#B5AE8E" />
