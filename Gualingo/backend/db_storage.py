@@ -337,7 +337,31 @@ class DatabaseStorage:
             conn.execute("DELETE FROM language_word_index WHERE source_lang = ? AND word_lower = ?",
                          (source_lang, word_lower))
             conn.commit()
-            return None
+
+        # 索引未命中或过期，直接搜索 word_cache 表（通过 language_settings 关联 source_lang）
+        row = conn.execute(
+            "SELECT wc.word_info FROM word_cache wc "
+            "JOIN language_settings ls ON wc.file_id = ls.file_id "
+            "WHERE ls.source_lang = ? AND wc.word = ?",
+            (source_lang, word_lower)
+        ).fetchone()
+        if row:
+            data = json.loads(row["word_info"])
+            cached_word = data.get("word", "").lower()
+            if cached_word == word_lower:
+                # 修复索引：将找到的 file_id 更新到索引中
+                file_id = None
+                fid_row = conn.execute(
+                    "SELECT wc.file_id FROM word_cache wc "
+                    "JOIN language_settings ls ON wc.file_id = ls.file_id "
+                    "WHERE ls.source_lang = ? AND wc.word = ? LIMIT 1",
+                    (source_lang, word_lower)
+                ).fetchone()
+                if fid_row:
+                    file_id = fid_row["file_id"]
+                    self.add_word_to_language_index(source_lang, word, file_id, overwrite=True)
+                return data
+
         return None
 
     # ── language_settings ──────────────────────────────────
