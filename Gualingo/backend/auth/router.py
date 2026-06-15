@@ -29,6 +29,9 @@ def _get_conn():
             api_key TEXT,
             base_url TEXT,
             model TEXT,
+            quota_used INTEGER DEFAULT 0,
+            quota_max INTEGER DEFAULT 50,
+            quota_reset_at TEXT,
             created_at TEXT NOT NULL
         )
     """)

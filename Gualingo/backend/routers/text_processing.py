@@ -102,7 +102,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 6. 处理成功后才写入历史记录
         text_preview = text.strip()[:100]
-        storage.add_history_record(file_id, title, source_lang, target_lang, text_preview)
+        storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
 
         # 7. 扣减额度
         if user_id:

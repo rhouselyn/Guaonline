@@ -151,6 +151,7 @@ class DatabaseStorage:
 
             CREATE TABLE IF NOT EXISTS history (
                 file_id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT,
                 title TEXT NOT NULL DEFAULT '',
                 source_lang TEXT NOT NULL DEFAULT 'en',
                 target_lang TEXT NOT NULL DEFAULT 'zh',
@@ -558,9 +559,25 @@ class DatabaseStorage:
 
     # ── history ────────────────────────────────────────────
 
-    def load_history(self) -> List[Dict]:
+    def load_history(self, user_id: str = None) -> List[Dict]:
         conn = self._get_conn()
-        rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC").fetchall()
+        # 确保 user_id 列存在（兼容旧数据库）
+        try:
+            cursor = conn.execute("PRAGMA table_info(history)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE history ADD COLUMN user_id TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
+        if user_id:
+            rows = conn.execute(
+                "SELECT * FROM history WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC").fetchall()
         if rows:
             return [dict(row) for row in rows]
         return []
@@ -578,17 +595,27 @@ class DatabaseStorage:
             )
         conn.commit()
 
-    def add_history_record(self, file_id: str, title: str, source_lang: str, target_lang: str, text_preview: str):
+    def add_history_record(self, file_id: str, title: str, source_lang: str, target_lang: str, text_preview: str, user_id: str = None):
         now = datetime.datetime.now().isoformat()
         conn = self._get_conn()
+        # 确保 user_id 列存在
+        try:
+            cursor = conn.execute("PRAGMA table_info(history)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE history ADD COLUMN user_id TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
         conn.execute(
-            "INSERT OR IGNORE INTO history (file_id, title, source_lang, target_lang, text_preview, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (file_id, title, source_lang, target_lang, text_preview, now)
+            "INSERT OR IGNORE INTO history (file_id, user_id, title, source_lang, target_lang, text_preview, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (file_id, user_id, title, source_lang, target_lang, text_preview, now)
         )
         conn.commit()
         record = {
-            "file_id": file_id, "title": title, "source_lang": source_lang,
+            "file_id": file_id, "user_id": user_id, "title": title, "source_lang": source_lang,
             "target_lang": target_lang, "text_preview": text_preview, "created_at": now
         }
         return record

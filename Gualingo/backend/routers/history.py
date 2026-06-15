@@ -1,9 +1,10 @@
 """历史记录相关路由：history/*"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from utils.state import storage
 from utils.helpers import filter_eligible_sentences
+from auth.deps import require_auth, TokenData
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -69,9 +70,9 @@ def compute_file_progress(file_id: str) -> dict:
 
 
 @router.get("/history")
-async def get_history():
+async def get_history(current_user: TokenData = Depends(require_auth)):
     try:
-        records = storage.load_history()
+        records = storage.load_history(user_id=current_user.user_id)
         records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         for record in records:
             file_id = record.get("file_id", "")
@@ -85,8 +86,12 @@ async def get_history():
 
 
 @router.delete("/history/{file_id}")
-async def delete_history(file_id: str):
+async def delete_history(file_id: str, current_user: TokenData = Depends(require_auth)):
     try:
+        # 验证该记录属于当前用户
+        records = storage.load_history(user_id=current_user.user_id)
+        if not any(r.get("file_id") == file_id for r in records):
+            raise HTTPException(status_code=404, detail="Record not found")
         success = storage.delete_history_record(file_id)
         if success:
             return {"success": True}
@@ -98,8 +103,12 @@ async def delete_history(file_id: str):
 
 
 @router.put("/history/{file_id}")
-async def rename_history(file_id: str, request: dict):
+async def rename_history(file_id: str, request: dict, current_user: TokenData = Depends(require_auth)):
     try:
+        # 验证该记录属于当前用户
+        records = storage.load_history(user_id=current_user.user_id)
+        if not any(r.get("file_id") == file_id for r in records):
+            raise HTTPException(status_code=404, detail="Record not found")
         new_title = request.get("title", "").strip()
         if not new_title:
             raise HTTPException(status_code=400, detail="Title is required")

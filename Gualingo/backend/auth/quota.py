@@ -18,13 +18,15 @@ def _get_conn():
 
 
 def _ensure_quota_columns(conn):
-    """确保 users 表有额度字段。"""
-    conn.executescript("""
-        ALTER TABLE users ADD COLUMN quota_used INTEGER DEFAULT 0;
-        ALTER TABLE users ADD COLUMN quota_max INTEGER DEFAULT 50;
-        ALTER TABLE users ADD COLUMN quota_reset_at TEXT;
-    """)
-    # 忽略已存在的列错误
+    """确保 users 表有额度字段（兼容旧数据库）。"""
+    cursor = conn.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "quota_used" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN quota_used INTEGER DEFAULT 0")
+    if "quota_max" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN quota_max INTEGER DEFAULT 50")
+    if "quota_reset_at" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN quota_reset_at TEXT")
     conn.commit()
 
 
