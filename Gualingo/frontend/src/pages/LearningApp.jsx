@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2, Home } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -29,21 +29,19 @@ import SettingsModal from '../components/SettingsModal'
 
 function FrogLogo({ size = 40 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="100" cy="120" rx="70" ry="55" fill="#39FF14" stroke="#000" strokeWidth="6" />
-      <ellipse cx="100" cy="115" rx="62" ry="48" fill="#5CFF41" />
-      <circle cx="68" cy="72" r="30" fill="#39FF14" stroke="#000" strokeWidth="6" />
-      <circle cx="68" cy="72" r="24" fill="#FFF" stroke="#000" strokeWidth="4" />
-      <circle cx="72" cy="68" r="10" fill="#000" />
-      <circle cx="75" cy="65" r="3" fill="#FFF" />
-      <circle cx="132" cy="72" r="30" fill="#39FF14" stroke="#000" strokeWidth="6" />
-      <circle cx="132" cy="72" r="24" fill="#FFF" stroke="#000" strokeWidth="4" />
-      <circle cx="136" cy="68" r="10" fill="#000" />
-      <circle cx="139" cy="65" r="3" fill="#FFF" />
-      <ellipse cx="100" cy="130" rx="32" ry="14" fill="#FFD700" stroke="#000" strokeWidth="4" />
-      <path d="M74 126 Q100 146 126 126" stroke="#000" strokeWidth="4" fill="none" strokeLinecap="round" />
-      <ellipse cx="55" cy="110" rx="12" ry="8" fill="#FF69B4" opacity="0.6" />
-      <ellipse cx="145" cy="110" rx="12" ry="8" fill="#FF69B4" opacity="0.6" />
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="58" rx="38" ry="32" fill="#B5AE8E" />
+      <ellipse cx="50" cy="55" rx="34" ry="28" fill="#D8D4BF" />
+      <circle cx="34" cy="38" r="16" fill="#B5AE8E" />
+      <circle cx="66" cy="38" r="16" fill="#B5AE8E" />
+      <circle cx="34" cy="38" r="13" fill="#fff" />
+      <circle cx="66" cy="38" r="13" fill="#fff" />
+      <circle cx="36" cy="37" r="6" fill="#524D3C" />
+      <circle cx="68" cy="37" r="6" fill="#524D3C" />
+      <circle cx="38" cy="35" r="2" fill="#fff" />
+      <circle cx="70" cy="35" r="2" fill="#fff" />
+      <ellipse cx="50" cy="62" rx="18" ry="8" fill="#E8C985" />
+      <path d="M38 60 Q50 70 62 60" stroke="#524D3C" strokeWidth="2" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
@@ -1295,18 +1293,19 @@ function App() {
                 />
               ) : (
                 <>
-                  <div
-                    className="absolute top-3 left-4 z-10 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => navigate('/')}
+                    className="absolute top-3 right-20 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
                   >
-                    <FrogLogo size={28} />
-                    <span className="text-sm font-serif text-ink-600 hidden sm:inline">呱邻国</span>
-                  </div>
+                    <Home className="w-5 h-5" />
+                  </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setShowSettings(true)}
-                    className="absolute top-3 right-16 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
+                    className="absolute top-3 right-4 p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors z-10"
                   >
                     <Settings className="w-5 h-5" />
                   </motion.button>
