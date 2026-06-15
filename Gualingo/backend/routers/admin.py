@@ -208,15 +208,13 @@ async def list_users(
 async def get_user_detail(user_id: str, admin: AdminTokenData = Depends(require_admin)):
     conn = get_user_conn()
     row = conn.execute(
-        "SELECT id, email, name, tier, api_key, base_url, model, quota_used, quota_max, banned, banned_reason, created_at FROM users WHERE id = ?",
+        "SELECT id, email, name, tier, quota_used, quota_max, banned, banned_reason, created_at FROM users WHERE id = ?",
         (user_id,)
     ).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
     result = dict(row)
-    if result.get("api_key") and len(result["api_key"]) > 8:
-        result["api_key"] = result["api_key"][:4] + "****" + result["api_key"][-4:]
     return result
 
 
@@ -422,7 +420,7 @@ def _load_global_settings() -> dict:
         with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"request_interval": 1.0}
+        return {"request_interval": 1.0, "batch_size": 3}
 
 
 def _save_global_settings(data: dict):
@@ -437,6 +435,7 @@ async def get_global_settings(admin: AdminTokenData = Depends(require_admin)):
 
 class GlobalSettingsUpdate(BaseModel):
     request_interval: Optional[float] = None
+    batch_size: Optional[int] = None
 
 
 @router.put("/global-settings")
@@ -444,7 +443,15 @@ async def update_global_settings(req: GlobalSettingsUpdate, admin: AdminTokenDat
     settings = _load_global_settings()
     if req.request_interval is not None:
         settings["request_interval"] = req.request_interval
+    if req.batch_size is not None:
+        settings["batch_size"] = req.batch_size
     _save_global_settings(settings)
+    # 通知 gateway 刷新配置
+    try:
+        from utils.llm_gateway import gateway
+        gateway.reload()
+    except Exception:
+        pass
     _log_action("update_global_settings", details=settings)
     return settings
 
@@ -471,3 +478,26 @@ async def get_logs(
         "page_size": page_size,
         "logs": [dict(r) for r in rows],
     }
+
+
+# ── UI 翻译管理 ────────────────────────────────────────────
+
+@router.get("/ui-translations")
+async def get_ui_translations(admin: AdminTokenData = Depends(require_admin)):
+    from db_storage import DatabaseStorage
+    storage = DatabaseStorage()
+    langs = storage.get_all_ui_translation_langs()
+    return {"languages": langs}
+
+
+@router.delete("/ui-translations/{lang_code}")
+async def delete_ui_translation(lang_code: str, admin: AdminTokenData = Depends(require_admin)):
+    if lang_code in ('zh', 'en'):
+        raise HTTPException(status_code=400, detail="不能删除内置语言")
+    from db_storage import DatabaseStorage
+    storage = DatabaseStorage()
+    conn = storage._get_conn()
+    conn.execute("DELETE FROM ui_translations WHERE lang_code = ?", (lang_code,))
+    conn.commit()
+    _log_action("delete_ui_translation", "lang", lang_code)
+    return {"status": "ok"}

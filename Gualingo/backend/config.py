@@ -27,12 +27,6 @@ CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", str(BASE_DIR / "config")))
 # UI 翻译缓存目录
 UI_TRANSLATIONS_DIR = CONFIG_DIR / "ui_translations"
 
-# LLM 设置文件
-LLM_SETTINGS_FILE = CONFIG_DIR / "llm_settings.json"
-
-# 用户偏好文件
-USER_PREFS_FILE = CONFIG_DIR / "user_preferences.json"
-
 # 前端静态文件目录
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", str(BASE_DIR / "frontend" / "dist")))
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../utils/auth';
-import { ArrowLeft, Sparkles, Key } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 
 // 复用着陆页的青蛙 Logo
 function FrogLogo({ size = 48 }) {
@@ -242,13 +242,8 @@ export default function LoginPage() {
             onClick={() => navigate('/learn')}
             className="w-full py-2.5 border border-[#d4c9a8] text-[#524d3c] rounded hover:bg-[#f0ead6] transition-colors text-sm flex items-center justify-center gap-2"
           >
-            <Key className="w-4 h-4" />
-            使用自己的 API Key 直接开始
+            直接开始使用
           </button>
-
-          <p className="mt-3 text-center text-xs text-[#b5ae8e]">
-            无需注册，自带 Key 即可使用全部功能
-          </p>
         </motion.div>
       </div>
     </div>

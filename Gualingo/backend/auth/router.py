@@ -108,7 +108,7 @@ async def refresh_token(refresh_token: str):
 async def get_me(current_user: TokenData = Depends(require_auth)):
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, email, name, tier, api_key, base_url, model, created_at, quota_used, quota_max FROM users WHERE id = ?",
+        "SELECT id, email, name, tier, created_at, quota_used, quota_max FROM users WHERE id = ?",
         (current_user.user_id,)
     ).fetchone()
     conn.close()
@@ -116,8 +116,7 @@ async def get_me(current_user: TokenData = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="用户不存在")
     return User(
         id=row["id"], email=row["email"], name=row["name"],
-        tier=UserTier(row["tier"]), api_key=row["api_key"],
-        base_url=row["base_url"], model=row["model"],
+        tier=UserTier(row["tier"]),
         created_at=row["created_at"],
         quota_used=row["quota_used"] or 0, quota_max=row["quota_max"] or 50
     )
@@ -128,25 +127,4 @@ async def get_quota(current_user: TokenData = Depends(require_auth)):
     return check_and_refill_quota(current_user.user_id)
 
 
-@router.put("/me/api-key")
-async def update_api_key(
-    api_key: str = None, base_url: str = None, model: str = None,
-    current_user: TokenData = Depends(require_auth)
-):
-    conn = _get_conn()
-    updates, params = [], []
-    if api_key is not None:
-        updates.append("api_key = ?")
-        params.append(api_key)
-    if base_url is not None:
-        updates.append("base_url = ?")
-        params.append(base_url)
-    if model is not None:
-        updates.append("model = ?")
-        params.append(model)
-    if updates:
-        params.append(current_user.user_id)
-        conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
-        conn.commit()
-    conn.close()
-    return {"status": "ok"}
+

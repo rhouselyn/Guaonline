@@ -29,9 +29,6 @@ class UserLogin(BaseModel):
 class User(UserBase):
     id: str
     tier: UserTier = UserTier.free
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
-    model: Optional[str] = None
     created_at: Optional[str] = None
     quota_used: int = 0
     quota_max: int = 50

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from config import DATA_DIR, CONFIG_DIR, USER_PREFS_FILE
+from config import DATA_DIR
 
 
 class DatabaseStorage:
@@ -187,6 +187,13 @@ class DatabaseStorage:
                 source_lang TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 PRIMARY KEY (user_id, word, source_lang)
+            );
+
+            CREATE TABLE IF NOT EXISTS ui_translations (
+                lang_code TEXT NOT NULL,
+                translations TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (lang_code)
             );
         """)
         conn.commit()
@@ -809,6 +816,28 @@ class DatabaseStorage:
                 conn.commit()
         except Exception:
             pass
+
+    # ── ui_translations ───────────────────────────────────
+
+    def save_ui_translations(self, lang_code: str, translations: dict):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO ui_translations (lang_code, translations, updated_at) VALUES (?, ?, datetime('now'))",
+            (lang_code, json.dumps(translations, ensure_ascii=False))
+        )
+        conn.commit()
+
+    def load_ui_translations(self, lang_code: str) -> Optional[dict]:
+        conn = self._get_conn()
+        row = conn.execute("SELECT translations FROM ui_translations WHERE lang_code = ?", (lang_code,)).fetchone()
+        if row:
+            return json.loads(row["translations"])
+        return None
+
+    def get_all_ui_translation_langs(self) -> List[str]:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT lang_code FROM ui_translations ORDER BY lang_code").fetchall()
+        return [row["lang_code"] for row in rows]
 
 
 

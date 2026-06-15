@@ -4,17 +4,19 @@ import { adminApi } from '../../utils/adminApi'
 export default function AdminGlobalSettings() {
   const [settings, setSettings] = useState(null)
   const [interval, setInterval_] = useState(1.0)
+  const [batchSize, setBatchSize] = useState(3)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     adminApi.getGlobalSettings().then(data => {
       setSettings(data)
       setInterval_(data.request_interval || 1.0)
+      setBatchSize(data.batch_size || 3)
     })
   }, [])
 
   const save = async () => {
-    await adminApi.updateGlobalSettings({ request_interval: interval })
+    await adminApi.updateGlobalSettings({ request_interval: interval, batch_size: batchSize })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -38,6 +40,20 @@ export default function AdminGlobalSettings() {
             </div>
             <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
               <span>0.1s</span><span>20s</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[#e8d5b7]/60 text-sm block mb-1">并发批大小</label>
+            <p className="text-[#e8d5b7]/40 text-xs mb-2">每个 API Key 同时处理的请求数量</p>
+            <div className="flex items-center gap-3">
+              <input type="range" min={1} max={20} step={1} value={batchSize}
+                onChange={e => setBatchSize(Number(e.target.value))}
+                className="flex-1" />
+              <span className="text-[#c9a96e] font-bold text-sm w-12 text-right">{batchSize}</span>
+            </div>
+            <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
+              <span>1</span><span>20</span>
             </div>
           </div>
 

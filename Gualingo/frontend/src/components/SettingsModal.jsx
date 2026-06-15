@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Globe, Cpu, Check, Loader2, Languages, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle, Key } from 'lucide-react'
+import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 
@@ -122,7 +122,7 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
   )
 }
 
-const SECTIONS = ['api', 'general', 'nativeLang']
+const SECTIONS = ['general', 'nativeLang']
 
 const slideVariants = {
   enter: (dir) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -131,15 +131,13 @@ const slideVariants = {
 }
 
 function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPageSizeChange, t, recentLangs, onRecentLangsChange }) {
-  const [configs, setConfigs] = useState([])
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [localUiLang, setLocalUiLang] = useState(uiLang || 'zh')
   const [localPageSize, setLocalPageSize] = useState(50)
-  const [activeSection, setActiveSection] = useState('api')
+  const [activeSection, setActiveSection] = useState('general')
   const [saveError, setSaveError] = useState('')
 
   // Version check state
@@ -154,22 +152,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
       setLoading(true)
       setSaved(false)
       setSaveError('')
-      setActiveSection('api')
-      Promise.all([
-        fetch('/api/settings').then(res => res.json()),
-        api.getUserPreferences().catch(() => ({}))
-      ]).then(([data, prefs]) => {
-        const loaded = (data.configs && data.configs.length > 0)
-          ? data.configs.map(c => ({
-              api_key: '',
-              base_url: c.base_url || '',
-              model: c.model || '',
-              has_key: c.has_key || false,
-              masked_key: c.api_key || '',
-            }))
-          : [{ api_key: '', base_url: '', model: '', has_key: false, masked_key: '' }]
-        setConfigs(loaded)
-        setCurrentIndex(data.active_index || 0)
+      setActiveSection('general')
+      api.getUserPreferences().catch(() => ({})).then(prefs => {
         if (prefs.ui_lang) setLocalUiLang(prefs.ui_lang)
         else if (prefs.target_lang) setLocalUiLang(prefs.target_lang)
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
@@ -178,61 +162,10 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
         setLoading(false)
       }).catch(() => {
-        setConfigs([{ api_key: '', base_url: '', model: '', has_key: false, masked_key: '' }])
         setLoading(false)
       })
     }
   }, [isOpen])
-
-  const updateConfig = useCallback((index, field, value) => {
-    setConfigs(prev => {
-      const next = [...prev]
-      next[index] = { ...next[index], [field]: value }
-      return next
-    })
-  }, [])
-
-  const goNext = useCallback(() => {
-    if (currentIndex < configs.length - 1) {
-      setDirection(1)
-      setCurrentIndex(i => i + 1)
-    }
-  }, [currentIndex, configs.length])
-
-  const goPrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setDirection(-1)
-      setCurrentIndex(i => i - 1)
-    }
-  }, [currentIndex])
-
-  const addConfig = useCallback(() => {
-    const current = configs[configs.length - 1]
-    const newConfig = {
-      api_key: '',
-      base_url: current?.base_url || '',
-      model: current?.model || '',
-      has_key: false,
-      masked_key: '',
-    }
-    setDirection(1)
-    setConfigs(prev => [...prev, newConfig])
-    setCurrentIndex(configs.length)
-  }, [configs])
-
-  const removeConfig = useCallback((index) => {
-    if (configs.length <= 1) return
-    setConfigs(prev => {
-      const next = prev.filter((_, i) => i !== index)
-      return next
-    })
-    setCurrentIndex(prev => {
-      if (prev >= configs.length - 1) return Math.max(0, configs.length - 2)
-      if (prev > index) return prev - 1
-      return Math.min(prev, configs.length - 2)
-    })
-    setDirection(-1)
-  }, [configs.length])
 
   const handleCheckUpdates = async () => {
     setVersionChecking(true)
@@ -252,33 +185,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     setSaved(false)
     setSaveError('')
     try {
-      const payload = {
-        configs: configs.map(c => ({
-          api_key: c.api_key || '',
-          base_url: c.base_url,
-          model: c.model,
-        })),
-        active_index: currentIndex,
-      }
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      if (!res.ok) throw new Error('API settings save failed')
-      const data = await res.json()
-      const loaded = (data.configs && data.configs.length > 0)
-        ? data.configs.map(c => ({
-            api_key: '',
-            base_url: c.base_url || '',
-            model: c.model || '',
-            has_key: c.has_key || false,
-            masked_key: c.api_key || '',
-          }))
-        : configs
-      setConfigs(loaded)
-      setCurrentIndex(data.active_index ?? currentIndex)
-
       const updatedRecentLangs = [localUiLang, ...recentLangs.filter(code => code !== localUiLang)].slice(0, 5)
       await api.saveUserPreferences({
         target_lang: localUiLang,
@@ -317,18 +223,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
   if (!isOpen) return null
 
-  const current = configs[currentIndex]
-  const isFirst = currentIndex === 0
-  const isLast = currentIndex === configs.length - 1
-
   const sectionLabels = {
-    api: t.settingsApi || 'API',
     general: t.settingsGeneral || '通用',
     nativeLang: t.settingsNativeLang || '母语',
   }
 
   const sectionIcons = {
-    api: Key,
     general: Settings,
     nativeLang: Languages,
   }
@@ -508,69 +408,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     </div>
   )
 
-  const renderApiSection = () => (
-    <div className="space-y-5">
-      <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm">
-        <p className="text-[11px] text-amber-700">
-          {t?.apiSectionNote || '测试用：配置 API Key 后可使用自己的 LLM 服务。正式版将使用平台统一额度。'}
-        </p>
-      </div>
-      {/* API Key */}
-      <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
-          <Key className="w-3 h-3" />
-          API Key
-        </label>
-        <div className="relative">
-          <input
-            type="password"
-            value={current.api_key}
-            onChange={e => {
-              const next = [...configs]; next[currentIndex] = { ...current, api_key: e.target.value }; setConfigs(next)
-            }}
-            placeholder={current.has_key ? `当前: ${current.masked_key}` : 'sk-...'}
-            className="input-retro w-full pr-8"
-          />
-        </div>
-      </div>
-      {/* Base URL */}
-      <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
-          <Globe className="w-3 h-3" />
-          Base URL
-        </label>
-        <input
-          type="text"
-          value={current.base_url}
-          onChange={e => {
-            const next = [...configs]; next[currentIndex] = { ...current, base_url: e.target.value }; setConfigs(next)
-          }}
-          placeholder="https://api.openai.com/v1"
-          className="input-retro w-full"
-        />
-      </div>
-      {/* Model */}
-      <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
-          <Cpu className="w-3 h-3" />
-          Model
-        </label>
-        <input
-          type="text"
-          value={current.model}
-          onChange={e => {
-            const next = [...configs]; next[currentIndex] = { ...current, model: e.target.value }; setConfigs(next)
-          }}
-          placeholder="gpt-4o-mini"
-          className="input-retro w-full"
-        />
-      </div>
-    </div>
-  )
-
   const renderContent = () => {
     switch (activeSection) {
-      case 'api': return renderApiSection()
       case 'general': return renderGeneralSection()
       case 'nativeLang': return renderNativeLangSection()
       default: return null

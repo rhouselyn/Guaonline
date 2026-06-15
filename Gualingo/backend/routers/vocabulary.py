@@ -6,8 +6,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from auth.deps import require_auth, TokenData
 
-from utils.state import llm_api, storage
+from utils.llm_gateway import gateway
+from utils.state import storage
 from utils.helpers import fix_llm_options_result
+from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
 
@@ -57,7 +59,7 @@ async def get_sentences(file_id: str):
 
 
 @router.get("/word/{file_id}/{word}")
-async def get_word_details(file_id: str, word: str):
+async def get_word_details(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
     try:
         print(f"[DEBUG] 获取单词详情: {word}")
         language_settings = storage.load_language_settings(file_id)
@@ -145,7 +147,9 @@ async def get_word_details(file_id: str, word: str):
                     "vocab": vocab,
                     "priority_queue": [],
                     "task": None,
-                    "processing_words": set()
+                    "processing_words": set(),
+                    "user_id": current_user.user_id,
+                    "tier": current_user.tier.value,
                 }
             state = word_gen_state[file_id]
             state["vocab"] = vocab
@@ -154,7 +158,7 @@ async def get_word_details(file_id: str, word: str):
             if "plan_position" not in state:
                 state["plan_position"] = 0
 
-            await process_single_word_gen(file_id, word, vocab, source_lang, target_lang)
+            await process_single_word_gen(file_id, word, vocab, source_lang, target_lang, user_id=current_user.user_id, tier=current_user.tier.value)
 
             cached_word = storage.load_word_cache(file_id, word)
             if cached_word:
@@ -192,7 +196,9 @@ async def get_word_details(file_id: str, word: str):
                     "vocab": vocab,
                     "priority_queue": [word],
                     "task": asyncio.create_task(background_word_gen(file_id)),
-                    "processing_words": set()
+                    "processing_words": set(),
+                    "user_id": current_user.user_id,
+                    "tier": current_user.tier.value,
                 }
 
             for _ in range(60):
@@ -233,7 +239,7 @@ async def get_word_details(file_id: str, word: str):
 
 
 @router.post("/word-detail/regenerate")
-async def regenerate_word_detail(request: dict):
+async def regenerate_word_detail(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         word = request.get("word", "")
         source_lang = request.get("source_lang", "en")
@@ -249,7 +255,8 @@ async def regenerate_word_detail(request: dict):
             if file_id:
                 storage.delete_word_cache(file_id, word)
 
-        options_result = await llm_api.generate_multiple_choice(
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word, "", "", target_lang, source_lang, 0.7
         )
         file_id = matching[0].get("file_id") if matching else None
@@ -283,7 +290,7 @@ async def regenerate_word_detail(request: dict):
 
 
 @router.post("/word/{file_id}/{word}/regenerate")
-async def regenerate_word_detail_by_file(file_id: str, word: str):
+async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
     try:
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
@@ -337,7 +344,8 @@ async def regenerate_word_detail_by_file(file_id: str, word: str):
                 correct_meaning = word_entry["context_meaning"]
 
         # Generate with temperature 0.7
-        options_result = await llm_api.generate_multiple_choice(
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word,
             correct_meaning,
             context,
@@ -389,7 +397,7 @@ async def regenerate_word_detail_by_file(file_id: str, word: str):
 
 
 @router.get("/word-detail")
-async def get_word_detail(word: str, source_lang: str = "en", target_lang: str = "en"):
+async def get_word_detail(word: str, source_lang: str = "en", target_lang: str = "en", current_user: TokenData = Depends(require_auth)):
     try:
         records = storage.load_history()
         matching = [r for r in records if r.get("source_lang") == source_lang]
@@ -411,7 +419,8 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
                     "variants_detail": cached.get("variants_detail", []),
                 }
 
-        options_result = await llm_api.generate_multiple_choice(
+        options_result = await _gateway_generate_multiple_choice(
+            current_user.user_id, current_user.tier.value,
             word, "", "", target_lang, source_lang, 0
         )
         options_result = fix_llm_options_result(options_result, source_lang, file_id)

@@ -356,8 +356,7 @@ function App() {
           // 如果是 API Key 相关错误，打开设置
           const errMsg = status.error || ''
           if (errMsg.includes('API Key') || errMsg.includes('Key')) {
-            showAlert(t.apiKeyInvalid || 'API Key 无效或已过期，请检查设置中的 API Key', t.apiKeyError || 'API Key 错误')
-            setShowSettings(true)
+            showAlert(t.processFailed || '处理失败，请重试')
           } else {
             showAlert(t.processFailed || '处理失败，请重试')
           }
@@ -449,22 +448,6 @@ function App() {
     // 重置字典状态，避免显示上一个条目的残留
     dictStateRef.current = { vocabPage: 1, sentencePage: 1, globalVocabPage: 1, vocabScrollPos: 0, sentenceTranslationScrollPos: 0, sentenceOriginalScrollPos: 0, globalVocabScrollPos: 0, vocabDisplayMode: 0, sentenceDisplayMode: 0, showOriginal: false, showGlobalVocab: false, vocabSearch: '', sentenceSearch: '' }
 
-    // 先检查 API Key 是否已配置
-    try {
-      const settingsResp = await fetch('/api/settings')
-      const settingsData = await settingsResp.json()
-      const activeIdx = settingsData.active_index || 0
-      const activeConfig = (settingsData.configs || [])[activeIdx]
-      if (!activeConfig || !activeConfig.has_key) {
-        setLoading(false)
-        showAlert(t.noApiKey || '请先在设置中填写 API Key', t.apiKeyError || 'API Key 错误')
-        setShowSettings(true)
-        return
-      }
-    } catch (e) {
-      // 检查失败则继续，让后端报错
-    }
-
     if (inputMode === 'translate') {
       setPreprocessStatus('translating')
     } else if (inputMode === 'generate') {
@@ -503,13 +486,7 @@ function App() {
       setPreprocessStatus(null)
       setStep('input')
       if (error.response && error.response.status === 400) {
-        const detail = error.response.data?.detail || ''
-        if (detail.includes('API Key')) {
-          showAlert(t.apiKeyInvalid || 'API Key 无效或已过期，请检查设置中的 API Key', t.apiKeyError || 'API Key 错误')
-          setShowSettings(true)
-        } else {
-          showAlert(t.badRequest || '请求参数错误')
-        }
+        showAlert(t.badRequest || '请求参数错误')
       } else if (error.response && error.response.status === 429) {
         const detail = error.response.data?.detail || '额度已用完'
         showAlert(detail, '额度不足')

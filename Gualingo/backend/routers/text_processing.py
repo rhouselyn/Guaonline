@@ -8,7 +8,8 @@ import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 
 from llm_api import detect_language, get_lang_name
-from utils.state import llm_api, storage, processing_status
+from utils.llm_gateway import gateway
+from utils.state import storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title
 from auth.deps import get_current_user, require_auth, TokenData
 from auth.quota import check_and_refill_quota, consume_quota
@@ -17,7 +18,7 @@ from vocab import global_vocab, user_vocab
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None):
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free"):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
         # 直接输入模式：原文就是用户输入的文本，立即保存
@@ -31,7 +32,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", **_preserve_tr}
             source_lang_name = get_lang_name(source_lang)
             target_lang_name = get_lang_name(target_lang)
-            llm_api.reload()
+            gateway.reload()
             messages = [
                 {
                     "role": "system",
@@ -39,7 +40,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await llm_api.call_llm(messages, temperature=0.3, max_tokens=4096)
+            response = await gateway.call(user_id, tier, messages, temperature=0.3, max_tokens=4096, request_type="translate")
             if "choices" in response and len(response["choices"]) > 0:
                 translated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if translated:
@@ -52,7 +53,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             _preserve_gen = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", **_preserve_gen}
             source_lang_name = get_lang_name(source_lang)
-            llm_api.reload()
+            gateway.reload()
             messages = [
                 {
                     "role": "system",
@@ -60,7 +61,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await llm_api.call_llm(messages, temperature=0.7, max_tokens=4096)
+            response = await gateway.call(user_id, tier, messages, temperature=0.7, max_tokens=4096, request_type="generate")
             if "choices" in response and len(response["choices"]) > 0:
                 generated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if generated:
@@ -92,13 +93,13 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         storage.save_user_preferences(app_settings, user_id=user_id)
 
         # 4. 生成标题
-        title = await generate_title(text, source_lang)
+        title = await generate_title(text, source_lang, user_id=user_id, tier=tier)
         # 更新 processing_status 中的标题
         if file_id in processing_status:
             processing_status[file_id]["title"] = title
 
         # 5. 执行文本处理
-        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id)
+        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)
 
         # 6. 处理成功后才写入历史记录
         text_preview = text.strip()[:100]
@@ -178,7 +179,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         }
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
 
         return {
             "file_id": file_id,
@@ -211,7 +212,7 @@ async def detect_language_endpoint(request: dict):
 
 
 @router.post("/translate-text")
-async def translate_text(request: dict):
+async def translate_text(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         text = request.get("text", "")
         source_lang = request.get("source_language", "zh")
@@ -223,7 +224,7 @@ async def translate_text(request: dict):
         source_lang_name = get_lang_name(source_lang)
         target_lang_name = get_lang_name(target_lang)
 
-        llm_api.reload()
+        gateway.reload()
         messages = [
             {
                 "role": "system",
@@ -234,7 +235,7 @@ async def translate_text(request: dict):
                 "content": text
             }
         ]
-        response = await llm_api.call_llm(messages, temperature=0.3, max_tokens=4096)
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.3, max_tokens=4096, request_type="translate")
 
         translated_text = ""
         if "choices" in response and len(response["choices"]) > 0:
@@ -251,7 +252,7 @@ async def translate_text(request: dict):
 
 
 @router.post("/generate-text")
-async def generate_text(request: dict):
+async def generate_text(request: dict, current_user: TokenData = Depends(require_auth)):
     try:
         prompt = request.get("prompt", "")
         source_lang = request.get("source_language", "en")
@@ -262,7 +263,7 @@ async def generate_text(request: dict):
 
         source_lang_name = get_lang_name(source_lang)
 
-        llm_api.reload()
+        gateway.reload()
         messages = [
             {
                 "role": "system",
@@ -273,7 +274,7 @@ async def generate_text(request: dict):
                 "content": prompt
             }
         ]
-        response = await llm_api.call_llm(messages, temperature=0.7, max_tokens=4096)
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.7, max_tokens=4096, request_type="generate")
 
         generated_text = ""
         if "choices" in response and len(response["choices"]) > 0:
