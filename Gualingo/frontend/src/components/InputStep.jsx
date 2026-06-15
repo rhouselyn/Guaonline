@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
 
@@ -491,6 +492,7 @@ function ModeSelector({ mode, setMode, t }) {
 }
 
 function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
+  const navigate = useNavigate()
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
   // 记住非直接输入模式（翻译/生成）的语言选择，默认 en
@@ -541,7 +543,8 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex items-center gap-3 mb-3"
+          className="flex items-center gap-3 mb-3 cursor-pointer"
+          onClick={() => navigate('/')}
         >
           <div className="w-14 h-14 bg-amber-400 rounded-sm flex items-center justify-center shadow-retro-sm">
             <FrogLogo size={32} />
