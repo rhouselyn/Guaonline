@@ -1270,8 +1270,12 @@ function App() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-parchment-50 bg-paper-grain">
-      <main className="h-full">
+    <div className="h-screen overflow-hidden bg-parchment-50 bg-paper-grain relative">
+      {/* 装饰性波点背景 */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-0"
+        style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+      />
+      <main className="h-full relative z-10">
         {step === 'input' ? (
           <div className="flex h-full">
             <HistorySidebar onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />

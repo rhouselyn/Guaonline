@@ -145,6 +145,7 @@ const STEPS = [
   { num: '03', title: '阶段一', desc: '单词选择、句子翻译、听力理解', icon: Mic },
   { num: '04', title: '阶段二', desc: '遮蔽填空、翻译重组', icon: Brain },
   { num: '05', title: '错题回顾', desc: '答错的题自动收集，强化练习直到掌握', icon: Trophy },
+  { num: '06', title: '收藏单词', desc: '一键收藏生词，方便重点复习', icon: Star },
 ];
 
 const PLANS = [
@@ -464,10 +465,10 @@ export default function LandingPage() {
       {/* 使用流程 */}
       <section className="py-24 px-6 bg-[#faf8f0] relative">
         <div className="max-w-5xl mx-auto">
-          <SectionTitle sub="五步搞定">
+          <SectionTitle sub="六步搞定">
             使用<span className="text-[#d4a853]">流程</span>
           </SectionTitle>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {STEPS.map((s, i) => {
               const Icon = s.icon;
               return (
@@ -480,11 +481,6 @@ export default function LandingPage() {
                   <h3 className="font-bold text-[#3d3929] text-sm mb-1"
                     style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{s.title}</h3>
                   <p className="text-xs text-[#8b7e5e]">{s.desc}</p>
-                  {i < STEPS.length - 1 && (
-                    <div className="hidden md:block absolute top-7 -right-3 text-[#b5ae8e]">
-                      <ArrowRight className="w-4 h-4" />
-                    </div>
-                  )}
                 </motion.div>
               );
             })}
