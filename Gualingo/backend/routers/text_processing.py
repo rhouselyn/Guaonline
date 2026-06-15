@@ -105,23 +105,16 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         text_preview = text.strip()[:100]
         storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
 
-        # 7. 扣减额度
-        if user_id:
-            # 估算句子数（按句号/问号/感叹号分割）
-            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
-            sentence_count = min(sentence_count, 50)  # 上限保护
-            consume_quota(user_id, sentence_count)
-
-            # 8. 写入词汇缓存（从处理结果中提取）
-            try:
-                file_data = storage.load_pipeline_data(file_id)
-                if file_data and "dictionary" in file_data:
-                    words = file_data["dictionary"]
-                    if isinstance(words, list):
-                        user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
-                        global_vocab.batch_upsert(words, source_lang, target_lang)
-            except Exception as e:
-                print(f"[WARN] 词汇缓存写入失败: {e}")
+        # 7. 写入词汇缓存（从处理结果中提取）
+        try:
+            file_data = storage.load_pipeline_data(file_id)
+            if file_data and "dictionary" in file_data:
+                words = file_data["dictionary"]
+                if isinstance(words, list):
+                    user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
+                    global_vocab.batch_upsert(words, source_lang, target_lang)
+        except Exception as e:
+            print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:
         print(f"[ERROR] 预处理或处理出错: {str(e)}")
         import traceback
@@ -153,13 +146,48 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        # 额度检查
-        quota = check_and_refill_quota(current_user.user_id)
-        if quota["max"] != -1 and quota["available"] <= 0:
-            raise HTTPException(status_code=429, detail=f"额度已用完（{quota['used']}/{quota['max']}），明天恢复或升级套餐")
-
         now = datetime.datetime.now()
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
+
+        # 预估句子数并检查额度
+        from auth.quota import check_and_refill_quota
+        quota_info = check_and_refill_quota(current_user.user_id)
+        if quota_info["max"] != -1:  # 非无限额度
+            # 估算句子数
+            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
+            sentence_count = min(sentence_count, 50)
+            if quota_info["available"] < sentence_count:
+                # 获取用户界面语言
+                from db_storage import DatabaseStorage
+                db = DatabaseStorage()
+                prefs = db.load_user_preferences(user_id=current_user.user_id)
+                ui_lang = prefs.get("ui_lang", prefs.get("target_lang", "zh"))
+
+                # 多语言额度不足提示
+                if ui_lang == "zh":
+                    detail = f"额度不足：需要 {sentence_count} 句，剩余 {quota_info['available']} 句"
+                elif ui_lang == "en":
+                    detail = f"Insufficient quota: {sentence_count} sentences needed, {quota_info['available']} remaining"
+                elif ui_lang == "ja":
+                    detail = f"枠不足: {sentence_count}文必要、残り{quota_info['available']}文"
+                elif ui_lang == "ko":
+                    detail = f"할당량 부족: {sentence_count}문장 필요, {quota_info['available']}문장 남음"
+                elif ui_lang == "fr":
+                    detail = f"Quota insuffisant : {sentence_count} phrases nécessaires, {quota_info['available']} restantes"
+                elif ui_lang == "de":
+                    detail = f"Kontingent unzureichend: {sentence_count} Sätze benötigt, {quota_info['available']} verbleibend"
+                elif ui_lang == "es":
+                    detail = f"Cuota insuficiente: {sentence_count} frases necesarias, {quota_info['available']} restantes"
+                elif ui_lang == "ru":
+                    detail = f"Недостаточно квоты: нужно {sentence_count} предложений, осталось {quota_info['available']}"
+                else:
+                    detail = f"Insufficient quota: {sentence_count} sentences needed, {quota_info['available']} remaining"
+
+                raise HTTPException(status_code=402, detail=detail)
+
+            # 额度足够，立即扣减
+            from auth.quota import consume_quota
+            consume_quota(current_user.user_id, sentence_count)
 
         # 立即设置初始状态
         preprocess_label = ""

@@ -151,12 +151,12 @@ const STEPS = [
 const PLANS = [
   {
     id: 'free', name: '免费版', price: '¥0', period: '', highlight: false,
-    features: ['免费 50 句额度', '每日恢复 10 句（上限 100）', '基础学习功能'],
+    features: ['免费 200 句额度', '每日恢复 50 句（上限 200）', '基础学习功能'],
     cta: '免费开始',
   },
   {
     id: 'basic', name: '基础版', price: '¥19', period: '/月', highlight: true,
-    features: ['1000 句/月', '更优模型', '云同步', 'SRS 间隔复习', '跨设备使用'],
+    features: ['2000 句/月', '更优模型', '云同步', 'SRS 间隔复习', '跨设备使用'],
     cta: '即将推出', disabled: true,
   },
   {
@@ -275,15 +275,11 @@ export default function LandingPage() {
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.45 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            className="flex justify-center items-center">
             <button onClick={() => navigate(user ? '/learn' : '/login')}
               className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg flex items-center gap-2 shadow-[2px_2px_0_#8b7e5e]">
               {user ? '进入学习' : '免费开始'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button onClick={() => navigate('/login')}
-              className="px-8 py-3.5 border-2 border-[#b5ae8e] text-[#524d3c] font-medium rounded hover:bg-[#f0ead6] transition-colors text-lg">
-              登录
             </button>
           </motion.div>
 

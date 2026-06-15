@@ -2,28 +2,58 @@ import { useState, useEffect } from 'react'
 import { adminApi } from '../../utils/adminApi'
 
 const LineChart = ({ data }) => {
+  const [hovered, setHovered] = useState(null)
+
   if (!data.length) return <div className="text-[#e8d5b7]/40 text-sm">暂无数据</div>
   const maxCost = Math.max(...data.map(d => d.cost || 0), 0.001)
   const width = 100
   const height = 40
-  const points = data.map((d, i) => {
-    const x = (i / Math.max(data.length - 1, 1)) * width
-    const y = height - ((d.cost || 0) / maxCost) * height
-    return `${x},${y}`
-  }).join(' ')
-  const areaPoints = `0,${height} ${points} ${width},${height}`
 
   return (
     <div className="relative">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48" preserveAspectRatio="none">
-        <polygon points={areaPoints} fill="rgba(201,169,110,0.1)" />
-        <polyline points={points} fill="none" stroke="#c9a96e" strokeWidth="0.5" />
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48" preserveAspectRatio="none"
+        onMouseLeave={() => setHovered(null)}>
+        {/* 网格线 */}
+        {[0.25, 0.5, 0.75].map(frac => {
+          const y = height * (1 - frac)
+          return <line key={frac} x1="0" y1={y} x2={width} y2={y} stroke="rgba(201,169,110,0.1)" strokeWidth="0.2" />
+        })}
+        {/* 区域填充 */}
+        <polygon points={`0,${height} ${data.map((d, i) => {
+          const x = (i / Math.max(data.length - 1, 1)) * width
+          const y = height - ((d.cost || 0) / maxCost) * height
+          return `${x},${y}`
+        }).join(' ')} ${width},${height}`} fill="rgba(201,169,110,0.1)" />
+        {/* 折线 */}
+        <polyline points={data.map((d, i) => {
+          const x = (i / Math.max(data.length - 1, 1)) * width
+          const y = height - ((d.cost || 0) / maxCost) * height
+          return `${x},${y}`
+        }).join(' ')} fill="none" stroke="#c9a96e" strokeWidth="0.5" />
+        {/* 数据点（透明，用于 hover 检测） */}
         {data.map((d, i) => {
           const x = (i / Math.max(data.length - 1, 1)) * width
           const y = height - ((d.cost || 0) / maxCost) * height
-          return <circle key={i} cx={x} cy={y} r="0.8" fill="#c9a96e" />
+          return (
+            <circle key={i} cx={x} cy={y} r={hovered === i ? "1.5" : "1"}
+              fill={hovered === i ? "#fff" : "#c9a96e"} stroke="#c9a96e" strokeWidth="0.3"
+              onMouseEnter={() => setHovered(i)} />
+          )
         })}
       </svg>
+      {/* Tooltip */}
+      {hovered !== null && data[hovered] && (
+        <div className="absolute pointer-events-none bg-[#1a1a2e] border border-[#c9a96e]/30 rounded px-2 py-1 text-xs z-10"
+          style={{
+            left: `${(hovered / Math.max(data.length - 1, 1)) * 100}%`,
+            top: `${(1 - (data[hovered].cost || 0) / maxCost) * 100}%`,
+            transform: 'translate(-50%, -120%)',
+          }}>
+          <div className="text-[#e8d5b7]/60">{data[hovered].date}</div>
+          <div className="text-[#c9a96e] font-bold">${(data[hovered].cost || 0).toFixed(4)}</div>
+          <div className="text-[#e8d5b7]/40">{(data[hovered].tokens || 0).toLocaleString()} tokens</div>
+        </div>
+      )}
       {/* X轴标签 */}
       <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
         <span>{data[0]?.date?.slice(5)}</span>

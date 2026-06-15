@@ -487,6 +487,9 @@ function App() {
       setStep('input')
       if (error.response && error.response.status === 400) {
         showAlert(t.badRequest || '请求参数错误')
+      } else if (error.response && error.response.status === 402) {
+        const detail = error.response?.data?.detail || '额度不足'
+        showAlert(detail, '额度不足')
       } else if (error.response && error.response.status === 429) {
         const detail = error.response.data?.detail || '额度已用完'
         showAlert(detail, '额度不足')

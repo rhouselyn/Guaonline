@@ -30,7 +30,7 @@ def _get_conn():
             base_url TEXT,
             model TEXT,
             quota_used INTEGER DEFAULT 0,
-            quota_max INTEGER DEFAULT 50,
+            quota_max INTEGER DEFAULT 200,
             quota_reset_at TEXT,
             created_at TEXT NOT NULL
         )
@@ -77,7 +77,7 @@ async def register(user_data: UserCreate):
     )
     conn.commit()
     conn.close()
-    init_quota(user_id)
+    init_quota(user_id, "free")
     return create_tokens(user_id, UserTier.free)
 
 
@@ -124,7 +124,7 @@ async def get_me(current_user: TokenData = Depends(require_auth)):
         id=row["id"], email=row["email"], name=row["name"],
         tier=UserTier(row["tier"]),
         created_at=row["created_at"],
-        quota_used=row["quota_used"] or 0, quota_max=row["quota_max"] or 50
+        quota_used=row["quota_used"] or 0, quota_max=row["quota_max"] or 200
     )
 
 
