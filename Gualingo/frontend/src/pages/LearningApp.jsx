@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Loader2 } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -1279,7 +1279,17 @@ function App() {
                 />
               ) : (
                 <>
-
+                  <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+                    <AccountMenu t={t} />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowSettings(true)}
+                      className="p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </motion.button>
+                  </div>
                   {translatingUI && (
                     <div className="absolute inset-0 bg-parchment-50/80 backdrop-blur-sm z-20 flex items-center justify-center">
                       <div className="flex items-center gap-3 bg-parchment-50 border-2 border-aged-200 rounded-sm px-6 py-4 shadow-retro">
@@ -1612,7 +1622,6 @@ function App() {
           </div>
         )}
       </main>
-      <AccountMenu t={t} onOpenSettings={() => setShowSettings(true)} />
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={setUiLang} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} />
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog

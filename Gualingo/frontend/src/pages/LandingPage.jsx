@@ -281,7 +281,10 @@ export default function LandingPage() {
               {user ? '进入学习' : '免费开始'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-
+            <button onClick={() => navigate('/login')}
+              className="px-8 py-3.5 border-2 border-[#b5ae8e] text-[#524d3c] font-medium rounded hover:bg-[#f0ead6] transition-colors text-lg">
+              登录
+            </button>
           </motion.div>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
