@@ -318,9 +318,9 @@ export default function AdminUsers() {
                 <label className="text-[#e8d5b7]/60 text-sm block mb-1">操作类型</label>
                 <select value={quotaAction} onChange={e => { setQuotaAction(e.target.value); setQuotaConfirming(false) }}
                   className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-3 py-2 text-sm">
-                  <option value="add">增加 N 句</option>
-                  <option value="subtract">减少 N 句</option>
-                  <option value="set">设为 N 句</option>
+                  <option value="add">增加</option>
+                  <option value="subtract">减少</option>
+                  <option value="set">设为</option>
                 </select>
               </div>
               <div>

@@ -106,7 +106,8 @@ def check_and_refill_quota(user_id: str) -> dict:
             )
             conn.commit()
         conn.close()
-        return {"used": used, "max": max_q, "available": max_q - used}
+        available = max(max_q - used, 0)
+        return {"used": used, "max": max_q, "available": available}
 
     else:  # free
         # Free: 每日恢复50句，上限200
@@ -120,6 +121,8 @@ def check_and_refill_quota(user_id: str) -> dict:
                 if days_passed >= 1:
                     refill = days_passed * FREE_DAILY_REFILL
                     max_q = min(max_q + refill, FREE_MAX_QUOTA)
+                    # 确保额度不低于已用
+                    max_q = max(max_q, used)
                     conn.execute(
                         "UPDATE users SET quota_max = ?, quota_reset_at = ? WHERE id = ?",
                         (max_q, now.isoformat(), user_id)
@@ -134,7 +137,8 @@ def check_and_refill_quota(user_id: str) -> dict:
             )
             conn.commit()
         conn.close()
-        return {"used": used, "max": max_q, "available": max_q - used}
+        available = max(max_q - used, 0)
+        return {"used": used, "max": max_q, "available": available}
 
 
 def consume_quota(user_id: str, count: int) -> bool:
