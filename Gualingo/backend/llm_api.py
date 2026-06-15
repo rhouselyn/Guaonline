@@ -460,7 +460,22 @@ class LLMAPI:
                 try:
                     from utils.token_tracker import record_token_usage
                     model_name = getattr(self, '_current_model', None) or "unknown"
-                    record_token_usage(user_id, model_name, result["usage"], "llm_call")
+                    # 获取当前 tier key 的定价
+                    input_price = None
+                    output_price = None
+                    try:
+                        tier_data = _load_tier_keys()
+                        for tier_name, pool in tier_data.get("tier_keys", {}).items():
+                            for cfg in pool.get("configs", []):
+                                if cfg.get("model") == model_name:
+                                    input_price = cfg.get("input_price_per_million")
+                                    output_price = cfg.get("output_price_per_million")
+                                    break
+                            if input_price is not None:
+                                break
+                    except Exception:
+                        pass
+                    record_token_usage(user_id, model_name, result["usage"], "llm_call", input_price, output_price)
                 except Exception:
                     pass
             return result
@@ -482,7 +497,22 @@ class LLMAPI:
                 try:
                     from utils.token_tracker import record_token_usage
                     model_name = getattr(self, '_current_model', None) or "unknown"
-                    record_token_usage(user_id, model_name, result["usage"], "llm_call")
+                    # 获取当前 tier key 的定价
+                    input_price = None
+                    output_price = None
+                    try:
+                        tier_data = _load_tier_keys()
+                        for tier_name, pool in tier_data.get("tier_keys", {}).items():
+                            for cfg in pool.get("configs", []):
+                                if cfg.get("model") == model_name:
+                                    input_price = cfg.get("input_price_per_million")
+                                    output_price = cfg.get("output_price_per_million")
+                                    break
+                            if input_price is not None:
+                                break
+                    except Exception:
+                        pass
+                    record_token_usage(user_id, model_name, result["usage"], "llm_call", input_price, output_price)
                 except Exception:
                     pass
             return result
@@ -916,6 +946,8 @@ def get_tier_keys() -> dict:
                 "base_url": cfg.get("base_url", ""),
                 "model": cfg.get("model", ""),
                 "has_key": bool(key),
+                "input_price_per_million": cfg.get("input_price_per_million", 0),
+                "output_price_per_million": cfg.get("output_price_per_million", 0),
             })
         masked[tier] = {"configs": configs, "active_index": pool.get("active_index", 0)}
     return masked
@@ -938,6 +970,8 @@ def update_tier_keys(tier: str, configs: list, active_index: int = 0):
             "api_key": key,
             "base_url": cfg.get("base_url", ""),
             "model": cfg.get("model", ""),
+            "input_price_per_million": cfg.get("input_price_per_million", 0),
+            "output_price_per_million": cfg.get("output_price_per_million", 0),
         })
     data["tier_keys"][tier] = {"configs": new_configs, "active_index": active_index}
     _save_tier_keys(data)

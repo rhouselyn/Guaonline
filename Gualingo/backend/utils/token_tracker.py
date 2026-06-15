@@ -42,20 +42,24 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
-def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    """估算单次调用的美元成本。"""
-    pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
-    input_cost = (prompt_tokens / 1_000_000) * pricing["input"]
-    output_cost = (completion_tokens / 1_000_000) * pricing["output"]
+def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int, input_price: float = None, output_price: float = None) -> float:
+    """估算单次调用的美元成本。支持自定义价格。"""
+    if input_price is not None and output_price is not None:
+        input_cost = (prompt_tokens / 1_000_000) * input_price
+        output_cost = (completion_tokens / 1_000_000) * output_price
+    else:
+        pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
+        input_cost = (prompt_tokens / 1_000_000) * pricing["input"]
+        output_cost = (completion_tokens / 1_000_000) * pricing["output"]
     return round(input_cost + output_cost, 8)
 
 
-def record_token_usage(user_id: str, model: str, usage: dict, request_type: str = None):
-    """记录一次 LLM 调用的 token 使用量。usage 来自 API 响应的 usage 字段。"""
+def record_token_usage(user_id: str, model: str, usage: dict, request_type: str = None, input_price: float = None, output_price: float = None):
+    """记录一次 LLM 调用的 token 使用量。"""
     prompt_tokens = usage.get("prompt_tokens", 0)
     completion_tokens = usage.get("completion_tokens", 0)
     total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
-    cost = estimate_cost(model, prompt_tokens, completion_tokens)
+    cost = estimate_cost(model, prompt_tokens, completion_tokens, input_price, output_price)
 
     conn = _get_conn()
     conn.execute(

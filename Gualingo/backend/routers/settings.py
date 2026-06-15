@@ -33,8 +33,7 @@ class UserPreferencesUpdate(BaseModel):
     source_lang: Optional[str] = None
     target_lang: Optional[str] = None
     ui_lang: Optional[str] = None
-    rpm: Optional[int] = None
-    retry_interval: Optional[float] = None
+
     skip_listening: Optional[bool] = None
     recent_languages: Optional[List[str]] = None
     page_size: Optional[int] = None
@@ -125,10 +124,7 @@ async def update_user_preferences(req: UserPreferencesUpdate, current_user: Toke
             current["target_lang"] = req.target_lang
         if req.ui_lang is not None:
             current["ui_lang"] = req.ui_lang
-        if req.rpm is not None:
-            current["rpm"] = req.rpm
-        if req.retry_interval is not None:
-            current["retry_interval"] = req.retry_interval
+
         if req.skip_listening is not None:
             current["skip_listening"] = req.skip_listening
         if req.recent_languages is not None:

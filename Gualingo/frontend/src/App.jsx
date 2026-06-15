@@ -12,6 +12,7 @@ const AdminUserDetail = lazy(() => import('./components/admin/AdminUserDetail'))
 const AdminQuota = lazy(() => import('./components/admin/AdminQuota'))
 const AdminBlacklist = lazy(() => import('./components/admin/AdminBlacklist'))
 const AdminCosts = lazy(() => import('./components/admin/AdminCosts'))
+const AdminGlobalSettings = lazy(() => import('./components/admin/AdminGlobalSettings'))
 
 function AdminSuspense({ children }) {
   return (
@@ -31,6 +32,7 @@ function App() {
       <Route path="/admin" element={<AdminSuspense><AdminPage /></AdminSuspense>}>
         <Route index element={<AdminSuspense><AdminDashboard /></AdminSuspense>} />
         <Route path="api-keys" element={<AdminSuspense><AdminApiKeys /></AdminSuspense>} />
+        <Route path="global-settings" element={<AdminSuspense><AdminGlobalSettings /></AdminSuspense>} />
         <Route path="users" element={<AdminSuspense><AdminUsers /></AdminSuspense>} />
         <Route path="users/:id" element={<AdminSuspense><AdminUserDetail /></AdminSuspense>} />
         <Route path="quota" element={<AdminSuspense><AdminQuota /></AdminSuspense>} />

@@ -21,11 +21,11 @@ from utils.helpers import (
 )
 
 
-async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, rpm: int = 20, user_id: str = None):
+async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, user_id: str = None):
     try:
         t_total_start = time.time()
-        app_prefs = storage.load_user_preferences()
-        retry_interval = app_prefs.get("retry_interval", 1.0)
+        app_prefs = storage.load_user_preferences(user_id=user_id)
+        retry_interval = 1.0  # Admin 全局设置，暂固定为 1.0
         print(f"[DEBUG] 开始处理文件 {file_id}, 请求间隔={retry_interval}s")
         _preserve = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
         processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, **_preserve}

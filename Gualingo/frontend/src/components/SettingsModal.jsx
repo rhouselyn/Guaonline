@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Globe, Cpu, Check, Loader2, Gauge, Languages, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle, Key } from 'lucide-react'
+import { Settings, X, Globe, Cpu, Check, Loader2, Languages, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, BookOpen, RefreshCw, Download, ToggleLeft, ToggleRight, AlertCircle, Key } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 
@@ -137,7 +137,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [retryInterval, setRetryInterval] = useState(1)
   const [localUiLang, setLocalUiLang] = useState(uiLang || 'zh')
   const [localPageSize, setLocalPageSize] = useState(50)
   const [activeSection, setActiveSection] = useState('api')
@@ -147,6 +146,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const [versionChecking, setVersionChecking] = useState(false)
   const [versionInfo, setVersionInfo] = useState(null)
   const [autoUpdate, setAutoUpdate] = useState(false)
+  const [skipListening, setSkipListening] = useState(false)
+  const [onlyNewWords, setOnlyNewWords] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -169,11 +170,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           : [{ api_key: '', base_url: '', model: '', has_key: false, masked_key: '' }]
         setConfigs(loaded)
         setCurrentIndex(data.active_index || 0)
-        if (prefs.retry_interval !== undefined) setRetryInterval(prefs.retry_interval)
         if (prefs.ui_lang) setLocalUiLang(prefs.ui_lang)
         else if (prefs.target_lang) setLocalUiLang(prefs.target_lang)
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
         if (prefs.auto_update !== undefined) setAutoUpdate(prefs.auto_update)
+        if (prefs.skip_listening !== undefined) setSkipListening(prefs.skip_listening)
+        if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
         setLoading(false)
       }).catch(() => {
         setConfigs([{ api_key: '', base_url: '', model: '', has_key: false, masked_key: '' }])
@@ -279,12 +281,13 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
       const updatedRecentLangs = [localUiLang, ...recentLangs.filter(code => code !== localUiLang)].slice(0, 5)
       await api.saveUserPreferences({
-        retry_interval: retryInterval,
         target_lang: localUiLang,
         ui_lang: localUiLang,
         page_size: localPageSize,
         recent_languages: updatedRecentLangs,
         auto_update: autoUpdate,
+        skip_listening: skipListening,
+        only_new_words: onlyNewWords,
       })
 
       if (onRecentLangsChange) {
@@ -332,38 +335,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
   const renderGeneralSection = () => (
     <div className="space-y-5">
-      {/* Request Interval */}
-      <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
-          <Gauge className="w-3 h-3" />
-          {t.retryInterval || '请求间隔'}
-        </label>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-ink-400">{t.retryIntervalDesc || '每次API请求之间的等待时间'}</span>
-            <span className="text-[11px] font-bold text-amber-500">{retryInterval.toFixed(1)}s</span>
-          </div>
-          <div className="relative">
-            <input
-              type="range"
-              min={0.1}
-              max={20}
-              step={0.1}
-              value={retryInterval}
-              onChange={e => setRetryInterval(Number(e.target.value))}
-              className="w-full h-2 rounded-none appearance-none cursor-pointer bg-parchment-100"
-              style={{
-                background: `linear-gradient(to right, #C08A3A 0%, #C08A3A ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #F5ECD7 ${((retryInterval - 0.1) / (20 - 0.1)) * 100}%, #F5ECD7 100%)`
-              }}
-            />
-            <div className="flex justify-between mt-1">
-              <span className="text-[10px] text-aged-300">0.1s</span>
-              <span className="text-[10px] text-aged-300">20s</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Items Per Page */}
       <div>
         <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
@@ -393,6 +364,42 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
               <span className="text-[10px] text-aged-300">200</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Learning Options */}
+      <div className="space-y-3 pt-2 border-t border-aged-200/60">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <BookOpen className="w-3 h-3" />
+          {t.learningOptions || '学习选项'}
+        </label>
+
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <p className="text-xs font-medium text-ink-700">{t.onlyNewWords || '只学新词'}</p>
+            <p className="text-[10px] text-ink-400">{t.onlyNewWordsDesc || '跳过已学过的单词'}</p>
+          </div>
+          <button onClick={() => setOnlyNewWords(v => !v)} className="transition-colors">
+            {onlyNewWords ? (
+              <svg className="w-8 h-5 text-amber-500" viewBox="0 0 32 20" fill="currentColor"><rect x="12" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="22" cy="10" r="7" fill="white"/></svg>
+            ) : (
+              <svg className="w-8 h-5 text-aged-300" viewBox="0 0 32 20" fill="currentColor"><rect x="0" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="white"/></svg>
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <p className="text-xs font-medium text-ink-700">{t.skipListening || '跳过听力'}</p>
+            <p className="text-[10px] text-ink-400">{t.skipListeningDesc || '跳过听力练习'}</p>
+          </div>
+          <button onClick={() => setSkipListening(v => !v)} className="transition-colors">
+            {skipListening ? (
+              <svg className="w-8 h-5 text-amber-500" viewBox="0 0 32 20" fill="currentColor"><rect x="12" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="22" cy="10" r="7" fill="white"/></svg>
+            ) : (
+              <svg className="w-8 h-5 text-aged-300" viewBox="0 0 32 20" fill="currentColor"><rect x="0" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="white"/></svg>
+            )}
+          </button>
         </div>
       </div>
 

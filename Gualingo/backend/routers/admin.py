@@ -412,6 +412,43 @@ async def get_cost_by_model(admin: AdminTokenData = Depends(require_admin)):
     return {"by_model": summary["by_model"]}
 
 
+# ── 全局设置 ──────────────────────────────────────────────
+
+GLOBAL_SETTINGS_FILE = str(DATA_DIR / "global_settings.json")
+
+
+def _load_global_settings() -> dict:
+    try:
+        with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"request_interval": 1.0}
+
+
+def _save_global_settings(data: dict):
+    with open(GLOBAL_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+@router.get("/global-settings")
+async def get_global_settings(admin: AdminTokenData = Depends(require_admin)):
+    return _load_global_settings()
+
+
+class GlobalSettingsUpdate(BaseModel):
+    request_interval: Optional[float] = None
+
+
+@router.put("/global-settings")
+async def update_global_settings(req: GlobalSettingsUpdate, admin: AdminTokenData = Depends(require_admin)):
+    settings = _load_global_settings()
+    if req.request_interval is not None:
+        settings["request_interval"] = req.request_interval
+    _save_global_settings(settings)
+    _log_action("update_global_settings", details=settings)
+    return settings
+
+
 # ── 操作日志 ────────────────────────────────────────────────
 
 @router.get("/logs")

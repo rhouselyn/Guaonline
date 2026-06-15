@@ -116,4 +116,14 @@ export const adminApi = {
     const response = await axios.get(`${baseUrl}/api/admin/logs`, { params: { page, page_size: 20 } });
     return response.data;
   },
+
+  getGlobalSettings: async () => {
+    const response = await axios.get(`${baseUrl}/api/admin/global-settings`);
+    return response.data;
+  },
+
+  updateGlobalSettings: async (data) => {
+    const response = await axios.put(`${baseUrl}/api/admin/global-settings`, data);
+    return response.data;
+  },
 };

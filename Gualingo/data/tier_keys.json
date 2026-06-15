@@ -3,9 +3,9 @@
     "free": {
       "configs": [
         {
-          "api_key": "sk-test-free-key",
-          "base_url": "https://api.openai.com/v1",
-          "model": "gpt-4o-mini"
+          "api_key": "sk-tszhvcglvfqiivwqqtqwkxmxsneyuymjjywtfxteofmfvkct",
+          "base_url": "https://api.siliconflow.cn/v1",
+          "model": "Qwen/Qwen3.6-27B"
         }
       ],
       "active_index": 0

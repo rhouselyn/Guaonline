@@ -721,7 +721,7 @@ class DatabaseStorage:
         row = conn.execute("SELECT prefs FROM user_preferences WHERE user_id = ?", (uid,)).fetchone()
         if row:
             return json.loads(row["prefs"])
-        return {"source_lang": "auto", "target_lang": "zh", "rpm": 60, "skip_listening": False}
+        return {"source_lang": "auto", "target_lang": "zh", "skip_listening": False, "only_new_words": False}
 
     def _ensure_prefs_user_id(self, conn):
         """兼容旧表：如果 user_preferences 没有 user_id 列则迁移。"""

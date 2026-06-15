@@ -17,7 +17,7 @@ export default function AdminApiKeys() {
       for (const tier of TIERS) {
         const pool = data[tier] || { configs: [], active_index: 0 }
         ed[tier] = {
-          configs: pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }],
+          configs: pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }],
           active_index: pool.active_index || 0,
         }
       }
@@ -30,7 +30,7 @@ export default function AdminApiKeys() {
       ...prev,
       [tier]: {
         ...prev[tier],
-        configs: [...prev[tier].configs, { api_key: '', base_url: '', model: '' }],
+        configs: [...prev[tier].configs, { api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }],
       }
     }))
   }
@@ -132,6 +132,16 @@ export default function AdminApiKeys() {
               <label className="text-[#e8d5b7]/60 text-xs">Model</label>
               <input value={cfg.model || ''} onChange={e => updateConfig(activeTier, i, 'model', e.target.value)}
                 placeholder="gpt-4o-mini" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+            </div>
+            <div className="w-24">
+              <label className="text-[#e8d5b7]/60 text-xs">输入价格/$1M</label>
+              <input type="number" step="0.01" value={cfg.input_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'input_price_per_million', Number(e.target.value))}
+                placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+            </div>
+            <div className="w-24">
+              <label className="text-[#e8d5b7]/60 text-xs">输出价格/$1M</label>
+              <input type="number" step="0.01" value={cfg.output_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'output_price_per_million', Number(e.target.value))}
+                placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
             </div>
             <button onClick={() => removeConfig(activeTier, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
           </div>

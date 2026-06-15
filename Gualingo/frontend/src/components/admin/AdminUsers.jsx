@@ -48,7 +48,7 @@ export default function AdminUsers() {
                 <th className="text-left py-2 px-3">邮箱</th>
                 <th className="text-left py-2 px-3">名称</th>
                 <th className="text-center py-2 px-3">Tier</th>
-                <th className="text-center py-2 px-3">额度</th>
+                <th className="text-center py-2 px-3">剩余额度</th>
                 <th className="text-center py-2 px-3">封禁</th>
                 <th className="text-left py-2 px-3">注册时间</th>
               </tr>
@@ -60,7 +60,7 @@ export default function AdminUsers() {
                   <td className="py-2 px-3">{user.email}</td>
                   <td className="py-2 px-3">{user.name}</td>
                   <td className="text-center py-2 px-3"><span className={`px-2 py-0.5 rounded text-xs font-bold ${user.tier === 'pro' ? 'bg-purple-900/30 text-purple-400' : user.tier === 'basic' ? 'bg-blue-900/30 text-blue-400' : 'bg-gray-700/30 text-gray-400'}`}>{user.tier}</span></td>
-                  <td className="text-center py-2 px-3">{user.quota_used}/{user.quota_max}</td>
+                  <td className="text-center py-2 px-3">{user.quota_max - user.quota_used}</td>
                   <td className="text-center py-2 px-3">{user.banned ? <span className="text-red-400">是</span> : <span className="text-green-400">否</span>}</td>
                   <td className="py-2 px-3 text-xs">{user.created_at?.slice(0, 10)}</td>
                 </tr>
