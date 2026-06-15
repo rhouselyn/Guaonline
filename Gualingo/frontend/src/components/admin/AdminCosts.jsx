@@ -38,6 +38,13 @@ export default function AdminCosts() {
   const [trendDays, setTrendDays] = useState(30)
   const [trend, setTrend] = useState([])
   const [byModel, setByModel] = useState([])
+  const trendOptions = [
+    { days: 7, label: '7天' },
+    { days: 14, label: '14天' },
+    { days: 30, label: '30天' },
+    { days: 90, label: '90天' },
+    { days: 9999, label: '有史以来' },
+  ]
 
   useEffect(() => {
     adminApi.getCosts().then(setData)
@@ -75,10 +82,10 @@ export default function AdminCosts() {
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-[#c9a96e] font-bold">成本趋势</h3>
           <div className="flex gap-1">
-            {[7, 14, 30, 90].map(d => (
-              <button key={d} onClick={() => setTrendDays(d)}
-                className={`px-2 py-1 rounded text-xs ${trendDays === d ? 'bg-[#c9a96e] text-[#1a1a2e]' : 'bg-[#1a1a2e] text-[#e8d5b7]'}`}>
-                {d}天
+            {trendOptions.map(opt => (
+              <button key={opt.days} onClick={() => setTrendDays(opt.days)}
+                className={`px-2 py-1 rounded text-xs ${trendDays === opt.days ? 'bg-[#c9a96e] text-[#1a1a2e]' : 'bg-[#1a1a2e] text-[#e8d5b7]'}`}>
+                {opt.label}
               </button>
             ))}
           </div>

@@ -634,8 +634,14 @@ async def get_top_cost_users(
     count_row = conn.execute(f"SELECT COUNT(DISTINCT user_id) as cnt FROM token_usage WHERE {date_filter} AND user_id != 'system'").fetchone()
     total = count_row["cnt"] if count_row else 0
 
-    # 分页查询
+    # 最多返回 Top 100
+    total = min(total, 100)
     offset = (page - 1) * page_size
+    if offset >= 100:
+        return {"users": [], "total": total, "page": page, "page_size": page_size}
+
+    # 分页查询
+    effective_limit = min(page_size, 100 - offset)
     rows = conn.execute(f"""
         SELECT user_id,
                SUM(prompt_tokens) as prompt_tokens,
@@ -647,7 +653,7 @@ async def get_top_cost_users(
         GROUP BY user_id
         ORDER BY cost DESC
         LIMIT ? OFFSET ?
-    """, (page_size, offset)).fetchall()
+    """, (effective_limit, offset)).fetchall()
 
     # 获取用户邮箱
     user_conn = get_user_conn()
