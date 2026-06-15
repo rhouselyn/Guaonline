@@ -163,6 +163,41 @@ async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)
         return {"status": "error", "message": str(e)}
 
 
+@router.get("/api-keys/{tier}/status")
+async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    from utils.llm_gateway import gateway
+    pool = gateway.pools.get(tier)
+    if not pool:
+        return {"statuses": []}
+    statuses = []
+    for i, cfg in enumerate(pool.configs):
+        status_info = {
+            "index": i,
+            "api_key_preview": cfg.get("api_key", "")[:8] + "..." if cfg.get("api_key") else "未配置",
+            "model": cfg.get("model", ""),
+            "is_valid": cfg.get("is_valid", True),
+            "last_error": cfg.get("last_error", None),
+            "last_error_time": cfg.get("last_error_time", None),
+            "active_count": pool.active_count.get(i, 0) if isinstance(pool.active_count, dict) else 0,
+            "total_calls": pool.total_calls.get(i, 0) if hasattr(pool, 'total_calls') else 0,
+        }
+        # 判断状态
+        if not cfg.get("api_key"):
+            status_info["status"] = "empty"
+            status_info["status_text"] = "未配置"
+        elif not cfg.get("is_valid", True):
+            status_info["status"] = "invalid"
+            status_info["status_text"] = "无效/欠费"
+        elif cfg.get("last_error") and "429" in str(cfg.get("last_error", "")):
+            status_info["status"] = "rate_limited"
+            status_info["status_text"] = "限速中"
+        else:
+            status_info["status"] = "normal"
+            status_info["status_text"] = "正常"
+        statuses.append(status_info)
+    return {"statuses": statuses}
+
+
 # ── 用户管理 ────────────────────────────────────────────────
 
 @router.get("/users")
@@ -449,6 +484,12 @@ class BatchQuotaRequest(BaseModel):
     value: int
 
 
+class BatchQuotaByIdsRequest(BaseModel):
+    user_ids: List[str]
+    action: str  # add / subtract / set
+    value: int
+
+
 @router.post("/quota/batch")
 async def batch_adjust_quota(req: BatchQuotaRequest, admin: AdminTokenData = Depends(require_admin)):
     conn = get_user_conn()
@@ -479,6 +520,30 @@ async def batch_adjust_quota(req: BatchQuotaRequest, admin: AdminTokenData = Dep
     _log_action("quota_batch_adjust", "tier", req.target_tier or "all",
                 {"action": req.action, "value": req.value, "affected": count})
     return {"status": "ok", "affected": count}
+
+
+@router.post("/quota/batch-by-ids")
+async def batch_adjust_quota_by_ids(req: BatchQuotaByIdsRequest, admin: AdminTokenData = Depends(require_admin)):
+    conn = get_user_conn()
+    affected = 0
+    for uid in req.user_ids:
+        row = conn.execute("SELECT quota_used, quota_max FROM users WHERE id = ?", (uid,)).fetchone()
+        if not row:
+            continue
+        if req.action == "add":
+            new_max = row["quota_max"] + req.value
+        elif req.action == "subtract":
+            new_max = max(0, row["quota_max"] - req.value)
+        elif req.action == "set":
+            new_max = req.value
+        else:
+            continue
+        conn.execute("UPDATE users SET quota_max = ? WHERE id = ?", (new_max, uid))
+        affected += 1
+    conn.commit()
+    conn.close()
+    _log_action("batch_adjust_quota_by_ids", "quota", None, {"count": affected, "action": req.action, "value": req.value})
+    return {"status": "ok", "affected": affected}
 
 
 # ── 黑名单 ──────────────────────────────────────────────────
@@ -524,7 +589,14 @@ async def remove_from_blacklist(user_id: str, admin: AdminTokenData = Depends(re
 
 @router.get("/costs")
 async def get_costs(admin: AdminTokenData = Depends(require_admin)):
-    return get_cost_summary()
+    summary = get_cost_summary()
+    # 添加 all_time 统计
+    from utils.token_tracker import _get_conn as get_token_conn
+    conn = get_token_conn()
+    all_time_row = conn.execute("SELECT SUM(prompt_tokens) as pt, SUM(completion_tokens) as ct, SUM(total_tokens) as tt, SUM(cost_usd) as c FROM token_usage").fetchone()
+    summary["all_time"] = {"tokens": all_time_row["tt"] or 0, "cost": float(all_time_row["c"] or 0)}
+    conn.close()
+    return summary
 
 
 @router.get("/costs/trend")
@@ -537,6 +609,62 @@ async def get_cost_trend(days: int = Query(30, ge=1, le=90), admin: AdminTokenDa
 async def get_cost_by_model(admin: AdminTokenData = Depends(require_admin)):
     summary = get_cost_summary()
     return {"by_model": summary["by_model"]}
+
+
+@router.get("/costs/top-users")
+async def get_top_cost_users(
+    period: str = Query("month", pattern="^(today|week|month|all)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: AdminTokenData = Depends(require_admin),
+):
+    from utils.token_tracker import _get_conn as get_token_conn
+
+    if period == "today":
+        date_filter = "date(created_at) = date('now')"
+    elif period == "week":
+        date_filter = "date(created_at) >= date('now', '-7 days')"
+    elif period == "month":
+        date_filter = "date(created_at) >= date('now', '-30 days')"
+    else:  # all
+        date_filter = "1=1"
+
+    conn = get_token_conn()
+    # 获取总数
+    count_row = conn.execute(f"SELECT COUNT(DISTINCT user_id) as cnt FROM token_usage WHERE {date_filter} AND user_id != 'system'").fetchone()
+    total = count_row["cnt"] if count_row else 0
+
+    # 分页查询
+    offset = (page - 1) * page_size
+    rows = conn.execute(f"""
+        SELECT user_id,
+               SUM(prompt_tokens) as prompt_tokens,
+               SUM(completion_tokens) as completion_tokens,
+               SUM(total_tokens) as total_tokens,
+               SUM(cost_usd) as cost
+        FROM token_usage
+        WHERE {date_filter} AND user_id != 'system'
+        GROUP BY user_id
+        ORDER BY cost DESC
+        LIMIT ? OFFSET ?
+    """, (page_size, offset)).fetchall()
+
+    # 获取用户邮箱
+    user_conn = get_user_conn()
+    result = []
+    for row in rows:
+        user_row = user_conn.execute("SELECT email FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        result.append({
+            "user_id": row["user_id"],
+            "email": user_row["email"] if user_row else row["user_id"],
+            "prompt_tokens": row["prompt_tokens"],
+            "completion_tokens": row["completion_tokens"],
+            "total_tokens": row["total_tokens"],
+            "cost": float(row["cost"] or 0),
+        })
+    user_conn.close()
+
+    return {"users": result, "total": total, "page": page, "page_size": page_size}
 
 
 # ── 全局设置 ──────────────────────────────────────────────

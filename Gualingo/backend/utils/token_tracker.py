@@ -126,6 +126,12 @@ def get_cost_summary(days: int = 30) -> dict:
         (month_start,)
     ).fetchall()
 
+    # 有史以来总成本
+    all_time_row = conn.execute(
+        "SELECT COALESCE(SUM(total_tokens), 0) as tokens, COALESCE(SUM(cost_usd), 0) as cost "
+        "FROM token_usage"
+    ).fetchone()
+
     conn.close()
 
     month_cost = row_month["cost"] if row_month else 0
@@ -139,4 +145,5 @@ def get_cost_summary(days: int = 30) -> dict:
         "top_users": [dict(r) for r in top_users],
         "trend": [dict(r) for r in trend],
         "by_model": [dict(r) for r in by_model],
+        "all_time": {"tokens": all_time_row["tokens"] if all_time_row else 0, "cost": float(all_time_row["cost"] if all_time_row else 0)},
     }

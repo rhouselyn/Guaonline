@@ -24,10 +24,21 @@ const BarChart = ({ title, data, colors = {} }) => {
 export default function AdminDashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [topPeriod, setTopPeriod] = useState('month')
+  const [topPage, setTopPage] = useState(1)
+  const [topData, setTopData] = useState(null)
+  const [topLoading, setTopLoading] = useState(false)
 
   useEffect(() => {
     adminApi.getDashboard().then(setData).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    setTopLoading(true)
+    adminApi.getTopCostUsers(topPeriod, topPage).then(d => {
+      setTopData(d)
+    }).finally(() => setTopLoading(false))
+  }, [topPeriod, topPage])
 
   if (loading) return <div className="text-[#e8d5b7]">加载中...</div>
   if (!data) return <div className="text-red-400">加载失败</div>
@@ -38,6 +49,9 @@ export default function AdminDashboard() {
     { label: '本月 Token 成本', value: `$${(data.token_cost_month?.cost || 0).toFixed(4)}`, sub: `${(data.token_cost_month?.tokens || 0).toLocaleString()} tokens` },
     { label: '平均每用户成本', value: `$${data.avg_cost_per_user.toFixed(4)}`, sub: `${data.token_cost_month?.active_users || 0} 活跃用户` },
   ]
+
+  const periodLabels = { today: '本日', week: '本周', month: '本月', all: '有史以来' }
+  const totalPages = topData ? Math.ceil(topData.total / 20) : 0
 
   return (
     <div>
@@ -59,33 +73,61 @@ export default function AdminDashboard() {
         <BarChart title="目标语言分布" data={data.target_lang_distribution || {}} />
       </div>
 
-      {data.top_cost_users?.length > 0 && (
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
-          <h3 className="text-[#c9a96e] font-bold mb-3">Top 10 成本用户（本月）</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-[#e8d5b7]/60 border-b border-[#c9a96e]/10">
-                <th className="text-left py-2">邮箱</th>
-                <th className="text-right py-2">Prompt</th>
-                <th className="text-right py-2">Completion</th>
-                <th className="text-right py-2">Total</th>
-                <th className="text-right py-2">成本</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.top_cost_users.map((u, i) => (
-                <tr key={i} className="text-[#e8d5b7] border-b border-[#c9a96e]/5">
-                  <td className="py-2">{u.email}</td>
-                  <td className="text-right">{(u.prompt_tokens || 0).toLocaleString()}</td>
-                  <td className="text-right">{(u.completion_tokens || 0).toLocaleString()}</td>
-                  <td className="text-right">{(u.total_tokens || 0).toLocaleString()}</td>
-                  <td className="text-right">${(u.cost || 0).toFixed(4)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Top 成本用户表格 */}
+      <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-[#c9a96e] font-bold">Top 成本用户</h3>
+          <div className="flex gap-1">
+            {Object.entries(periodLabels).map(([key, label]) => (
+              <button key={key} onClick={() => { setTopPeriod(key); setTopPage(1) }}
+                className={`px-2 py-1 rounded text-xs ${topPeriod === key ? 'bg-[#c9a96e] text-[#1a1a2e]' : 'bg-[#1a1a2e] text-[#e8d5b7]'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+
+        {topLoading ? (
+          <div className="text-[#e8d5b7]/60 text-sm py-4">加载中...</div>
+        ) : topData?.users?.length > 0 ? (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[#e8d5b7]/60 border-b border-[#c9a96e]/10">
+                  <th className="text-left py-2">邮箱</th>
+                  <th className="text-right py-2">Prompt</th>
+                  <th className="text-right py-2">Completion</th>
+                  <th className="text-right py-2">Total</th>
+                  <th className="text-right py-2">成本</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topData.users.map((u, i) => (
+                  <tr key={i} className="text-[#e8d5b7] border-b border-[#c9a96e]/5">
+                    <td className="py-2">{u.email || u.user_id}</td>
+                    <td className="text-right">{(u.prompt_tokens || 0).toLocaleString()}</td>
+                    <td className="text-right">{(u.completion_tokens || 0).toLocaleString()}</td>
+                    <td className="text-right">{(u.total_tokens || 0).toLocaleString()}</td>
+                    <td className="text-right">${(u.cost || 0).toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-between items-center mt-3 text-sm text-[#e8d5b7]/60">
+              <span>共 {topData.total} 条</span>
+              <div className="flex gap-2">
+                <button disabled={topPage <= 1} onClick={() => setTopPage(p => p - 1)}
+                  className="px-3 py-1 bg-[#1a1a2e] rounded disabled:opacity-30">上一页</button>
+                <span className="px-3 py-1">{topPage} / {totalPages || 1}</span>
+                <button disabled={topPage >= totalPages} onClick={() => setTopPage(p => p + 1)}
+                  className="px-3 py-1 bg-[#1a1a2e] rounded disabled:opacity-30">下一页</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-[#e8d5b7]/40 text-sm py-4">暂无数据</div>
+        )}
+      </div>
     </div>
   )
 }

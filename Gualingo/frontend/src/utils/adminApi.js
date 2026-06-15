@@ -113,6 +113,11 @@ export const adminApi = {
     return response.data;
   },
 
+  batchAdjustQuotaByUserIds: async (userIds, action, value) => {
+    const response = await axios.post(`${baseUrl}/api/admin/quota/batch-by-ids`, { user_ids: userIds, action, value });
+    return response.data;
+  },
+
   getBlacklist: async () => {
     const response = await axios.get(`${baseUrl}/api/admin/blacklist`);
     return response.data;
@@ -140,6 +145,16 @@ export const adminApi = {
 
   getCostByModel: async () => {
     const response = await axios.get(`${baseUrl}/api/admin/costs/by-model`);
+    return response.data;
+  },
+
+  getTopCostUsers: async (period = 'month', page = 1) => {
+    const response = await axios.get(`${baseUrl}/api/admin/costs/top-users`, { params: { period, page, page_size: 20 } });
+    return response.data;
+  },
+
+  getKeyStatuses: async (tier) => {
+    const response = await axios.get(`${baseUrl}/api/admin/api-keys/${tier}/status`);
     return response.data;
   },
 

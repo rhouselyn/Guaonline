@@ -15,6 +15,10 @@ export default function AdminUsers() {
   const [banModal, setBanModal] = useState(null) // null | { userIds: [], type: 'single' | 'batch' }
   const [banReason, setBanReason] = useState('')
   const [confirmModal, setConfirmModal] = useState(null) // null | { userIds: [], action: 'delete' | 'batchBan' | 'batchUnban' | 'batchDelete' }
+  const [quotaModal, setQuotaModal] = useState(false)
+  const [quotaAction, setQuotaAction] = useState('add')
+  const [quotaValue, setQuotaValue] = useState(10)
+  const [quotaConfirming, setQuotaConfirming] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -113,6 +117,25 @@ export default function AdminUsers() {
 
   const handleBatchDelete = () => {
     setConfirmModal({ userIds: [...selected], action: 'batchDelete' })
+  }
+
+  const handleBatchQuota = () => {
+    setQuotaModal(true)
+    setQuotaAction('add')
+    setQuotaValue(10)
+    setQuotaConfirming(false)
+  }
+
+  const confirmQuotaAdjust = async () => {
+    try {
+      await adminApi.batchAdjustQuotaByUserIds([...selected], quotaAction, quotaValue)
+      setQuotaModal(false)
+      setQuotaConfirming(false)
+      setSelected(new Set())
+      load()
+    } catch (e) {
+      alert('额度调整失败: ' + (e.response?.data?.detail || e.message))
+    }
   }
 
   return (
@@ -231,6 +254,10 @@ export default function AdminUsers() {
               className="px-3 py-1 bg-red-900/50 text-red-400 rounded text-sm font-bold hover:bg-red-900/70">
               批量注销
             </button>
+            <button onClick={handleBatchQuota}
+              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm font-bold hover:bg-[#c9a96e]/30">
+              额度调整
+            </button>
           </div>
         </div>
       )}
@@ -276,6 +303,48 @@ export default function AdminUsers() {
                 }`}>
                 确认
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 额度调整模态框 */}
+      {quotaModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => { setQuotaModal(false); setQuotaConfirming(false) }}>
+          <div className="bg-[#16213e] rounded-lg p-6 border border-[#c9a96e]/20 w-96" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[#c9a96e] font-bold mb-4">额度调整 ({selected.size} 个用户)</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[#e8d5b7]/60 text-sm block mb-1">操作类型</label>
+                <select value={quotaAction} onChange={e => { setQuotaAction(e.target.value); setQuotaConfirming(false) }}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-3 py-2 text-sm">
+                  <option value="add">增加 N 句</option>
+                  <option value="subtract">减少 N 句</option>
+                  <option value="set">设为 N 句</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[#e8d5b7]/60 text-sm block mb-1">数量</label>
+                <input type="number" min={0} value={quotaValue} onChange={e => { setQuotaValue(Number(e.target.value)); setQuotaConfirming(false) }}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-3 py-2 text-sm" />
+              </div>
+              {!quotaConfirming ? (
+                <button onClick={() => setQuotaConfirming(true)}
+                  className="w-full py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">执行</button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[#e8d5b7] text-sm">
+                    确认对选中的 <span className="text-[#c9a96e] font-bold">{selected.size}</span> 个用户执行
+                    <span className="text-[#c9a96e] font-bold"> {quotaAction === 'add' ? '增加' : quotaAction === 'subtract' ? '减少' : '设为'} {quotaValue} </span>句？
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={confirmQuotaAdjust}
+                      className="flex-1 py-2 bg-red-600 text-white rounded font-bold text-sm">确认执行</button>
+                    <button onClick={() => setQuotaConfirming(false)}
+                      className="flex-1 py-2 bg-[#1a1a2e] text-[#e8d5b7] rounded text-sm border border-[#c9a96e]/20">取消</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

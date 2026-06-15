@@ -5,6 +5,7 @@ import json
 import threading
 import asyncio
 import httpx
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from config import DATA_DIR
 
@@ -42,6 +43,9 @@ class TierKeyPool:
         self.active_count = 0
         self.last_switch_time = 0
         self.consecutive_fail_start = None
+        self.total_calls: Dict[int, int] = {}
+        self.last_error: Dict[int, str] = {}
+        self.last_error_time: Dict[int, str] = {}
 
     def get_current(self) -> Optional[tuple]:
         """获取当前活跃 Key，返回 (config, index) 或 None。"""
@@ -63,6 +67,11 @@ class TierKeyPool:
             self.rate_limited_until[idx] = time.time() + wait
             self.active_count = 0
             self.current_index += 1
+            self.last_error[idx] = "429 Rate Limited"
+            self.last_error_time[idx] = datetime.now(timezone.utc).isoformat()
+            self.configs[idx]["is_valid"] = True
+            self.configs[idx]["last_error"] = "429 Rate Limited"
+            self.configs[idx]["last_error_time"] = self.last_error_time[idx]
 
     def mark_invalid(self, idx: int):
         """标记 Key 无效（401），5 分钟后恢复。"""
@@ -70,12 +79,18 @@ class TierKeyPool:
             self.rate_limited_until[idx] = time.time() + 300
             self.active_count = 0
             self.current_index += 1
+            self.last_error[idx] = "401 Unauthorized"
+            self.last_error_time[idx] = datetime.now(timezone.utc).isoformat()
+            self.configs[idx]["is_valid"] = False
+            self.configs[idx]["last_error"] = "401 Unauthorized"
+            self.configs[idx]["last_error_time"] = self.last_error_time[idx]
 
     def mark_complete(self, idx: int):
         """单个请求完成。batch 全部完成时切换到下一个 Key。"""
         with self.lock:
             self.active_count -= 1
             self.consecutive_fail_start = None
+            self.total_calls[idx] = self.total_calls.get(idx, 0) + 1
             if self.active_count <= 0:
                 self.active_count = 0
                 self.last_switch_time = time.time()

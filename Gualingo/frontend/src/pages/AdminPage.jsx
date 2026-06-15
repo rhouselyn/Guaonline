@@ -5,7 +5,6 @@ const navItems = [
   { to: '/admin', label: '仪表盘', end: true },
   { to: '/admin/api-keys', label: 'API Key' },
   { to: '/admin/users', label: '用户管理' },
-  { to: '/admin/quota', label: '额度管理' },
   { to: '/admin/costs', label: 'Token 成本' },
 ]
 
