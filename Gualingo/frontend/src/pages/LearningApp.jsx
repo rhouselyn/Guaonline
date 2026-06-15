@@ -491,8 +491,9 @@ function App() {
         const detail = error.response?.data?.detail || '额度不足'
         showAlert(detail, '额度不足')
       } else if (error.response && error.response.status === 429) {
-        const detail = error.response.data?.detail || '请求过于频繁，请稍后再试'
-        showAlert(detail)
+        const detail = error.response.data?.detail
+        const msg = (detail && t?.[detail]) || t?.rateLimitExceeded || '请求过于频繁，请稍后再试'
+        showAlert(msg)
       } else if (error.response && error.response.status === 504) {
         showAlert(t.networkTimeout || '网络连接超时，请检查网络连接后重试')
       } else if (error.message && error.message.includes('timeout')) {

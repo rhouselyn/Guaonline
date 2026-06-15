@@ -179,6 +179,7 @@ UI_TRANSLATION_SCHEMA = {
     "dailyRefillInfo": {"desc": "Daily refill info for free tier, {0}=daily, {1}=max", "zh": "每日恢复 {0} 句，上限 {1} 句", "en": "Daily refill {0} sentences, max {1}"},
     "monthlyQuotaInfo": {"desc": "Monthly quota info for basic tier, {0}=monthly", "zh": "每月 {0} 句额度", "en": "{0} sentences per month"},
     "unlimitedQuota": {"desc": "Unlimited quota label", "zh": "无限额度", "en": "Unlimited"},
+    "rateLimitExceeded": {"desc": "Rate limit exceeded message", "zh": "请求过于频繁，请稍后再试", "en": "Too many requests, please try again later"},
 }
 
 TRANSLATION_PROMPT = """You are a professional UI translator. Translate the following UI strings into {target_lang_name} ({target_lang_code}).

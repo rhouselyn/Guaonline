@@ -160,7 +160,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
     try:
         # 限流检查
         if not _check_rate_limit(current_user.user_id):
-            raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试（每分钟最多3次）")
+            raise HTTPException(status_code=429, detail="rateLimitExceeded")
 
         text = request.get("text", "")
         source_lang = request.get("source_language", "en")
