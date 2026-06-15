@@ -151,7 +151,7 @@ const STEPS = [
 const PLANS = [
   {
     id: 'free', name: '免费版', price: '¥0', period: '', highlight: false,
-    features: ['免费 50 句额度', '每日恢复 10 句', '基础学习功能'],
+    features: ['免费 50 句额度', '每日恢复 10 句（上限 100）', '基础学习功能'],
     cta: '免费开始',
   },
   {

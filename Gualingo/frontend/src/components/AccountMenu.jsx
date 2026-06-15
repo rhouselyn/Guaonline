@@ -6,9 +6,25 @@ import { User, Zap } from 'lucide-react';
 export default function AccountMenu({ t }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [quota, setQuota] = useState(() => auth.getQuota());
   const menuRef = useRef(null);
-  const user = auth.getUser();
-  const quota = auth.getQuota();
+
+  // 每次打开下拉菜单或组件挂载时刷新额度
+  useEffect(() => {
+    const refresh = () => {
+      const q = auth.getQuota();
+      if (q) setQuota(q);
+    };
+    refresh();
+    const interval = setInterval(refresh, 30000); // 每30秒刷新
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      auth.fetchUser().then(() => setQuota(auth.getQuota())).catch(() => {});
+    }
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -17,6 +33,8 @@ export default function AccountMenu({ t }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const user = auth.getUser();
 
   // 未登录：圆圈里显示人像图标，点击跳转登录
   if (!user) {
@@ -32,8 +50,8 @@ export default function AccountMenu({ t }) {
   }
 
   const tierLabel = { free: t?.freeTier || '免费版', basic: t?.basicTier || '基础版', pro: t?.proTier || '专业版' };
-  const available = quota?.available ?? '?';
-  const max = quota?.max;
+  const available = quota?.available ?? 0;
+  const max = quota?.max ?? 100;
   const isUnlimited = max === -1;
   const quotaText = isUnlimited ? '∞' : `${available}/${max}`;
   const isLow = !isUnlimited && typeof available === 'number' && available <= 10;
@@ -71,7 +89,7 @@ export default function AccountMenu({ t }) {
             <p className="text-xs text-amber-600 mt-0.5">{tierLabel[user.tier] || user.tier}</p>
           </div>
           {/* 额度详情 */}
-          {!isUnlimited && quota && (
+          {!isUnlimited && (
             <div className="px-4 py-2.5 border-b border-aged-200">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs text-ink-500">剩余额度</span>
@@ -85,7 +103,7 @@ export default function AccountMenu({ t }) {
                   style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }}
                 />
               </div>
-              <p className="text-[10px] text-ink-400 mt-1">每日恢复 10 句</p>
+              <p className="text-[10px] text-ink-400 mt-1">每日恢复 10 句，上限 100 句</p>
             </div>
           )}
           <button
