@@ -1,7 +1,66 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../utils/auth';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Sparkles, Key } from 'lucide-react';
+
+// 复用着陆页的青蛙 Logo
+function FrogLogo({ size = 48 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 200 200" fill="none">
+      <ellipse cx="100" cy="120" rx="70" ry="55" fill="#B5AE8E" stroke="#8B7E5E" strokeWidth="3" />
+      <ellipse cx="100" cy="115" rx="62" ry="48" fill="#D8D4BF" />
+      <circle cx="68" cy="72" r="30" fill="#B5AE8E" stroke="#8B7E5E" strokeWidth="3" />
+      <circle cx="68" cy="72" r="24" fill="#FFF" stroke="#8B7E5E" strokeWidth="2" />
+      <circle cx="72" cy="68" r="10" fill="#524D3C" />
+      <circle cx="75" cy="65" r="3" fill="#FFF" />
+      <circle cx="132" cy="72" r="30" fill="#B5AE8E" stroke="#8B7E5E" strokeWidth="3" />
+      <circle cx="132" cy="72" r="24" fill="#FFF" stroke="#8B7E5E" strokeWidth="2" />
+      <circle cx="136" cy="68" r="10" fill="#524D3C" />
+      <circle cx="139" cy="65" r="3" fill="#FFF" />
+      <ellipse cx="100" cy="130" rx="32" ry="14" fill="#E8C985" stroke="#8B7E5E" strokeWidth="2" />
+      <path d="M74 126 Q100 146 126 126" stroke="#524D3C" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <ellipse cx="55" cy="110" rx="12" ry="8" fill="#D4A853" opacity="0.4" />
+      <ellipse cx="145" cy="110" rx="12" ry="8" fill="#D4A853" opacity="0.4" />
+    </svg>
+  );
+}
+
+// 背景波点动画
+function DotBackground() {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+    let time = 0;
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    resize();
+    window.addEventListener('resize', resize);
+    const draw = () => {
+      time += 0.001;
+      const w = canvas.width, h = canvas.height;
+      ctx.fillStyle = '#faf8f0';
+      ctx.fillRect(0, 0, w, h);
+      const sp = 28;
+      for (let x = sp / 2; x < w; x += sp) {
+        for (let y = sp / 2; y < h; y += sp) {
+          const d = Math.sqrt((x - w / 2) ** 2 + (y - h / 2) ** 2);
+          const wave = Math.sin(d * 0.006 - time * 1.5) * 0.5 + 0.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 1 + wave * 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(180, 160, 120, ${0.05 + wave * 0.05})`;
+          ctx.fill();
+        }
+      }
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
+  }, []);
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -32,108 +91,158 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-parchment-50 px-4">
-      <div className="w-full max-w-md bg-parchment-50 border-2 border-aged-200 rounded-sm p-8 shadow-retro relative">
-        <button
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <DotBackground />
+
+      <div className="relative z-10 w-full max-w-md mx-4">
+        {/* 返回按钮 */}
+        <motion.button
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
           onClick={() => navigate('/')}
-          className="absolute top-4 left-4 p-1.5 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors"
-          title="返回首页"
+          className="absolute -top-12 left-0 flex items-center gap-1.5 text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors"
         >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex justify-center mb-6">
-          <svg width="48" height="48" viewBox="0 0 100 100" fill="none">
-            <ellipse cx="50" cy="58" rx="38" ry="32" fill="#B5AE8E" />
-            <ellipse cx="50" cy="55" rx="34" ry="28" fill="#D8D4BF" />
-            <circle cx="34" cy="38" r="16" fill="#B5AE8E" />
-            <circle cx="66" cy="38" r="16" fill="#B5AE8E" />
-            <circle cx="34" cy="38" r="13" fill="#fff" />
-            <circle cx="66" cy="38" r="13" fill="#fff" />
-            <circle cx="36" cy="37" r="6" fill="#524D3C" />
-            <circle cx="68" cy="37" r="6" fill="#524D3C" />
-            <circle cx="38" cy="35" r="2" fill="#fff" />
-            <circle cx="70" cy="35" r="2" fill="#fff" />
-            <ellipse cx="50" cy="62" rx="18" ry="8" fill="#E8C985" />
-            <path d="M38 60 Q50 70 62 60" stroke="#524D3C" strokeWidth="2" fill="none" strokeLinecap="round" />
-          </svg>
-        </div>
+          <ArrowLeft className="w-4 h-4" />
+          返回首页
+        </motion.button>
 
-        <h2 className="text-2xl font-serif text-ink-800 text-center mb-6">
-          {isRegister ? '注册呱邻国' : '登录呱邻国'}
-        </h2>
+        {/* 主卡片 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="bg-[#faf8f0]/90 backdrop-blur-sm border-2 border-[#d4c9a8] rounded-lg p-8 shadow-[4px_4px_0_#b5ae8e] relative"
+        >
+          {/* 装饰角标 */}
+          <div className="absolute -top-px -left-px w-6 h-6 border-t-2 border-l-2 border-[#d4a853] rounded-tl-lg" />
+          <div className="absolute -top-px -right-px w-6 h-6 border-t-2 border-r-2 border-[#d4a853] rounded-tr-lg" />
+          <div className="absolute -bottom-px -left-px w-6 h-6 border-b-2 border-l-2 border-[#d4a853] rounded-bl-lg" />
+          <div className="absolute -bottom-px -right-px w-6 h-6 border-b-2 border-r-2 border-[#d4a853] rounded-br-lg" />
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-sm">
-            {error}
+          {/* Logo + 标题 */}
+          <div className="text-center mb-8">
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="flex justify-center mb-4 relative"
+            >
+              <FrogLogo size={64} />
+              <motion.div
+                className="absolute -top-1 -right-1"
+                animate={{ rotate: [0, 12, -12, 0] }}
+                transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
+              >
+                <Sparkles className="w-5 h-5 text-[#d4a853]" />
+              </motion.div>
+            </motion.div>
+            <h1 className="text-2xl font-bold text-[#3d3929]"
+              style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+              {isRegister ? '加入呱邻国' : '欢迎回来'}
+            </h1>
+            <p className="text-sm text-[#8b7e5e] mt-1">
+              {isRegister ? '创建账号，开始你的语言学习之旅' : '登录你的账号，继续学习'}
+            </p>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
+          {/* 错误提示 */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 p-3 bg-red-50/80 border border-red-200 text-red-700 text-sm rounded"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 表单 */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isRegister && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+                <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">昵称</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="你希望被怎么称呼？"
+                  className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
+                />
+              </motion.div>
+            )}
+
             <div>
-              <label className="block text-sm text-ink-600 mb-1">昵称</label>
+              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">邮箱</label>
               <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-aged-200 rounded-sm bg-white focus:outline-none focus:border-amber-500"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="your@email.com"
+                className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
               />
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm text-ink-600 mb-1">邮箱</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-aged-200 rounded-sm bg-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">密码</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="至少 6 位"
+                className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm text-ink-600 mb-1">密码</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-3 py-2 border border-aged-200 rounded-sm bg-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] disabled:opacity-50 transition-all shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] text-sm"
+            >
+              {loading ? '...' : (isRegister ? '创建账号' : '登录')}
+            </button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-amber-500 text-white font-medium rounded-sm hover:bg-amber-600 disabled:opacity-50 transition-colors"
-          >
-            {loading ? '...' : (isRegister ? '注册' : '登录')}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-ink-500">
-          {isRegister ? '已有账号？' : '没有账号？'}
-          <button
-            onClick={() => { setIsRegister(!isRegister); setError(''); }}
-            className="text-amber-600 hover:text-amber-700 ml-1"
-          >
-            {isRegister ? '登录' : '注册'}
-          </button>
-        </p>
-
-        <div className="mt-6 pt-4 border-t border-aged-200">
-          <p className="text-center text-xs text-ink-400 mb-2">
-            也可以跳过登录，直接使用自己的 API Key
+          {/* 切换登录/注册 */}
+          <p className="mt-5 text-center text-sm text-[#8b7e5e]">
+            {isRegister ? '已有账号？' : '还没有账号？'}
+            <button
+              onClick={() => { setIsRegister(!isRegister); setError(''); }}
+              className="text-[#d4a853] hover:text-[#c49a48] ml-1 font-medium transition-colors"
+            >
+              {isRegister ? '登录' : '注册一个'}
+            </button>
           </p>
+
+          {/* 分隔线 */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#d4c9a8]" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-[#faf8f0] px-3 text-xs text-[#b5ae8e]">或者</span>
+            </div>
+          </div>
+
+          {/* 跳过登录 */}
           <button
             onClick={() => navigate('/learn')}
-            className="w-full py-2 border border-aged-200 text-ink-600 rounded-sm hover:bg-parchment-100 transition-colors text-sm"
+            className="w-full py-2.5 border border-[#d4c9a8] text-[#524d3c] rounded hover:bg-[#f0ead6] transition-colors text-sm flex items-center justify-center gap-2"
           >
-            跳过，直接使用
+            <Key className="w-4 h-4" />
+            使用自己的 API Key 直接开始
           </button>
-        </div>
+
+          <p className="mt-3 text-center text-xs text-[#b5ae8e]">
+            无需注册，自带 Key 即可使用全部功能
+          </p>
+        </motion.div>
       </div>
     </div>
   );
