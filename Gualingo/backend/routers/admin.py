@@ -806,3 +806,143 @@ async def delete_ui_translation(lang_code: str, admin: AdminTokenData = Depends(
     conn.commit()
     _log_action("delete_ui_translation", "lang", lang_code)
     return {"status": "ok"}
+
+
+# ── 全局词汇管理 ──────────────────────────────────────────
+
+@router.get("/global-vocab/stats")
+async def get_global_vocab_stats(admin: AdminTokenData = Depends(require_admin)):
+    """获取全局词汇统计：按语言分组的词条数。"""
+    from vocab.global_vocab import _get_conn as get_gv_conn
+    conn = get_gv_conn()
+    rows = conn.execute(
+        "SELECT source_lang, COUNT(*) as cnt FROM global_vocab GROUP BY source_lang ORDER BY cnt DESC"
+    ).fetchall()
+    total = conn.execute("SELECT COUNT(*) as c FROM global_vocab").fetchone()["c"]
+    conn.close()
+    return {"total": total, "by_lang": [dict(r) for r in rows]}
+
+
+@router.get("/global-vocab/list")
+async def list_global_vocab(
+    source_lang: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    sort: str = Query("hit_count", pattern="^(hit_count|word|created_at)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    admin: AdminTokenData = Depends(require_admin),
+):
+    """列出全局词汇，支持按语言筛选和搜索。"""
+    from vocab.global_vocab import _get_conn as get_gv_conn
+    conn = get_gv_conn()
+    conditions = []
+    params = []
+    if source_lang:
+        conditions.append("source_lang = ?")
+        params.append(source_lang)
+    if search:
+        conditions.append("(word LIKE ? OR meaning LIKE ? OR enriched_meaning LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    total = conn.execute(f"SELECT COUNT(*) as c FROM global_vocab {where}", params).fetchone()["c"]
+    offset = (page - 1) * page_size
+    order_clause = f"ORDER BY {sort} {order.upper()}"
+    rows = conn.execute(
+        f"SELECT id, word, source_lang, target_lang, meaning, enriched_meaning, morphology, hit_count, created_at "
+        f"FROM global_vocab {where} {order_clause} LIMIT ? OFFSET ?",
+        params + [page_size, offset]
+    ).fetchall()
+    conn.close()
+    return {"total": total, "page": page, "page_size": page_size, "words": [dict(r) for r in rows]}
+
+
+@router.get("/global-vocab/{word_id}")
+async def get_global_vocab_detail(word_id: str, admin: AdminTokenData = Depends(require_admin)):
+    """获取全局词汇条目详情。"""
+    from vocab.global_vocab import _get_conn as get_gv_conn
+    import json as _json
+    conn = get_gv_conn()
+    row = conn.execute("SELECT * FROM global_vocab WHERE id = ?", (word_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="词条不存在")
+    result = dict(row)
+    for field in ("variants_detail", "examples", "multiple_choice"):
+        if result.get(field):
+            try:
+                result[field] = _json.loads(result[field])
+            except (_json.JSONDecodeError, TypeError):
+                pass
+    return result
+
+
+@router.post("/global-vocab/{word_id}/refresh")
+async def refresh_global_vocab_detail(word_id: str, admin: AdminTokenData = Depends(require_admin)):
+    """重新生成全局词汇条目详情。"""
+    from vocab.global_vocab import _get_conn as get_gv_conn, upsert as gv_upsert
+    from utils.llm_gateway import gateway
+    from auth.deps import TokenData
+    conn = get_gv_conn()
+    row = conn.execute("SELECT * FROM global_vocab WHERE id = ?", (word_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="词条不存在")
+
+    word = row["word"]
+    source_lang = row["source_lang"]
+    target_lang = row["target_lang"]
+
+    from llm_api import get_lang_name
+    source_lang_name = get_lang_name(source_lang)
+    target_lang_name = get_lang_name(target_lang)
+
+    gateway.reload()
+    messages = [
+        {
+            "role": "system",
+            "content": f"You are a {source_lang_name} language expert. Generate a detailed word entry for the {source_lang_name} word/expression below. "
+                       f"Explain in {target_lang_name}. Return a JSON object with these fields:\n"
+                       f"- word: the word/expression\n"
+                       f"- enriched_meaning: detailed meaning explanation in {target_lang_name}\n"
+                       f"- morphology: part of speech and morphological info\n"
+                       f"- examples: array of 3 example sentences in {source_lang_name}, each with {target_lang_name} translation\n"
+                       f"- memory_hint: a mnemonic tip in {target_lang_name}\n"
+                       f"- variants_detail: array of variant forms with explanations\n"
+                       f"- multiple_choice: object with 'question' and 'options' array for a quiz"
+        },
+        {"role": "user", "content": word}
+    ]
+
+    try:
+        response = await gateway.call("system", "free", messages, temperature=0.7, max_tokens=2048, request_type="admin_vocab_refresh")
+        if "choices" in response and len(response["choices"]) > 0:
+            content = response["choices"][0].get("message", {}).get("content", "")
+            # 尝试解析 JSON
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                import json
+                parsed = json.loads(json_match.group())
+                gv_upsert(word, source_lang, target_lang, parsed)
+                _log_action("refresh_global_vocab", "vocab", word_id, {"word": word})
+                return {"status": "ok", "data": parsed}
+        raise Exception("Failed to parse LLM response")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/global-vocab/{word_id}")
+async def delete_global_vocab_entry(word_id: str, admin: AdminTokenData = Depends(require_admin)):
+    """删除全局词汇条目。"""
+    from vocab.global_vocab import _get_conn as get_gv_conn
+    conn = get_gv_conn()
+    cursor = conn.execute("DELETE FROM global_vocab WHERE id = ?", (word_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="词条不存在")
+    _log_action("delete_global_vocab", "vocab", word_id)
+    return {"status": "ok"}

@@ -11,6 +11,7 @@ const AdminApiKeys = lazy(() => import('./components/admin/AdminApiKeys'))
 const AdminUsers = lazy(() => import('./components/admin/AdminUsers'))
 const AdminUserDetail = lazy(() => import('./components/admin/AdminUserDetail'))
 const AdminCosts = lazy(() => import('./components/admin/AdminCosts'))
+const AdminGlobalVocab = lazy(() => import('./components/admin/AdminGlobalVocab'))
 
 function AdminSuspense({ children }) {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="users" element={<AdminSuspense><AdminUsers /></AdminSuspense>} />
         <Route path="users/:id" element={<AdminSuspense><AdminUserDetail /></AdminSuspense>} />
         <Route path="costs" element={<AdminSuspense><AdminCosts /></AdminSuspense>} />
+        <Route path="global-vocab" element={<AdminSuspense><AdminGlobalVocab /></AdminSuspense>} />
       </Route>
     </Routes>
   )

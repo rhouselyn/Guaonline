@@ -6,6 +6,7 @@ const navItems = [
   { to: '/admin/api-keys', label: 'API Key' },
   { to: '/admin/users', label: '用户管理' },
   { to: '/admin/costs', label: 'Token 成本' },
+  { to: '/admin/global-vocab', label: '全局词汇' },
 ]
 
 export default function AdminPage() {

@@ -177,4 +177,29 @@ export const adminApi = {
     const response = await axios.put(`${baseUrl}/api/admin/global-settings`, data);
     return response.data;
   },
+
+  getGlobalVocabStats: async () => {
+    const response = await axios.get(`${baseUrl}/api/admin/global-vocab/stats`);
+    return response.data;
+  },
+
+  getGlobalVocabList: async (params = {}) => {
+    const response = await axios.get(`${baseUrl}/api/admin/global-vocab/list`, { params });
+    return response.data;
+  },
+
+  getGlobalVocabDetail: async (wordId) => {
+    const response = await axios.get(`${baseUrl}/api/admin/global-vocab/${wordId}`);
+    return response.data;
+  },
+
+  refreshGlobalVocab: async (wordId) => {
+    const response = await axios.post(`${baseUrl}/api/admin/global-vocab/${wordId}/refresh`);
+    return response.data;
+  },
+
+  deleteGlobalVocab: async (wordId) => {
+    const response = await axios.delete(`${baseUrl}/api/admin/global-vocab/${wordId}`);
+    return response.data;
+  },
 };

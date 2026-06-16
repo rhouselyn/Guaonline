@@ -227,7 +227,10 @@ class LLMGateway:
                 if user_id and result_data.get("usage"):
                     try:
                         from utils.token_tracker import record_token_usage
-                        record_token_usage(user_id, model, result_data["usage"], request_type, input_price, output_price)
+                        # 只有配置了非零价格才传入自定义价格，否则让 estimate_cost 用模型价格表
+                        custom_input = input_price if input_price else None
+                        custom_output = output_price if output_price else None
+                        record_token_usage(user_id, model, result_data["usage"], request_type, custom_input, custom_output)
                     except Exception:
                         pass
                 return result_data
