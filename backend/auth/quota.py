@@ -183,6 +183,25 @@ def consume_quota(user_id: str, count: int) -> bool:
     return True
 
 
+def refund_quota(user_id: str, count: int):
+    """退还额度（处理失败时调用）。"""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT quota_used FROM users WHERE id = ?",
+        (user_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+    used = row["quota_used"] or 0
+    conn.execute(
+        "UPDATE users SET quota_used = ? WHERE id = ?",
+        (max(0, used - count), user_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_quota_info(user_id: str) -> dict:
     """获取额度信息（含恢复逻辑）。"""
     return check_and_refill_quota(user_id)

@@ -18,7 +18,7 @@ from vocab import global_vocab, user_vocab
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free"):
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free", consumed_quota: int = 0):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
         # 直接输入模式：原文就是用户输入的文本，立即保存
@@ -139,6 +139,17 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             "status": "error",
             "error": error_msg
         }
+        # 处理失败：删除历史记录，退还额度
+        try:
+            storage.delete_history_record(file_id)
+        except Exception:
+            pass
+        if consumed_quota > 0 and user_id:
+            try:
+                from auth.quota import refund_quota
+                refund_quota(user_id, consumed_quota)
+            except Exception:
+                pass
 
 
 # 每用户每分钟最高请求数
@@ -180,6 +191,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
 
         # 预估句子数并检查额度
+        consumed_quota = 0
         from auth.quota import check_and_refill_quota
         quota_info = check_and_refill_quota(current_user.user_id)
         if quota_info["max"] != -1:  # 非无限额度
@@ -210,6 +222,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
             # 额度足够，立即扣减
             from auth.quota import consume_quota
             consume_quota(current_user.user_id, sentence_count)
+            consumed_quota = sentence_count
 
         # 立即设置初始状态
         preprocess_label = ""
@@ -237,7 +250,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         storage.add_history_record(file_id, "", source_lang, target_lang, text_preview, user_id=current_user.user_id)
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value, consumed_quota)
 
         return {
             "file_id": file_id,
