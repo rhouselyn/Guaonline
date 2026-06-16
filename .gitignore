@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+*.whl
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / Frontend build
+Gualingo/frontend/dist/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets & keys
+*.env
+*.env.local
+*.env.production
+tier_keys.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Superpowers temp
+.superpowers/
