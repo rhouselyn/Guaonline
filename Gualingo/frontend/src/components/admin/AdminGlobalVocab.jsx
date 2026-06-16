@@ -2,49 +2,127 @@ import { useState, useEffect, useMemo } from 'react'
 import { adminApi } from '../../utils/adminApi'
 import { RefreshCw, Search, ChevronLeft, ChevronRight, Trash2, Eye, X } from 'lucide-react'
 
-// 从 InputStep 的 LANGUAGES 列表中提取语言
+// 与 InputStep.jsx 完全同步的语言列表
 const LANGUAGES = [
   { value: 'en', native: 'English', en: 'English' },
   { value: 'fr', native: 'Français', en: 'French' },
   { value: 'pt', native: 'Português', en: 'Portuguese' },
   { value: 'de', native: 'Deutsch', en: 'German' },
+  { value: 'ro', native: 'Română', en: 'Romanian' },
+  { value: 'sv', native: 'Svenska', en: 'Swedish' },
+  { value: 'da', native: 'Dansk', en: 'Danish' },
+  { value: 'bg', native: 'Български', en: 'Bulgarian' },
   { value: 'ru', native: 'Русский', en: 'Russian' },
+  { value: 'cs', native: 'Čeština', en: 'Czech' },
+  { value: 'el', native: 'Ελληνικά', en: 'Greek' },
+  { value: 'uk', native: 'Українська', en: 'Ukrainian' },
   { value: 'es', native: 'Español', en: 'Spanish' },
+  { value: 'nl', native: 'Nederlands', en: 'Dutch' },
+  { value: 'sk', native: 'Slovenčina', en: 'Slovak' },
+  { value: 'hr', native: 'Hrvatski', en: 'Croatian' },
+  { value: 'pl', native: 'Polski', en: 'Polish' },
+  { value: 'lt', native: 'Lietuvių', en: 'Lithuanian' },
+  { value: 'nb', native: 'Norsk Bokmål', en: 'Norwegian Bokmål' },
+  { value: 'nn', native: 'Norsk Nynorsk', en: 'Norwegian Nynorsk' },
+  { value: 'fa', native: 'فارسی', en: 'Persian' },
+  { value: 'sl', native: 'Slovenščina', en: 'Slovenian' },
+  { value: 'gu', native: 'ગુજરાતી', en: 'Gujarati' },
+  { value: 'lv', native: 'Latviešu', en: 'Latvian' },
   { value: 'it', native: 'Italiano', en: 'Italian' },
-  { value: 'ja', native: '日本語', en: 'Japanese' },
-  { value: 'ko', native: '한국어', en: 'Korean' },
+  { value: 'oc', native: 'Occitan', en: 'Occitan' },
+  { value: 'ne', native: 'नेपाली', en: 'Nepali' },
+  { value: 'mr', native: 'मराठी', en: 'Marathi' },
+  { value: 'be', native: 'Беларуская', en: 'Belarusian' },
+  { value: 'sr', native: 'Српски', en: 'Serbian' },
+  { value: 'lb', native: 'Lëtzebuergesch', en: 'Luxembourgish' },
+  { value: 'vec', native: 'Vèneto', en: 'Venetian' },
+  { value: 'as', native: 'অসমীয়া', en: 'Assamese' },
+  { value: 'cy', native: 'Cymraeg', en: 'Welsh' },
+  { value: 'szl', native: 'Ślōnski', en: 'Silesian' },
+  { value: 'ast', native: 'Asturianu', en: 'Asturian' },
+  { value: 'hne', native: 'छत्तीसगढ़ी', en: 'Chhattisgarhi' },
+  { value: 'awa', native: 'अवधी', en: 'Awadhi' },
+  { value: 'mai', native: 'मैथिली', en: 'Maithili' },
+  { value: 'bho', native: 'भोजपुरी', en: 'Bhojpuri' },
+  { value: 'sd', native: 'سنڌي', en: 'Sindhi' },
+  { value: 'ga', native: 'Gaeilge', en: 'Irish' },
+  { value: 'fo', native: 'Føroyskt', en: 'Faroese' },
+  { value: 'hi', native: 'हिन्दी', en: 'Hindi' },
+  { value: 'pa', native: 'ਪੰਜਾਬੀ', en: 'Punjabi' },
+  { value: 'bn', native: 'বাংলা', en: 'Bengali' },
+  { value: 'or', native: 'ଓଡ଼ିଆ', en: 'Odia' },
+  { value: 'tg', native: 'Тоҷикӣ', en: 'Tajik' },
+  { value: 'yi', native: 'ייִדיש', en: 'Yiddish' },
+  { value: 'lmo', native: 'Lombard', en: 'Lombard' },
+  { value: 'lij', native: 'Lìgure', en: 'Ligurian' },
+  { value: 'scn', native: 'Sicilianu', en: 'Sicilian' },
+  { value: 'fur', native: 'Furlan', en: 'Friulian' },
+  { value: 'sc', native: 'Sardu', en: 'Sardinian' },
+  { value: 'gl', native: 'Galego', en: 'Galician' },
+  { value: 'ca', native: 'Català', en: 'Catalan' },
+  { value: 'is', native: 'Íslenska', en: 'Icelandic' },
+  { value: 'sq', native: 'Shqip', en: 'Albanian' },
+  { value: 'li', native: 'Limburgs', en: 'Limburgish' },
+  { value: 'prs', native: 'دری', en: 'Dari' },
+  { value: 'af', native: 'Afrikaans', en: 'Afrikaans' },
+  { value: 'mk', native: 'Македонски', en: 'Macedonian' },
+  { value: 'si', native: 'සිංහල', en: 'Sinhala' },
+  { value: 'ur', native: 'اردو', en: 'Urdu' },
+  { value: 'mag', native: 'मगही', en: 'Magahi' },
+  { value: 'bs', native: 'Bosanski', en: 'Bosnian' },
+  { value: 'hy', native: 'Հայերեն', en: 'Armenian' },
   { value: 'zh', native: '简体中文', en: 'Chinese (Simplified)' },
   { value: 'zh-TW', native: '繁體中文', en: 'Chinese (Traditional)' },
-  { value: 'ar', native: 'العربية', en: 'Arabic' },
-  { value: 'hi', native: 'हिन्दी', en: 'Hindi' },
-  { value: 'nl', native: 'Nederlands', en: 'Dutch' },
-  { value: 'sv', native: 'Svenska', en: 'Swedish' },
-  { value: 'pl', native: 'Polski', en: 'Polish' },
-  { value: 'tr', native: 'Türkçe', en: 'Turkish' },
-  { value: 'uk', native: 'Українська', en: 'Ukrainian' },
-  { value: 'vi', native: 'Tiếng Việt', en: 'Vietnamese' },
-  { value: 'th', native: 'ไทย', en: 'Thai' },
-  { value: 'cs', native: 'Čeština', en: 'Czech' },
-  { value: 'da', native: 'Dansk', en: 'Danish' },
-  { value: 'el', native: 'Ελληνικά', en: 'Greek' },
-  { value: 'fi', native: 'Suomi', en: 'Finnish' },
+  { value: 'yue', native: '粵語', en: 'Cantonese' },
+  { value: 'my', native: 'မြန်မာ', en: 'Burmese' },
+  { value: 'ar', native: 'العربية', en: 'Arabic (Standard)' },
+  { value: 'ars', native: 'نجدي', en: 'Arabic (Najdi)' },
+  { value: 'apc', native: 'شامي', en: 'Arabic (Levantine)' },
+  { value: 'arz', native: 'مصري', en: 'Arabic (Egyptian)' },
+  { value: 'ary', native: 'الدارجة', en: 'Arabic (Moroccan)' },
+  { value: 'acm', native: 'العراقية', en: 'Arabic (Mesopotamian)' },
+  { value: 'acq', native: 'يمني', en: "Arabic (Ta'izzi-Adeni)" },
+  { value: 'aeb', native: 'تونسي', en: 'Arabic (Tunisian)' },
   { value: 'he', native: 'עברית', en: 'Hebrew' },
-  { value: 'hu', native: 'Magyar', en: 'Hungarian' },
+  { value: 'mt', native: 'Malti', en: 'Maltese' },
   { value: 'id', native: 'Bahasa Indonesia', en: 'Indonesian' },
   { value: 'ms', native: 'Bahasa Melayu', en: 'Malay' },
-  { value: 'no', native: 'Norsk', en: 'Norwegian' },
-  { value: 'ro', native: 'Română', en: 'Romanian' },
-  { value: 'sk', native: 'Slovenčina', en: 'Slovak' },
-  { value: 'bg', native: 'Български', en: 'Bulgarian' },
-  { value: 'hr', native: 'Hrvatski', en: 'Croatian' },
-  { value: 'lt', native: 'Lietuvių', en: 'Lithuanian' },
-  { value: 'lv', native: 'Latviešu', en: 'Latvian' },
-  { value: 'sr', native: 'Српски', en: 'Serbian' },
-  { value: 'sl', native: 'Slovenščina', en: 'Slovenian' },
-  { value: 'fa', native: 'فارسی', en: 'Persian' },
-  { value: 'bn', native: 'বাংলা', en: 'Bengali' },
+  { value: 'tl', native: 'Tagalog', en: 'Tagalog' },
+  { value: 'ceb', native: 'Cebuano', en: 'Cebuano' },
+  { value: 'jv', native: 'Basa Jawa', en: 'Javanese' },
+  { value: 'su', native: 'Basa Sunda', en: 'Sundanese' },
+  { value: 'min', native: 'Baso Minangkabau', en: 'Minangkabau' },
+  { value: 'ban', native: 'Basa Bali', en: 'Balinese' },
+  { value: 'bjn', native: 'Bahasa Banjar', en: 'Banjar' },
+  { value: 'pag', native: 'Pangasinan', en: 'Pangasinan' },
+  { value: 'ilo', native: 'Ilokano', en: 'Ilokano' },
+  { value: 'war', native: 'Waray', en: 'Waray' },
   { value: 'ta', native: 'தமிழ்', en: 'Tamil' },
-  { value: 'yue', native: '粵語', en: 'Cantonese' },
+  { value: 'te', native: 'తెలుగు', en: 'Telugu' },
+  { value: 'kn', native: 'ಕನ್ನಡ', en: 'Kannada' },
+  { value: 'ml', native: 'മലയാളം', en: 'Malayalam' },
+  { value: 'tr', native: 'Türkçe', en: 'Turkish' },
+  { value: 'az', native: 'Azərbaycan', en: 'Azerbaijani' },
+  { value: 'uz', native: "Oʻzbek", en: 'Uzbek' },
+  { value: 'kk', native: 'Қазақ', en: 'Kazakh' },
+  { value: 'ba', native: 'Башҡорт', en: 'Bashkir' },
+  { value: 'tt', native: 'Татар', en: 'Tatar' },
+  { value: 'th', native: 'ไทย', en: 'Thai' },
+  { value: 'lo', native: 'ລາວ', en: 'Lao' },
+  { value: 'fi', native: 'Suomi', en: 'Finnish' },
+  { value: 'et', native: 'Eesti', en: 'Estonian' },
+  { value: 'hu', native: 'Magyar', en: 'Hungarian' },
+  { value: 'vi', native: 'Tiếng Việt', en: 'Vietnamese' },
+  { value: 'km', native: 'ភាសាខ្មែរ', en: 'Khmer' },
+  { value: 'ja', native: '日本語', en: 'Japanese' },
+  { value: 'ko', native: '한국어', en: 'Korean' },
+  { value: 'ka', native: 'ქართული', en: 'Georgian' },
+  { value: 'eu', native: 'Euskara', en: 'Basque' },
+  { value: 'ht', native: 'Kreyòl Ayisyen', en: 'Haitian Creole' },
+  { value: 'pap', native: 'Papiamentu', en: 'Papiamento' },
+  { value: 'kea', native: 'Kabuverdianu', en: 'Kabuverdianu' },
+  { value: 'tpi', native: 'Tok Pisin', en: 'Tok Pisin' },
+  { value: 'sw', native: 'Kiswahili', en: 'Swahili' },
 ]
 
 const LANG_MAP = Object.fromEntries(LANGUAGES.map(l => [l.value, l]))
@@ -58,16 +136,14 @@ function getLangShort(code) {
   return code?.substring(0, 2).toUpperCase() || '?'
 }
 
-// 热力图组件 - 使用全部语言列表作为行列
+// 热力图组件 - 只显示有数据的语言对
 function Heatmap({ pairs, onCellClick }) {
   const [hovered, setHovered] = useState(null)
 
-  // 使用全部语言列表作为行列
-  const allLangs = useMemo(() => LANGUAGES.map(l => l.value), [])
-  const sourceLangs = allLangs
-  const targetLangs = allLangs
+  // 只收集有数据的语言
+  const sourceLangs = useMemo(() => [...new Set(pairs.map(p => p.source_lang))].sort(), [pairs])
+  const targetLangs = useMemo(() => [...new Set(pairs.map(p => p.target_lang))].sort(), [pairs])
 
-  // 构建查找表
   const pairMap = useMemo(() => {
     const m = {}
     for (const p of pairs) {
@@ -154,7 +230,7 @@ export default function AdminGlobalVocab() {
   const [detailWord, setDetailWord] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [refreshing, setRefreshing] = useState({})
-  const pageSize = 50
+  const pageSize = 10
 
   const loadStats = () => adminApi.getGlobalVocabStats().then(setStats).catch(() => {})
 
