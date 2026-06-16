@@ -116,27 +116,19 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       } else if (dictStateRef) {
         dictStateRef.current._lastFileId = currentFileId
       }
-      fetch(`/api/file/${currentFileId}/info`)
-        .then(r => r.json())
-        .then(data => {
-          const lang = data.source_lang
-          // 只有当后端返回了真实检测到的语言（非默认值）时才更新
-          // 前端 sourceLang='auto' 时，等待后端语言检测完成后再更新
-          if (lang && lang !== 'auto') {
-            setActualSourceLang(lang)
-          }
-        })
-        .catch(() => {
-          fetch(`/api/status/${currentFileId}`)
-            .then(r => r.json())
-            .then(data => {
-              const lang = data.source_lang
-              if (lang && lang !== 'auto') {
-                setActualSourceLang(lang)
-              }
-            })
-            .catch(() => {})
-        })
+      // sourceLang='auto' 时，不从此 API 设置语言，避免默认值 "en" 闪现
+      // 等轮询状态返回检测到的语言后再更新
+      if (sourceLang !== 'auto') {
+        fetch(`/api/file/${currentFileId}/info`)
+          .then(r => r.json())
+          .then(data => {
+            const lang = data.source_lang
+            if (lang && lang !== 'auto') {
+              setActualSourceLang(lang)
+            }
+          })
+          .catch(() => {})
+      }
     }
     if (sourceLang && sourceLang !== 'auto') {
       setActualSourceLang(sourceLang)

@@ -495,8 +495,16 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
   const navigate = useNavigate()
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
-  // 记住非直接输入模式（翻译/生成）的语言选择，默认 en
-  const nonDirectModeLangRef = useRef('en')
+  // 记住非直接输入模式（翻译/生成）的语言选择
+  const nonDirectModeLangRef = useRef(null)
+
+  // 当 recentLanguages 加载后，初始化 nonDirectModeLangRef
+  useEffect(() => {
+    if (!nonDirectModeLangRef.current && recentLanguages?.length) {
+      const lastLang = recentLanguages.find(l => l !== 'auto')
+      if (lastLang) nonDirectModeLangRef.current = lastLang
+    }
+  }, [recentLanguages])
 
   const handleSourceLangChange = (lang) => {
     setSourceLang(lang)
@@ -514,7 +522,7 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
       // 切到直接输入模式：恢复该模式记住的语言（可能是 auto）
       setSourceLang(directModeLangRef.current)
     } else if (prevMode === 'direct' && directModeLangRef.current === 'auto') {
-      // 从直接输入（auto）切到翻译/生成：恢复之前非直接模式选的语言，或用最近语言，默认 en
+      // 从直接输入（auto）切到翻译/生成：恢复之前非直接模式选的语言，或用最近语言
       const lang = nonDirectModeLangRef.current || (recentLanguages || []).find(l => l !== 'auto') || 'en'
       setSourceLang(lang)
     } else if (prevMode === 'direct') {
