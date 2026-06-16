@@ -518,9 +518,9 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
       const lang = nonDirectModeLangRef.current || (recentLanguages || []).find(l => l !== 'auto') || 'en'
       setSourceLang(lang)
     } else if (prevMode === 'direct') {
-      // 从直接输入（非auto）切到翻译/生成：使用记住的非直接模式语言
-      const lang = nonDirectModeLangRef.current || (recentLanguages || []).find(l => l !== 'auto') || 'en'
-      setSourceLang(lang)
+      // 从直接输入（非auto）切到翻译/生成：保持当前选的语言
+      // 同时更新 nonDirectModeLangRef 以便下次切换回来时使用
+      nonDirectModeLangRef.current = directModeLangRef.current
     }
     // 翻译↔生成切换：语言不变
   }

@@ -30,13 +30,15 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         if mode == "translate":
             _preserve_tr = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", **_preserve_tr}
+            # 翻译模式：用户输入母语文本，翻译成学习语言(source_lang)
+            # 翻译方向是 target_lang(母语) → source_lang(学习语言)
             source_lang_name = get_lang_name(source_lang)
             target_lang_name = get_lang_name(target_lang)
             gateway.reload()
             messages = [
                 {
                     "role": "system",
-                    "content": f"You are a professional translator. Translate the following text from {source_lang_name} to {target_lang_name}. Output ONLY the translated text, nothing else. Do not add any explanations, notes, or commentary. The translation should be natural and fluent. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
+                    "content": f"You are a professional translator. Translate the following text from {target_lang_name} to {source_lang_name}. Output ONLY the translated text, nothing else. Do not add any explanations, notes, or commentary. The translation should be natural and fluent. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
                 },
                 {"role": "user", "content": text}
             ]
