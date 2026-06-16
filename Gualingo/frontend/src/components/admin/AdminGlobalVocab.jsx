@@ -159,7 +159,6 @@ function Heatmap({ pairs, onCellClick }) {
   }
 
   const cellSize = 14
-  const dotR = 5
   const labelW = 36
   const labelH = 40
   const w = labelW + targetLangs.length * cellSize
@@ -187,18 +186,19 @@ function Heatmap({ pairs, onCellClick }) {
               const cnt = pairMap[`${sl}-${tl}`] || 0
               const intensity = cnt / maxCnt
               const key = `${sl}-${tl}`
-              const cx = labelW + ci * cellSize + cellSize / 2
-              const cy = labelH + ri * cellSize + cellSize / 2
+              const cx = labelW + ci * cellSize
+              const cy = labelH + ri * cellSize
               return (
                 <g key={key}
                   onMouseEnter={() => cnt > 0 && setHovered({ sl, tl, cnt, x: cx, y: cy })}
                   onMouseLeave={() => setHovered(null)}
                   onClick={() => cnt > 0 && onCellClick(sl, tl)}
                   style={{ cursor: cnt > 0 ? 'pointer' : 'default' }}>
-                  <circle
-                    cx={cx} cy={cy}
-                    r={cnt > 0 ? dotR : 2}
-                    fill={cnt > 0 ? `rgba(201,169,110,${0.2 + intensity * 0.8})` : 'rgba(201,169,110,0.05)'}
+                  <rect
+                    x={cx + 1} y={cy + 1}
+                    width={cellSize - 2} height={cellSize - 2}
+                    rx={2}
+                    fill={cnt > 0 ? `rgba(201,169,110,${0.15 + intensity * 0.85})` : 'rgba(201,169,110,0.03)'}
                   />
                 </g>
               )
