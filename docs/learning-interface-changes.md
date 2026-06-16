@@ -3,12 +3,12 @@
 ## 一、Bug 修复
 
 ### 1. 翻译方向错误
-- **文件**: `Gualingo/backend/routers/text_processing.py`
+- **文件**: `backend/routers/text_processing.py`
 - **问题**: 翻译模式下，翻译方向为 source→target（学习语言→母语），应该是 target→source（母语→学习语言），即把母语翻译为正在学习的语言
 - **修复**: 将翻译方向从 source→target 改为 target→source
 
 ### 2. Auto 模式语言闪现 "en"
-- **文件**: `Gualingo/frontend/src/components/DictionaryStep.jsx`、`Gualingo/frontend/src/pages/LearningApp.jsx`
+- **文件**: `frontend/src/components/DictionaryStep.jsx`、`frontend/src/pages/LearningApp.jsx`
 - **问题**: Auto 模式下，语言检测完成前 DictionaryStep 会短暂显示默认值 "en"，导致用户看到错误的语言标识闪现
 - **修复**:
   - LearningApp 新增 `detectedLang` 状态，轮询检测到语言后更新该状态并传递给 DictionaryStep
