@@ -638,8 +638,8 @@ git commit -m "refactor: remove user API key logic from frontend and backend"
 - [ ] **Step 1: 删除 desktop 目录和 Gualingo.spec**
 
 ```bash
-rm -rf /workspace/Gualingo/desktop
-rm -f /workspace/Gualingo/Gualingo.spec
+rm -rf /workspace/desktop
+rm -f /workspace/Gualingo.spec
 ```
 
 - [ ] **Step 2: 清理 config.py**
@@ -658,7 +658,7 @@ PORT = int(os.environ.get("PORT", 8000))
 - [ ] **Step 3: 删除旧的 llm_settings.json**
 
 ```bash
-rm -f /workspace/Gualingo/data/llm_settings.json
+rm -f /workspace/data/llm_settings.json
 ```
 
 - [ ] **Step 4: 提交**
@@ -813,8 +813,8 @@ git commit -m "feat: add batch_size to global settings for key rotation"
 
 ```bash
 lsof -ti:8000 | xargs kill -9 2>/dev/null
-rm -f /workspace/Gualingo/data/*.db
-cd /workspace/Gualingo/backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+rm -f /workspace/data/*.db
+cd /workspace/backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 ```
 
 - [ ] **Step 2: 测试 admin 登录和全局设置**
@@ -845,7 +845,7 @@ curl -s http://localhost:8000/api/admin/costs -H "Authorization: Bearer $ADMIN_T
 - [ ] **Step 4: 构建前端**
 
 ```bash
-cd /workspace/Gualingo/frontend && npm run build
+cd /workspace/frontend && npm run build
 ```
 
 - [ ] **Step 5: 提交**
