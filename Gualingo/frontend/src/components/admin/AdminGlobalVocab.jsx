@@ -467,30 +467,31 @@ export default function AdminGlobalVocab() {
               <div className="text-[#e8d5b7]/50 text-center py-4">加载中...</div>
             ) : (
               <div className="space-y-3 text-sm">
-                {detailWord.enriched_meaning && (
+                {/* 释义 - 与学习界面一致 */}
+                {(detailWord.enriched_meaning || detailWord.meaning || detailWord.context_meaning) && (
                   <div>
-                    <div className="text-[#e8d5b7]/50 mb-1">详细释义</div>
-                    <div className="text-[#e8d5b7]">{detailWord.enriched_meaning}</div>
+                    <div className="text-[#e8d5b7]/50 mb-1">释义</div>
+                    <div className="text-[#e8d5b7] leading-relaxed">
+                      {detailWord.enriched_meaning || detailWord.meaning || detailWord.context_meaning}
+                    </div>
                   </div>
                 )}
-                {detailWord.morphology && (
+                {/* 变形 - 与学习界面一致 */}
+                {detailWord.variants_detail?.length > 0 && (
                   <div>
-                    <div className="text-[#e8d5b7]/50 mb-1">词性/形态</div>
-                    <div className="text-[#e8d5b7]">{detailWord.morphology}</div>
+                    <div className="text-[#e8d5b7]/50 mb-1">变形</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {detailWord.variants_detail.map((v, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          {v.type && <span className="px-1.5 py-0.5 bg-[#c9a96e]/10 text-[#c9a96e] rounded text-xs">{v.type}</span>}
+                          <span className="text-[#e8d5b7]">{v.form || v.variant}</span>
+                          {v.explanation && <span className="text-[#e8d5b7]/50 text-xs">- {v.explanation}</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {detailWord.phonetic && (
-                  <div>
-                    <div className="text-[#e8d5b7]/50 mb-1">音标</div>
-                    <div className="text-[#e8d5b7]">{detailWord.phonetic}</div>
-                  </div>
-                )}
-                {detailWord.memory_hint && (
-                  <div>
-                    <div className="text-[#e8d5b7]/50 mb-1">记忆提示</div>
-                    <div className="text-[#e8d5b7]">{detailWord.memory_hint}</div>
-                  </div>
-                )}
+                {/* 例句 - 与学习界面一致 */}
                 {detailWord.examples?.length > 0 && (
                   <div>
                     <div className="text-[#e8d5b7]/50 mb-1">例句</div>
@@ -504,19 +505,30 @@ export default function AdminGlobalVocab() {
                     </div>
                   </div>
                 )}
-                {detailWord.variants_detail?.length > 0 && (
+                {/* 记忆辅助 - 与学习界面一致 */}
+                {detailWord.memory_hint && (
                   <div>
-                    <div className="text-[#e8d5b7]/50 mb-1">变形</div>
-                    <div className="space-y-1">
-                      {detailWord.variants_detail.map((v, i) => (
-                        <div key={i} className="text-[#e8d5b7] pl-3 border-l-2 border-[#c9a96e]/10">
-                          <span className="font-medium">{v.form || v.variant}</span>
-                          {v.explanation && <span className="text-[#e8d5b7]/50 ml-2">- {v.explanation}</span>}
-                        </div>
-                      ))}
+                    <div className="text-[#e8d5b7]/50 mb-1">记忆辅助</div>
+                    <div className="text-[#e8d5b7] leading-relaxed bg-[#c9a96e]/5 px-3 py-2 rounded border border-[#c9a96e]/10">
+                      {detailWord.memory_hint}
                     </div>
                   </div>
                 )}
+                {/* 词性/形态 */}
+                {detailWord.morphology && (
+                  <div>
+                    <div className="text-[#e8d5b7]/50 mb-1">词性/形态</div>
+                    <div className="text-[#e8d5b7]">{detailWord.morphology}</div>
+                  </div>
+                )}
+                {/* 音标 */}
+                {detailWord.phonetic && (
+                  <div>
+                    <div className="text-[#e8d5b7]/50 mb-1">音标</div>
+                    <div className="text-[#e8d5b7]">{detailWord.phonetic}</div>
+                  </div>
+                )}
+                {/* 选择题 */}
                 {detailWord.multiple_choice && (
                   <div>
                     <div className="text-[#e8d5b7]/50 mb-1">选择题</div>
