@@ -140,9 +140,8 @@ function getLangShort(code) {
 function Heatmap({ pairs, onCellClick }) {
   const [hovered, setHovered] = useState(null)
 
-  // 只收集有数据的语言
-  const sourceLangs = useMemo(() => [...new Set(pairs.map(p => p.source_lang))].sort(), [pairs])
-  const targetLangs = useMemo(() => [...new Set(pairs.map(p => p.target_lang))].sort(), [pairs])
+  // 合并所有出现的语言，保持行列一致（正方形网格）
+  const allUsedLangs = useMemo(() => [...new Set([...pairs.map(p => p.source_lang), ...pairs.map(p => p.target_lang)])].sort(), [pairs])
 
   const pairMap = useMemo(() => {
     const m = {}
@@ -161,14 +160,15 @@ function Heatmap({ pairs, onCellClick }) {
   const cellSize = 14
   const labelW = 36
   const labelH = 40
-  const w = labelW + targetLangs.length * cellSize
-  const h = labelH + sourceLangs.length * cellSize
+  const n = allUsedLangs.length
+  const w = labelW + n * cellSize
+  const h = labelH + n * cellSize
 
   return (
     <div className="overflow-auto max-h-[600px]">
       <svg width={w} height={h} className="select-none">
         {/* 列标题（target_lang） */}
-        {targetLangs.map((tl, i) => (
+        {allUsedLangs.map((tl, i) => (
           <text key={tl} x={labelW + i * cellSize + cellSize / 2} y={labelH - 4}
             textAnchor="start" fill="rgba(201,169,110,0.5)" fontSize="7"
             transform={`rotate(-90, ${labelW + i * cellSize + cellSize / 2}, ${labelH - 4})`}>
@@ -176,13 +176,13 @@ function Heatmap({ pairs, onCellClick }) {
           </text>
         ))}
         {/* 行标题（source_lang）+ 单元格 */}
-        {sourceLangs.map((sl, ri) => (
+        {allUsedLangs.map((sl, ri) => (
           <g key={sl}>
             <text x={labelW - 3} y={labelH + ri * cellSize + cellSize / 2 + 2}
               textAnchor="end" fill="rgba(201,169,110,0.5)" fontSize="7">
               {getLangShort(sl)}
             </text>
-            {targetLangs.map((tl, ci) => {
+            {allUsedLangs.map((tl, ci) => {
               const cnt = pairMap[`${sl}-${tl}`] || 0
               const intensity = cnt / maxCnt
               const key = `${sl}-${tl}`
