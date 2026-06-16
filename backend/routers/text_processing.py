@@ -113,18 +113,21 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 7. 写入词汇缓存（从处理结果中提取）
         try:
-            file_data = storage.load_pipeline_data(file_id)
-            if file_data and "dictionary" in file_data:
-                words = file_data["dictionary"]
-                if isinstance(words, list):
-                    user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
-                    global_vocab.batch_upsert(words, source_lang, target_lang)
+            vocab = storage.load_vocab(file_id)
+            if vocab and isinstance(vocab, list):
+                user_vocab.batch_upsert(user_id, vocab, source_lang, target_lang)
+                global_vocab.batch_upsert(vocab, source_lang, target_lang)
         except Exception as e:
             print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:
         print(f"[ERROR] 预处理或处理出错: {str(e)}")
         import traceback
         traceback.print_exc()
+        # 处理失败，删除已创建的历史记录，避免空条目残留
+        try:
+            storage.delete_history_record(file_id)
+        except Exception:
+            pass
         error_msg = str(e)
         # 提供更友好的错误信息
         if "401" in error_msg or "Unauthorized" in error_msg or "authentication" in error_msg.lower():

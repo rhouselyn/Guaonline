@@ -181,7 +181,7 @@ export default function AdminCosts() {
                   <td className="py-1 truncate max-w-[160px]" title={u.email}>{u.email}</td>
                   <td className="text-right">{(u.prompt_tokens || 0).toLocaleString()}</td>
                   <td className="text-right">{(u.completion_tokens || 0).toLocaleString()}</td>
-                  <td className="text-right">{(u.request_count || 0).toLocaleString()}</td>
+                  <td className="text-right">{(u.sentence_count || 0).toLocaleString()}</td>
                   <td className="text-right">${(u.cost || 0).toFixed(4)}</td>
                 </tr>
               ))}

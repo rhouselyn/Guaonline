@@ -736,18 +736,18 @@ async def get_top_cost_users(
         LIMIT ? OFFSET ?
     """, (effective_limit, offset)).fetchall()
 
-    # 获取用户邮箱
+    # 获取用户邮箱和句子数（quota_used）
     user_conn = get_user_conn()
     result = []
     for row in rows:
-        user_row = user_conn.execute("SELECT email FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        user_row = user_conn.execute("SELECT email, quota_used FROM users WHERE id = ?", (row["user_id"],)).fetchone()
         result.append({
             "user_id": row["user_id"],
             "email": user_row["email"] if user_row else row["user_id"],
             "prompt_tokens": row["prompt_tokens"],
             "completion_tokens": row["completion_tokens"],
             "total_tokens": row["total_tokens"],
-            "request_count": row["request_count"],
+            "sentence_count": user_row["quota_used"] if user_row else 0,
             "cost": float(row["cost"] or 0),
         })
     user_conn.close()
