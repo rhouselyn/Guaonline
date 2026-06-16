@@ -159,6 +159,7 @@ function Heatmap({ pairs, onCellClick }) {
   }
 
   const cellSize = 14
+  const dotR = 5
   const labelW = 36
   const labelH = 40
   const w = labelW + targetLangs.length * cellSize
@@ -186,19 +187,18 @@ function Heatmap({ pairs, onCellClick }) {
               const cnt = pairMap[`${sl}-${tl}`] || 0
               const intensity = cnt / maxCnt
               const key = `${sl}-${tl}`
-              const cx = labelW + ci * cellSize
-              const cy = labelH + ri * cellSize
+              const cx = labelW + ci * cellSize + cellSize / 2
+              const cy = labelH + ri * cellSize + cellSize / 2
               return (
                 <g key={key}
                   onMouseEnter={() => cnt > 0 && setHovered({ sl, tl, cnt, x: cx, y: cy })}
                   onMouseLeave={() => setHovered(null)}
                   onClick={() => cnt > 0 && onCellClick(sl, tl)}
                   style={{ cursor: cnt > 0 ? 'pointer' : 'default' }}>
-                  <rect
-                    x={cx + 1} y={cy + 1}
-                    width={cellSize - 2} height={cellSize - 2}
-                    rx={1}
-                    fill={cnt > 0 ? `rgba(201,169,110,${0.15 + intensity * 0.85})` : 'rgba(201,169,110,0.03)'}
+                  <circle
+                    cx={cx} cy={cy}
+                    r={cnt > 0 ? dotR : 2}
+                    fill={cnt > 0 ? `rgba(201,169,110,${0.2 + intensity * 0.8})` : 'rgba(201,169,110,0.05)'}
                   />
                 </g>
               )
@@ -392,6 +392,7 @@ export default function AdminGlobalVocab() {
                 <th className="text-left px-3 py-2 text-[#e8d5b7]/50 font-normal">单词</th>
                 <th className="text-left px-3 py-2 text-[#e8d5b7]/50 font-normal">学习语言</th>
                 <th className="text-left px-3 py-2 text-[#e8d5b7]/50 font-normal">母语</th>
+                <th className="text-left px-3 py-2 text-[#e8d5b7]/50 font-normal">释义</th>
                 <th className="text-left px-3 py-2 text-[#e8d5b7]/50 font-normal">命中</th>
                 <th className="text-right px-3 py-2 text-[#e8d5b7]/50 font-normal">操作</th>
               </tr>
@@ -406,6 +407,7 @@ export default function AdminGlobalVocab() {
                   <td className="px-3 py-2">
                     <span className="px-1.5 py-0.5 bg-[#e8d5b7]/5 text-[#e8d5b7]/60 rounded text-xs">{getLangShort(w.target_lang)}</span>
                   </td>
+                  <td className="px-3 py-2 text-[#e8d5b7]/70 max-w-[300px] truncate">{w.enriched_meaning || w.meaning || '-'}</td>
                   <td className="px-3 py-2 text-[#e8d5b7]/50">{w.hit_count}</td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex gap-1">
