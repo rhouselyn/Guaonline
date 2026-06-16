@@ -146,9 +146,6 @@ function App() {
       if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
       if (prefs.recent_languages) {
         setRecentLanguages(prefs.recent_languages)
-        // 用最近使用的语言作为默认语言
-        const lastLang = prefs.recent_languages.find(l => l !== 'auto')
-        if (lastLang) setSourceLang(lastLang)
       }
       if (prefs.page_size) setPageSize(prefs.page_size)
     }).catch(() => {})
