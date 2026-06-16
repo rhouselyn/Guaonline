@@ -348,7 +348,27 @@ async def batch_delete_users(req: BatchDeleteRequest, admin: AdminTokenData = De
             conn2.execute("DELETE FROM favorite_words WHERE user_id = ?", (uid,))
             conn2.commit()
     except Exception as e:
-        print(f"[WARN] 批量清理用户数据失败: {e}")
+        print(f"[WARN] 批量清理用户主数据失败: {e}")
+    # 清理用户词汇缓存
+    try:
+        from vocab.user_vocab import _get_conn as get_uv_conn
+        uv_conn = get_uv_conn()
+        for uid in req.user_ids:
+            uv_conn.execute("DELETE FROM user_vocab WHERE user_id = ?", (uid,))
+        uv_conn.commit()
+        uv_conn.close()
+    except Exception as e:
+        print(f"[WARN] 批量清理用户词汇缓存失败: {e}")
+    # 清理用户 Token 使用记录
+    try:
+        from utils.token_tracker import _get_conn as get_token_conn
+        tk_conn = get_token_conn()
+        for uid in req.user_ids:
+            tk_conn.execute("DELETE FROM token_usage WHERE user_id = ?", (uid,))
+        tk_conn.commit()
+        tk_conn.close()
+    except Exception as e:
+        print(f"[WARN] 批量清理用户Token记录失败: {e}")
     _log_action("batch_delete", "user", None, {"count": len(req.user_ids)})
     return {"status": "ok", "affected": len(req.user_ids)}
 
@@ -398,13 +418,31 @@ async def delete_user(user_id: str, admin: AdminTokenData = Depends(require_admi
             file_id = record.get("file_id")
             if file_id:
                 storage.delete_history_record(file_id)
-        # 删除用户偏好
+        # 删除用户偏好、收藏
         conn2 = storage._get_conn()
         conn2.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
         conn2.execute("DELETE FROM favorite_words WHERE user_id = ?", (user_id,))
         conn2.commit()
     except Exception as e:
-        print(f"[WARN] 清理用户数据失败: {e}")
+        print(f"[WARN] 清理用户主数据失败: {e}")
+    # 删除用户词汇缓存
+    try:
+        from vocab.user_vocab import _get_conn as get_uv_conn
+        uv_conn = get_uv_conn()
+        uv_conn.execute("DELETE FROM user_vocab WHERE user_id = ?", (user_id,))
+        uv_conn.commit()
+        uv_conn.close()
+    except Exception as e:
+        print(f"[WARN] 清理用户词汇缓存失败: {e}")
+    # 删除用户 Token 使用记录
+    try:
+        from utils.token_tracker import _get_conn as get_token_conn
+        tk_conn = get_token_conn()
+        tk_conn.execute("DELETE FROM token_usage WHERE user_id = ?", (user_id,))
+        tk_conn.commit()
+        tk_conn.close()
+    except Exception as e:
+        print(f"[WARN] 清理用户Token记录失败: {e}")
     _log_action("delete_user", "user", user_id, {"email": row["email"]})
     return {"status": "ok"}
 
