@@ -120,26 +120,19 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         .then(r => r.json())
         .then(data => {
           const lang = data.source_lang
+          // 只有当后端返回了真实检测到的语言（非默认值）时才更新
+          // 前端 sourceLang='auto' 时，等待后端语言检测完成后再更新
           if (lang && lang !== 'auto') {
-            // 如果前端已传入具体语言，优先使用前端值，避免后端默认值 "en" 覆盖
-            if (sourceLang && sourceLang !== 'auto') {
-              setActualSourceLang(sourceLang)
-            } else {
-              setActualSourceLang(lang)
-            }
+            setActualSourceLang(lang)
           }
         })
         .catch(() => {
           fetch(`/api/status/${currentFileId}`)
             .then(r => r.json())
             .then(data => {
-              const lang = data.source_lang || sourceLang
+              const lang = data.source_lang
               if (lang && lang !== 'auto') {
-                if (sourceLang && sourceLang !== 'auto') {
-                  setActualSourceLang(sourceLang)
-                } else {
-                  setActualSourceLang(lang)
-                }
+                setActualSourceLang(lang)
               }
             })
             .catch(() => {})
@@ -855,12 +848,14 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <LangIcon langCode={actualSourceLang} size="md" />
-          <span className="text-sm font-bold text-ink-700">
-            {LANGUAGES.find(l => l.value === actualSourceLang)?.en || actualSourceLang?.toUpperCase()}
-          </span>
-        </div>
+        {actualSourceLang && actualSourceLang !== 'auto' && (
+          <div className="flex items-center gap-2">
+            <LangIcon langCode={actualSourceLang} size="md" />
+            <span className="text-sm font-bold text-ink-700">
+              {LANGUAGES.find(l => l.value === actualSourceLang)?.en || actualSourceLang?.toUpperCase()}
+            </span>
+          </div>
+        )}
 
         {fileTitle && !editingTitle && (
           <button

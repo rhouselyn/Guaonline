@@ -34,9 +34,12 @@ function FavoriteButton({ word, sourceLang, t, initialFavorited, onFavoriteChang
   }, [word, sourceLang, onFavoriteChange])
 
   return (
-    <button
+    <span
+      role="button"
+      tabIndex={0}
       onClick={handleToggle}
-      className={`p-1.5 rounded-none transition-colors ${
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleToggle(e) }}
+      className={`p-1.5 rounded-none transition-colors inline-flex items-center cursor-pointer ${
         favorited
           ? 'text-amber-400 hover:text-amber-500 hover:bg-amber-50'
           : 'text-aged-300 hover:text-amber-400 hover:bg-amber-50'
@@ -44,7 +47,7 @@ function FavoriteButton({ word, sourceLang, t, initialFavorited, onFavoriteChang
       title={favorited ? (t.favorited || '已收藏') : (t.favorite || '收藏')}
     >
       <Star className={`w-3.5 h-3.5 ${favorited ? 'fill-current' : ''}`} />
-    </button>
+    </span>
   )
 }
 

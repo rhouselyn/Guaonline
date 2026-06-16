@@ -317,6 +317,11 @@ function App() {
           setFileTitle(status.title)
         }
 
+        // 更新检测到的语言（auto模式检测完成后）
+        if (status.source_lang && status.source_lang !== 'auto') {
+          setSourceLang(status.source_lang)
+        }
+
         // 更新完整原文（LLM翻译/生成后的文本）
         if (status.original_text) {
           setOriginalText(status.original_text)
@@ -478,6 +483,8 @@ function App() {
         api.getUserPreferences().then(prefs => {
           if (prefs.recent_languages) setRecentLanguages(prefs.recent_languages)
         }).catch(() => {})
+        // 立即刷新历史记录，让用户可以退出后重新进入
+        setHistoryRefresh(v => v + 1)
       } else {
         throw new Error('无效的API响应')
       }

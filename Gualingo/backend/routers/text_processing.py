@@ -85,6 +85,9 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 3. 更新语言设置和历史记录
         storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
+        # 同步更新 processing_status 中的 source_lang，让前端轮询能拿到
+        if file_id in processing_status:
+            processing_status[file_id]["source_lang"] = source_lang
         app_settings = storage.load_user_preferences(user_id=user_id)
         recent_langs = app_settings.get("recent_languages", [])
         if source_lang in recent_langs:
@@ -100,12 +103,13 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         if file_id in processing_status:
             processing_status[file_id]["title"] = title
 
-        # 5. 执行文本处理
-        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)
+        # 5. 更新历史记录标题（记录已在 process-text API 中创建）
+        if title:
+            text_preview = text.strip()[:100]
+            storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
 
-        # 6. 处理成功后才写入历史记录
-        text_preview = text.strip()[:100]
-        storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
+        # 6. 执行文本处理
+        await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)
 
         # 7. 写入词汇缓存（从处理结果中提取）
         try:
@@ -227,6 +231,10 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         # 如果语言已知（非auto），立即保存，避免前端轮询时拿到默认值 "en"
         if source_lang != "auto":
             storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
+
+        # 立即写入历史记录（标题稍后更新），让用户可以退出后重新进入
+        text_preview = text.strip()[:100]
+        storage.add_history_record(file_id, "", source_lang, target_lang, text_preview, user_id=current_user.user_id)
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
         background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
