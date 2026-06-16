@@ -17,7 +17,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Vite / Frontend build（dist/ 已被上方 Python 区块的 dist/ 全局规则覆盖）
+# Vite / Frontend build
+Gualingo/frontend/dist/
 
 # Database (SQLite 运行时数据，每次启动都会变，绝对不追踪)
 # 对应 Gualingo/data/ 下所有数据库及其临时文件
