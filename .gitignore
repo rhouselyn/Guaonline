@@ -20,16 +20,26 @@ yarn-error.log*
 # Vite / Frontend build
 Gualingo/frontend/dist/
 
-# Database
+# Database (SQLite 运行时数据，每次启动都会变，绝对不追踪)
+# 对应 Gualingo/data/ 下所有数据库及其临时文件
 *.db
+*.db-journal
 *.db-shm
 *.db-wal
+Gualingo/data/*.db
+Gualingo/data/*.db-journal
+Gualingo/data/*.db-shm
+Gualingo/data/*.db-wal
 
-# Secrets & keys
+# 例外：如果 data/ 里有非数据库的配置文件（如 global_settings.json），
+# 由于 *.db 不会匹配 .json，所以它们仍会被正常追踪
+
+# Secrets & keys（敏感密钥，绝不进 Git）
 *.env
 *.env.local
 *.env.production
 tier_keys.json
+Gualingo/data/tier_keys.json
 
 # IDE
 .vscode/
