@@ -224,6 +224,10 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
             "preprocess": preprocess_label if preprocess_label else None
         }
 
+        # 如果语言已知（非auto），立即保存，避免前端轮询时拿到默认值 "en"
+        if source_lang != "auto":
+            storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
+
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
         background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
 

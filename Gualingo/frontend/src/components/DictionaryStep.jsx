@@ -121,7 +121,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         .then(data => {
           const lang = data.source_lang
           if (lang && lang !== 'auto') {
-            setActualSourceLang(lang)
+            // 如果前端已传入具体语言，优先使用前端值，避免后端默认值 "en" 覆盖
+            if (sourceLang && sourceLang !== 'auto') {
+              setActualSourceLang(sourceLang)
+            } else {
+              setActualSourceLang(lang)
+            }
           }
         })
         .catch(() => {
@@ -130,7 +135,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             .then(data => {
               const lang = data.source_lang || sourceLang
               if (lang && lang !== 'auto') {
-                setActualSourceLang(lang)
+                if (sourceLang && sourceLang !== 'auto') {
+                  setActualSourceLang(sourceLang)
+                } else {
+                  setActualSourceLang(lang)
+                }
               }
             })
             .catch(() => {})
