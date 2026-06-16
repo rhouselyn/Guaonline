@@ -126,4 +126,8 @@ def batch_upsert(words: list[dict], source_lang: str, target_lang: str):
     """批量写入单词列表。每个 dict 需含 word 字段。"""
     for w in words:
         if "word" in w:
-            upsert(w["word"], source_lang, target_lang, w)
+            # 映射字段名：vocab 条目用 ipa，global_vocab 用 phonetic
+            data = dict(w)
+            if "ipa" in data and "phonetic" not in data:
+                data["phonetic"] = data["ipa"]
+            upsert(w["word"], source_lang, target_lang, data)

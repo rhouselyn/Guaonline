@@ -118,4 +118,8 @@ def batch_upsert(user_id: str, words: list[dict], source_lang: str, target_lang:
     """批量写入用户单词列表。"""
     for w in words:
         if "word" in w:
-            upsert(user_id, w["word"], source_lang, target_lang, w)
+            # 映射字段名：vocab 条目用 ipa，user_vocab 用 phonetic
+            data = dict(w)
+            if "ipa" in data and "phonetic" not in data:
+                data["phonetic"] = data["ipa"]
+            upsert(user_id, w["word"], source_lang, target_lang, data)

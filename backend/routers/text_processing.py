@@ -113,12 +113,12 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 7. 写入词汇缓存（从处理结果中提取）
         try:
-            file_data = storage.load_pipeline_data(file_id)
-            if file_data and "dictionary" in file_data:
-                words = file_data["dictionary"]
-                if isinstance(words, list):
-                    user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
-                    global_vocab.batch_upsert(words, source_lang, target_lang)
+            vocab_list = storage.load_vocab(file_id)
+            if vocab_list:
+                if isinstance(vocab_list, dict) and "vocab" in vocab_list:
+                    vocab_list = vocab_list["vocab"]
+                user_vocab.batch_upsert(user_id, vocab_list, source_lang, target_lang)
+                global_vocab.batch_upsert(vocab_list, source_lang, target_lang)
         except Exception as e:
             print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:

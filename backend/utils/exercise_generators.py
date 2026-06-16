@@ -417,96 +417,105 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             if not sentence.strip():
                 return idx, None
 
-            before_indices = [i for i in range(max(0, idx - 2), idx)]
-            after_indices = [i for i in range(idx + 1, min(len(sentences), idx + 3))]
-            before_sentences = [sentences[i] for i in before_indices if sentences[i].strip()]
-            after_sentences = [sentences[i] for i in after_indices if sentences[i].strip()]
-            context_sentences = {"before": before_sentences, "after": after_sentences} if (before_sentences or after_sentences) else None
+            try:
+                before_indices = [i for i in range(max(0, idx - 2), idx)]
+                after_indices = [i for i in range(idx + 1, min(len(sentences), idx + 3))]
+                before_sentences = [sentences[i] for i in before_indices if sentences[i].strip()]
+                after_sentences = [sentences[i] for i in after_indices if sentences[i].strip()]
+                context_sentences = {"before": before_sentences, "after": after_sentences} if (before_sentences or after_sentences) else None
 
-            t_sentence_start = time.time()
+                t_sentence_start = time.time()
 
-            t_llm_start = time.time()
-            print(f"[DEBUG] 正在翻译句子 {idx+1}/{total_sentences}: {repr(sentence)}")
-            llm_shim = _LLMApiShim(user_id, tier)
-            sentence_translation_result = await text_processor.process_translation(
-                sentence,
-                source_lang,
-                target_lang,
-                llm_shim,
-                context_sentences
-            )
-            t_llm_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
-
-            t_validate_start = time.time()
-            sentence_translation_result = text_processor.validate_and_complete_translation(
-                sentence, sentence_translation_result, source_lang
-            )
-            t_validate_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 验证补全: {t_validate_end - t_validate_start:.3f}s")
-
-            t_extract_start = time.time()
-            sentence_words = text_processor.extract_words(sentence, source_lang)
-            t_extract_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
-
-            translation_words = set()
-            if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                for token in sentence_translation_result["translation"]:
-                    if isinstance(token, dict) and "text" in token:
-                        translation_words.add(token["text"].lower())
-
-            if source_lang in NO_SPACE_LANGUAGES:
-                def _norm(text):
-                    return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
-                sentence_norm = _norm(sentence)
-                tokens_norm = _norm(''.join(translation_words))
-                missing_words = [] if tokens_norm == sentence_norm else []
-            else:
-                multiword_components = set()
-                for tw in translation_words:
-                    if ' ' in tw:
-                        for part in tw.split():
-                            multiword_components.add(part.lower())
-
-                missing_words = []
-                for w in sentence_words:
-                    w_clean = strip_edge_punctuation(w).lower()
-                    if w_clean and w_clean not in translation_words and w_clean not in multiword_components and not is_punctuation_only(w):
-                        missing_words.append(strip_edge_punctuation(w))
-
-            if missing_words:
-                print(f"[DEBUG] 发现遗漏单词: {missing_words}, 正在补充处理...")
-                t_missing_start = time.time()
-                remaining_entries = await _gateway_process_remaining_words(
-                    user_id, tier, missing_words, source_lang, target_lang, sentence
+                t_llm_start = time.time()
+                print(f"[DEBUG] 正在翻译句子 {idx+1}/{total_sentences}: {repr(sentence)}")
+                llm_shim = _LLMApiShim(user_id, tier)
+                sentence_translation_result = await text_processor.process_translation(
+                    sentence,
+                    source_lang,
+                    target_lang,
+                    llm_shim,
+                    context_sentences
                 )
-                t_missing_end = time.time()
-                print(f"[TIMING] 句子 {idx+1} 遗漏单词补充LLM调用: {t_missing_end - t_missing_start:.3f}s")
-                if remaining_entries:
-                    if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                        translation_text_lower = []
-                        for token in sentence_translation_result["translation"]:
-                            if isinstance(token, dict) and "text" in token:
-                                translation_text_lower.append(token["text"].lower())
+                t_llm_end = time.time()
+                print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
 
-                        for entry in remaining_entries:
-                            if isinstance(entry, dict) and "text" in entry:
-                                word = entry["text"]
-                                if word.lower() not in translation_text_lower:
-                                    sentence_translation_result["translation"].append(entry)
-                                    translation_text_lower.append(word.lower())
+                # 检查翻译结果是否有效
+                if not sentence_translation_result or not isinstance(sentence_translation_result, dict) or not sentence_translation_result.get("translation"):
+                    print(f"[WARN] 句子 {idx+1} 翻译结果为空，跳过")
+                    return idx, None
 
-                    print(f"[DEBUG] 补充了 {len(remaining_entries)} 个遗漏单词")
+                t_validate_start = time.time()
+                sentence_translation_result = text_processor.validate_and_complete_translation(
+                    sentence, sentence_translation_result, source_lang
+                )
+                t_validate_end = time.time()
+                print(f"[TIMING] 句子 {idx+1} 验证补全: {t_validate_end - t_validate_start:.3f}s")
 
-            sentence_data = {
-                "sentence": sentence,
-                "source_lang": source_lang,
-                "translation_result": sentence_translation_result
-            }
-            t_sentence_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 总耗时: {t_sentence_end - t_sentence_start:.3f}s")
-            return idx, sentence_data
+                t_extract_start = time.time()
+                sentence_words = text_processor.extract_words(sentence, source_lang)
+                t_extract_end = time.time()
+                print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
+
+                translation_words = set()
+                if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
+                    for token in sentence_translation_result["translation"]:
+                        if isinstance(token, dict) and "text" in token:
+                            translation_words.add(token["text"].lower())
+
+                if source_lang in NO_SPACE_LANGUAGES:
+                    def _norm(text):
+                        return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
+                    sentence_norm = _norm(sentence)
+                    tokens_norm = _norm(''.join(translation_words))
+                    missing_words = [] if tokens_norm == sentence_norm else []
+                else:
+                    multiword_components = set()
+                    for tw in translation_words:
+                        if ' ' in tw:
+                            for part in tw.split():
+                                multiword_components.add(part.lower())
+
+                    missing_words = []
+                    for w in sentence_words:
+                        w_clean = strip_edge_punctuation(w).lower()
+                        if w_clean and w_clean not in translation_words and w_clean not in multiword_components and not is_punctuation_only(w):
+                            missing_words.append(strip_edge_punctuation(w))
+
+                if missing_words:
+                    print(f"[DEBUG] 发现遗漏单词: {missing_words}, 正在补充处理...")
+                    t_missing_start = time.time()
+                    remaining_entries = await _gateway_process_remaining_words(
+                        user_id, tier, missing_words, source_lang, target_lang, sentence
+                    )
+                    t_missing_end = time.time()
+                    print(f"[TIMING] 句子 {idx+1} 遗漏单词补充LLM调用: {t_missing_end - t_missing_start:.3f}s")
+                    if remaining_entries:
+                        if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
+                            translation_text_lower = []
+                            for token in sentence_translation_result["translation"]:
+                                if isinstance(token, dict) and "text" in token:
+                                    translation_text_lower.append(token["text"].lower())
+
+                            for entry in remaining_entries:
+                                if isinstance(entry, dict) and "text" in entry:
+                                    word = entry["text"]
+                                    if word.lower() not in translation_text_lower:
+                                        sentence_translation_result["translation"].append(entry)
+                                        translation_text_lower.append(word.lower())
+
+                        print(f"[DEBUG] 补充了 {len(remaining_entries)} 个遗漏单词")
+
+                sentence_data = {
+                    "sentence": sentence,
+                    "source_lang": source_lang,
+                    "translation_result": sentence_translation_result
+                }
+                t_sentence_end = time.time()
+                print(f"[TIMING] 句子 {idx+1} 总耗时: {t_sentence_end - t_sentence_start:.3f}s")
+                return idx, sentence_data
+            except Exception as e:
+                print(f"[ERROR] 句子 {idx+1} 处理失败: {e}")
+                return idx, None
 
         tasks = [asyncio.create_task(process_single_sentence(i, s)) for i, s in enumerate(sentences)]
 
@@ -566,7 +575,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             }
             print(f"[DEBUG] 更新状态: 进度 {progress}%, 已处理 {len(completed_indices)} 个句子, 词汇 {len(unique_partial)} 个")
 
-        sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
+        sentence_translations = [results_dict[i] for i in range(total_sentences) if i in results_dict]
 
         all_vocab = []
         for i, sentence_data in enumerate(sentence_translations):
