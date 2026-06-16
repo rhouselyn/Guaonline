@@ -82,9 +82,10 @@ function Heatmap({ pairs, onCellClick }) {
     return <div className="text-[#e8d5b7]/30 text-sm text-center py-4">暂无语言对数据</div>
   }
 
-  const cellSize = 22
-  const labelW = 50
-  const labelH = 60
+  const cellSize = 14
+  const dotR = 5
+  const labelW = 36
+  const labelH = 40
   const w = labelW + targetLangs.length * cellSize
   const h = labelH + sourceLangs.length * cellSize
 
@@ -93,41 +94,36 @@ function Heatmap({ pairs, onCellClick }) {
       <svg width={w} height={h} className="select-none">
         {/* 列标题（target_lang） */}
         {targetLangs.map((tl, i) => (
-          <text key={tl} x={labelW + i * cellSize + cellSize / 2} y={labelH - 6}
-            textAnchor="start" fill="rgba(201,169,110,0.5)" fontSize="8"
-            transform={`rotate(-90, ${labelW + i * cellSize + cellSize / 2}, ${labelH - 6})`}>
+          <text key={tl} x={labelW + i * cellSize + cellSize / 2} y={labelH - 4}
+            textAnchor="start" fill="rgba(201,169,110,0.5)" fontSize="7"
+            transform={`rotate(-90, ${labelW + i * cellSize + cellSize / 2}, ${labelH - 4})`}>
             {getLangShort(tl)}
           </text>
         ))}
         {/* 行标题（source_lang）+ 单元格 */}
         {sourceLangs.map((sl, ri) => (
           <g key={sl}>
-            <text x={labelW - 4} y={labelH + ri * cellSize + cellSize / 2 + 3}
-              textAnchor="end" fill="rgba(201,169,110,0.5)" fontSize="8">
+            <text x={labelW - 3} y={labelH + ri * cellSize + cellSize / 2 + 2}
+              textAnchor="end" fill="rgba(201,169,110,0.5)" fontSize="7">
               {getLangShort(sl)}
             </text>
             {targetLangs.map((tl, ci) => {
               const cnt = pairMap[`${sl}-${tl}`] || 0
               const intensity = cnt / maxCnt
               const key = `${sl}-${tl}`
+              const cx = labelW + ci * cellSize + cellSize / 2
+              const cy = labelH + ri * cellSize + cellSize / 2
               return (
                 <g key={key}
-                  onMouseEnter={() => cnt > 0 && setHovered({ sl, tl, cnt, x: labelW + ci * cellSize, y: labelH + ri * cellSize })}
+                  onMouseEnter={() => cnt > 0 && setHovered({ sl, tl, cnt, x: cx, y: cy })}
                   onMouseLeave={() => setHovered(null)}
                   onClick={() => cnt > 0 && onCellClick(sl, tl)}
                   style={{ cursor: cnt > 0 ? 'pointer' : 'default' }}>
-                  <rect
-                    x={labelW + ci * cellSize + 1} y={labelH + ri * cellSize + 1}
-                    width={cellSize - 2} height={cellSize - 2}
-                    rx={2}
-                    fill={cnt > 0 ? `rgba(201,169,110,${0.15 + intensity * 0.85})` : 'rgba(201,169,110,0.03)'}
+                  <circle
+                    cx={cx} cy={cy}
+                    r={cnt > 0 ? dotR : 2}
+                    fill={cnt > 0 ? `rgba(201,169,110,${0.2 + intensity * 0.8})` : 'rgba(201,169,110,0.05)'}
                   />
-                  {cnt > 0 && (
-                    <text x={labelW + ci * cellSize + cellSize / 2} y={labelH + ri * cellSize + cellSize / 2 + 3}
-                      textAnchor="middle" fill={intensity > 0.5 ? '#1a1a2e' : 'rgba(232,213,183,0.8)'} fontSize="7">
-                      {cnt >= 1000 ? `${(cnt / 1000).toFixed(1)}k` : cnt}
-                    </text>
-                  )}
                 </g>
               )
             })}
