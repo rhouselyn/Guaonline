@@ -35,22 +35,7 @@
 - **问题**: nonDirectModeLangRef 默认值为 'en'，在 recentLanguages 加载完成前会使用错误默认值
 - **修复**: 默认值从 'en' 改为 null，等 recentLanguages 加载后再初始化
 
-### 7. Token 计费逻辑错误
-- **文件**: `Gualingo/backend/utils/llm_gateway.py`
-- **问题**: 即使未配置有效价格，也会传入自定义价格参数，导致 estimate_cost 使用错误的价格而非模型价格表
-- **修复**: 仅当配置了非零价格时才传入自定义价格，否则让 estimate_cost 使用模型价格表
-
-### 8. Free 层模型价格配置错误
-- **文件**: `Gualingo/data/tier_keys.json`
-- **问题**: Free 层模型的 input/output 价格配置为 100/100（每百万 Token），明显不合理
-- **修复**: 修正为 0.6/4.8（每百万 Token）
-
-### 9. FavoriteButton 可访问性问题
-- **文件**: `Gualingo/frontend/src/components/FavoriteButton.jsx`
-- **问题**: 使用原生 button 元素在某些场景下存在样式/交互问题
-- **修复**: 将 button 元素改为 span，添加 role="button"、tabIndex 和键盘事件支持，改善可访问性
-
-### 10. 提交文本后历史记录未及时刷新
+### 7. 提交文本后历史记录未及时刷新
 - **文件**: `Gualingo/frontend/src/pages/LearningApp.jsx`
 - **问题**: 提交文本后历史记录列表不会立即刷新，用户需手动刷新才能看到新条目
 - **修复**: 处理开始后立即刷新历史记录列表；提交文本时重置 detectedLang
