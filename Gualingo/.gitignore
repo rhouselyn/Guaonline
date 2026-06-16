@@ -1,0 +1,57 @@
+# ====== 数据文件（运行时产生，每次使用都会变化） ======
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db-journal
+
+# 敏感配置（含 API Key，绝不应进版本控制）
+data/tier_keys.json
+
+# 注：global_settings.json 保留在版本控制中（应用默认配置）
+
+
+# ====== Python 后端 ======
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/__pycache__/
+backend/**/__pycache__/
+*.egg-info/
+
+
+# ====== 前端 / Node ======
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+
+# ====== 日志 ======
+*.log
+logs/
+
+
+# ====== 系统 ======
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+
+# ====== IDE ======
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
