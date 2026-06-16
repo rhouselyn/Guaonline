@@ -119,7 +119,7 @@ const PAIN_POINTS = [
 const EXERCISES = [
   { phase: 1, title: '单词选择题', desc: '看到目标语言单词，从四个母语释义中选出正确答案。答对后展开完整单词卡：丰富释义、词形变化、例句、记忆辅助。', demo: 'abandon → 废弃 / 采纳 / 伴随 / 仰慕 ✓' },
   { phase: 1, title: '句子翻译排序', desc: '将打乱的母语翻译片段拖拽排列成正确顺序，训练对句子结构和语义的理解。', demo: '他 / 放弃了 / 这个 / 计划 → 拖拽排序' },
-  { phase: 1, title: '听力理解', desc: '听 AI 朗读句子，从四个翻译选项中选出正确含义。语音合成支持多种语言，可随时点击重听。', demo: '🔊 He abandoned the plan. → 选出正确翻译' },
+  { phase: 1, title: '听力理解', desc: '听 AI 朗读句子，从四个翻译选项中选出正确含义。语音合成支持多种语言，可随时点击重听。', demo: '🔊 He abandoned the plan. → 拖拽拼出正确翻译' },
   { phase: 2, title: '遮蔽填空', desc: '原文中随机遮蔽若干单词，从候选词池中选出正确单词填入空位。同一句子多次出现，每次遮蔽不同位置。', demo: 'He ___ the plan. → 候选：abandon / adopted / ...' },
   { phase: 2, title: '翻译重组', desc: '看到原文句子，将打乱的母语翻译片段重新排列成正确顺序。比阶段一更难——需要自己理解原文并组织翻译。', demo: '原文：He abandoned the plan. → 重组翻译片段' },
 ];
@@ -241,10 +241,10 @@ export default function LandingPage() {
             </span>
           </button>
           <div className="hidden sm:flex items-center gap-6">
-            <button onClick={() => scrollTo('features')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">功能</button>
             <button onClick={() => scrollTo('comparison')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">对比</button>
             <button onClick={() => scrollTo('modes')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">模式</button>
-            <button onClick={() => scrollTo('users')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">用户</button>
+            <button onClick={() => scrollTo('exercises')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">练习</button>
+            <button onClick={() => scrollTo('features')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">功能</button>
             <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">定价</button>
             <button onClick={() => scrollTo('contact')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">联系</button>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
@@ -346,33 +346,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 特色功能 */}
-      <section id="features" className="py-24 px-6 bg-[#faf8f0] relative">
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.08 }} />
-        <div className="max-w-6xl mx-auto relative">
-          <SectionTitle sub="从输入到掌握，AI 覆盖全流程">特色功能</SectionTitle>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
-                  variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow">
-                  <div className="w-10 h-10 rounded flex items-center justify-center mb-4"
-                    style={{ backgroundColor: f.color + '18' }}>
-                    <Icon className="w-5 h-5" style={{ color: f.color }} />
-                  </div>
-                  <h3 className="text-lg font-bold text-[#3d3929] mb-2"
-                    style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{f.title}</h3>
-                  <p className="text-sm text-[#8b7e5e] leading-relaxed">{f.desc}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* 对比多邻国 */}
       <section id="comparison" className="py-24 px-6 bg-[#3d3929] text-[#faf8f0] relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none"
@@ -433,7 +406,7 @@ export default function LandingPage() {
       </section>
 
       {/* 练习体系 */}
-      <section className="py-24 px-6 bg-[#f0ead6]/40 relative">
+      <section id="exercises" className="py-24 px-6 bg-[#f0ead6]/40 relative">
         <div className="max-w-6xl mx-auto">
           <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">五大题型，从认到用</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -473,8 +446,35 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* 特色功能 */}
+      <section id="features" className="py-24 px-6 bg-[#faf8f0] relative">
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.08 }} />
+        <div className="max-w-6xl mx-auto relative">
+          <SectionTitle sub="从输入到掌握，AI 覆盖全流程">特色功能</SectionTitle>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {FEATURES.map((f, i) => {
+              const Icon = f.icon;
+              return (
+                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
+                  variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow">
+                  <div className="w-10 h-10 rounded flex items-center justify-center mb-4"
+                    style={{ backgroundColor: f.color + '18' }}>
+                    <Icon className="w-5 h-5" style={{ color: f.color }} />
+                  </div>
+                  <h3 className="text-lg font-bold text-[#3d3929] mb-2"
+                    style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{f.title}</h3>
+                  <p className="text-sm text-[#8b7e5e] leading-relaxed">{f.desc}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* 使用流程 */}
-      <section className="py-24 px-6 bg-[#faf8f0] relative">
+      <section className="py-24 px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-5xl mx-auto">
           <SectionTitle sub="六步搞定">
             使用<span className="text-[#d4a853]">流程</span>
