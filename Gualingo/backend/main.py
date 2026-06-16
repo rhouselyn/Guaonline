@@ -47,7 +47,7 @@ async def startup_event():
 
 # ── 前端静态文件服务 ────────────────────────────────────────
 
-# 挂载前端的 assets 目录
+# 挂载前端的 assets 目录（必须在 catch-all 路由之前）
 _assets_dir = FRONTEND_DIR / "assets"
 if _assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
@@ -59,9 +59,13 @@ async def serve_root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
-# SPA fallback：所有非 /api 路由返回 index.html
+# SPA fallback：非 /api、非静态文件的路径返回 index.html
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+    # 如果请求的是静态文件（有扩展名），尝试直接返回文件
+    file_path = FRONTEND_DIR / full_path
+    if full_path and "." in full_path.split("/")[-1] and file_path.exists():
+        return FileResponse(str(file_path))
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
