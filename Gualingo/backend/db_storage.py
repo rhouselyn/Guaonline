@@ -646,6 +646,11 @@ class DatabaseStorage:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (file_id, user_id, title, source_lang, target_lang, text_preview, now)
         )
+        # 如果记录已存在，更新标题和语言
+        conn.execute(
+            "UPDATE history SET title = ?, source_lang = ?, target_lang = ?, text_preview = ? WHERE file_id = ?",
+            (title, source_lang, target_lang, text_preview, file_id)
+        )
         conn.commit()
         record = {
             "file_id": file_id, "user_id": user_id, "title": title, "source_lang": source_lang,

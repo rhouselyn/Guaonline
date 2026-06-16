@@ -9,7 +9,7 @@ import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
-function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '' }) {
+function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '' }) {
   const saved = dictStateRef?.current || {}
   const [expandedWord, setExpandedWord] = useState(null)
   const [wordDetailCache, setWordDetailCache] = useState({})
@@ -23,7 +23,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [showGlobalVocab, setShowGlobalVocab] = useState(saved.showGlobalVocab || false)
   const [globalVocab, setGlobalVocab] = useState([])
   const [globalVocabLoading, setGlobalVocabLoading] = useState(false)
-  const [actualSourceLang, setActualSourceLang] = useState(sourceLang)
+  const [actualSourceLang, setActualSourceLang] = useState(sourceLang === 'auto' ? null : sourceLang)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleInput, setTitleInput] = useState('')
   const [vocabPage, setVocabPage] = useState(saved.vocabPage || 1)
@@ -117,7 +117,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         dictStateRef.current._lastFileId = currentFileId
       }
       // sourceLang='auto' 时，不从此 API 设置语言，避免默认值 "en" 闪现
-      // 等轮询状态返回检测到的语言后再更新
+      // 等轮询状态返回检测到的语言后通过 detectedLang prop 更新
       if (sourceLang !== 'auto') {
         fetch(`/api/file/${currentFileId}/info`)
           .then(r => r.json())
@@ -134,6 +134,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setActualSourceLang(sourceLang)
     }
   }, [currentFileId, sourceLang])
+
+  // detectedLang 更新时设置 actualSourceLang（auto模式语言检测完成）
+  useEffect(() => {
+    if (detectedLang && detectedLang !== 'auto') {
+      setActualSourceLang(detectedLang)
+    }
+  }, [detectedLang])
 
   useEffect(() => {
     if (!showGlobalVocab) return

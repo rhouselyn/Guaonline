@@ -52,6 +52,7 @@ function App() {
   const [step, setStep] = useState('input')
   const [text, setText] = useState('')
   const [sourceLang, setSourceLang] = useState('auto')
+  const [detectedLang, setDetectedLang] = useState(null)
   const [targetLang, setTargetLang] = useState('zh')
   const [uiLang, setUiLang] = useState('zh')
   const [customTranslations, setCustomTranslations] = useState({})
@@ -324,7 +325,11 @@ function App() {
 
         // 更新检测到的语言（auto模式检测完成后）
         if (status.source_lang && status.source_lang !== 'auto') {
-          setSourceLang(status.source_lang)
+          setDetectedLang(status.source_lang)
+          // 非auto模式下也更新 sourceLang
+          if (sourceLang !== 'auto') {
+            setSourceLang(status.source_lang)
+          }
         }
 
         // 更新完整原文（LLM翻译/生成后的文本）
@@ -442,6 +447,7 @@ function App() {
 
     setSkipPolling(false)
     setLoading(true)
+    setDetectedLang(null)
     setProgress(0)
     setProcessingInfo(null)
     setVocab([])
@@ -1361,6 +1367,7 @@ function App() {
               t={t}
               currentFileId={currentFileId}
               sourceLang={sourceLang}
+              detectedLang={detectedLang}
               preprocessStatus={preprocessStatus}
               onBack={() => { dictStateRef.current = { vocabPage: 1, sentencePage: 1, globalVocabPage: 1, vocabScrollPos: 0, sentenceTranslationScrollPos: 0, sentenceOriginalScrollPos: 0, globalVocabScrollPos: 0, vocabDisplayMode: 0, sentenceDisplayMode: 0, showOriginal: false, showGlobalVocab: false, vocabSearch: '', sentenceSearch: '' }; setStep('input') }}
               fileTitle={fileTitle}
