@@ -169,7 +169,9 @@ export default function AdminCosts() {
             <thead>
               <tr className="text-[#e8d5b7]/60 border-b border-[#c9a96e]/10">
                 <th className="text-left py-1">用户</th>
-                <th className="text-right py-1">Tokens</th>
+                <th className="text-right py-1">输入</th>
+                <th className="text-right py-1">输出</th>
+                <th className="text-right py-1">句子数</th>
                 <th className="text-right py-1">成本</th>
               </tr>
             </thead>
@@ -177,12 +179,14 @@ export default function AdminCosts() {
               {topUsers.map((u, i) => (
                 <tr key={i} className="text-[#e8d5b7] border-b border-[#c9a96e]/5">
                   <td className="py-1 truncate max-w-[160px]" title={u.email}>{u.email}</td>
-                  <td className="text-right">{(u.total_tokens || 0).toLocaleString()}</td>
-                  <td className="text-right">${(u.total_cost || 0).toFixed(4)}</td>
+                  <td className="text-right">{(u.prompt_tokens || 0).toLocaleString()}</td>
+                  <td className="text-right">{(u.completion_tokens || 0).toLocaleString()}</td>
+                  <td className="text-right">{(u.request_count || 0).toLocaleString()}</td>
+                  <td className="text-right">${(u.cost || 0).toFixed(4)}</td>
                 </tr>
               ))}
               {topUsers.length === 0 && (
-                <tr><td colSpan={3} className="text-[#e8d5b7]/30 text-center py-4">暂无数据</td></tr>
+                <tr><td colSpan={5} className="text-[#e8d5b7]/30 text-center py-4">暂无数据</td></tr>
               )}
             </tbody>
           </table>

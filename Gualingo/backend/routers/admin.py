@@ -689,6 +689,7 @@ async def get_top_cost_users(
                SUM(prompt_tokens) as prompt_tokens,
                SUM(completion_tokens) as completion_tokens,
                SUM(total_tokens) as total_tokens,
+               COUNT(*) as request_count,
                SUM(cost_usd) as cost
         FROM token_usage
         WHERE {date_filter} AND user_id != 'system'
@@ -708,6 +709,7 @@ async def get_top_cost_users(
             "prompt_tokens": row["prompt_tokens"],
             "completion_tokens": row["completion_tokens"],
             "total_tokens": row["total_tokens"],
+            "request_count": row["request_count"],
             "cost": float(row["cost"] or 0),
         })
     user_conn.close()
@@ -812,20 +814,25 @@ async def delete_ui_translation(lang_code: str, admin: AdminTokenData = Depends(
 
 @router.get("/global-vocab/stats")
 async def get_global_vocab_stats(admin: AdminTokenData = Depends(require_admin)):
-    """获取全局词汇统计：按语言分组的词条数。"""
+    """获取全局词汇统计：按语言分组的词条数，以及语言对热力图数据。"""
     from vocab.global_vocab import _get_conn as get_gv_conn
     conn = get_gv_conn()
     rows = conn.execute(
         "SELECT source_lang, COUNT(*) as cnt FROM global_vocab GROUP BY source_lang ORDER BY cnt DESC"
     ).fetchall()
     total = conn.execute("SELECT COUNT(*) as c FROM global_vocab").fetchone()["c"]
+    # 语言对热力图数据
+    pairs = conn.execute(
+        "SELECT source_lang, target_lang, COUNT(*) as cnt FROM global_vocab GROUP BY source_lang, target_lang ORDER BY cnt DESC"
+    ).fetchall()
     conn.close()
-    return {"total": total, "by_lang": [dict(r) for r in rows]}
+    return {"total": total, "by_lang": [dict(r) for r in rows], "pairs": [dict(r) for r in pairs]}
 
 
 @router.get("/global-vocab/list")
 async def list_global_vocab(
     source_lang: Optional[str] = None,
+    target_lang: Optional[str] = None,
     search: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -841,6 +848,9 @@ async def list_global_vocab(
     if source_lang:
         conditions.append("source_lang = ?")
         params.append(source_lang)
+    if target_lang:
+        conditions.append("target_lang = ?")
+        params.append(target_lang)
     if search:
         conditions.append("(word LIKE ? OR meaning LIKE ? OR enriched_meaning LIKE ?)")
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
