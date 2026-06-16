@@ -29,7 +29,6 @@ frontend/dist/
 *.env
 *.env.local
 *.env.production
-tier_keys.json
 
 # IDE
 .vscode/
