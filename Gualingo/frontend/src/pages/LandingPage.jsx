@@ -5,7 +5,7 @@ import { auth } from '../utils/auth';
 import {
   ArrowRight, Globe, PenTool, Brain, Star, Volume2, BarChart3,
   ChevronDown, Sparkles, BookOpen, List, Mic, Trophy, Check,
-  X, MessageSquare, Zap, Search, Headphones, Languages
+  X, MessageSquare, Zap, Search, Headphones, Languages, Code
 } from 'lucide-react';
 
 // 算法艺术背景 - Retro 波点 + 流动纹理
@@ -110,6 +110,41 @@ const COMPARISON = [
   { duo: '无法深入理解一篇文章', gua: 'AI 分句翻译，彻底吃透' },
 ];
 
+const PAIN_POINTS = [
+  { icon: BookOpen, title: '课程内容千篇一律', desc: '市面上的 App 用统一教材教所有人，你被迫学习与自己无关的对话场景，学了忘、忘了学，效率极低。' },
+  { icon: Search, title: '生词脱离上下文', desc: '单独背单词没有语境，记住的只是翻译对照，无法在真实阅读和交流中灵活运用，"认识但不会用"是常态。' },
+  { icon: Globe, title: '小语种资源匮乏', desc: '想学泰语、越南语、阿拉伯语方言？主流 App 要么不支持，要么内容极少。100+ 种语言的学习需求被长期忽视。' },
+];
+
+const EXERCISES = [
+  { phase: 1, title: '单词选择题', desc: '看到目标语言单词，从四个母语释义中选出正确答案。答对后展开完整单词卡：丰富释义、词形变化、例句、记忆辅助。', demo: 'abandon → 废弃 / 采纳 / 伴随 / 仰慕 ✓' },
+  { phase: 1, title: '句子翻译排序', desc: '将打乱的母语翻译片段拖拽排列成正确顺序，训练对句子结构和语义的理解。', demo: '他 / 放弃了 / 这个 / 计划 → 拖拽排序' },
+  { phase: 1, title: '听力理解', desc: '听 AI 朗读句子，从四个翻译选项中选出正确含义。语音合成支持多种语言，可随时点击重听。', demo: '🔊 He abandoned the plan. → 选出正确翻译' },
+  { phase: 2, title: '遮蔽填空', desc: '原文中随机遮蔽若干单词，从候选词池中选出正确单词填入空位。同一句子多次出现，每次遮蔽不同位置。', demo: 'He ___ the plan. → 候选：abandon / adopted / ...' },
+  { phase: 2, title: '翻译重组', desc: '看到原文句子，将打乱的母语翻译片段重新排列成正确顺序。比阶段一更难——需要自己理解原文并组织翻译。', demo: '原文：He abandoned the plan. → 重组翻译片段' },
+];
+
+const TARGET_USERS = [
+  { icon: '🎓', title: '语言学习者', scene: '备考 / 日常提升', desc: '厌倦了固定教材？粘贴你喜欢的文章、新闻、播客文本，立刻生成专属练习，让学习不再枯燥。' },
+  { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把工作邮件、行业报告变成学习材料，学到的就是用得上的，专业术语不再陌生。' },
+  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语方言……主流 App 忽略的语言，这里都能学。' },
+];
+
+const LANG_CLOUD = [
+  { name: '中文', color: '#dc2626' }, { name: 'English', color: '#3b82f6' },
+  { name: '日本語', color: '#dc2626' }, { name: '한국어', color: '#1d4ed8' },
+  { name: 'Español', color: '#ef4444' }, { name: 'Français', color: '#6366f1' },
+  { name: 'Deutsch', color: '#eab308' }, { name: 'Italiano', color: '#16a34a' },
+  { name: 'Português', color: '#22c55e' }, { name: 'Русский', color: '#1d4ed8' },
+  { name: 'ไทย', color: '#7c3aed' }, { name: 'Tiếng Việt', color: '#dc2626' },
+  { name: 'العربية', color: '#16a34a' }, { name: 'हिन्दी', color: '#f97316' },
+  { name: 'Türkçe', color: '#dc2626' }, { name: 'Suomi', color: '#1d4ed8' },
+  { name: 'Magyar', color: '#16a34a' }, { name: 'বাংলা', color: '#f97316' },
+  { name: 'Indonesia', color: '#ef4444' }, { name: 'Kiswahili', color: '#16a34a' },
+  { name: 'Yue', color: '#dc2626' }, { name: 'Myanmar', color: '#eab308' },
+  { name: 'עברית', color: '#2563eb' }, { name: 'தமிழ்', color: '#f97316' },
+];
+
 const MODES = [
   {
     icon: PenTool, title: '直接输入', subtitle: '我有素材，想直接学',
@@ -126,17 +161,6 @@ const MODES = [
     desc: '告诉 AI 你想学什么主题，AI 自动生成目标语言的文本，然后开始学习。没有素材也能学。',
     bg: '#524d3c',
   },
-];
-
-const PHASE1 = [
-  { icon: Check, text: '单词选择 — 四选一，看单词选释义' },
-  { icon: MessageSquare, text: '句子翻译 — 看源语言句子，拼出翻译' },
-  { icon: Headphones, text: '听力理解 — 听句子，拼出听到的内容' },
-];
-
-const PHASE2 = [
-  { icon: Search, text: '遮蔽填空 — 句子中挖空关键词，选择正确答案' },
-  { icon: Brain, text: '翻译重组 — 看母语翻译，还原原句' },
 ];
 
 const STEPS = [
@@ -220,6 +244,7 @@ export default function LandingPage() {
             <button onClick={() => scrollTo('features')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">功能</button>
             <button onClick={() => scrollTo('comparison')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">对比</button>
             <button onClick={() => scrollTo('modes')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">模式</button>
+            <button onClick={() => scrollTo('users')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">用户</button>
             <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">定价</button>
             <button onClick={() => scrollTo('contact')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">联系</button>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
@@ -287,6 +312,37 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.8 }} className="mt-16">
             <ChevronDown className="w-6 h-6 text-[#b5ae8e] mx-auto animate-bounce" />
           </motion.div>
+        </div>
+      </section>
+
+      {/* 痛点洞察 */}
+      <section className="py-24 px-6 bg-[#f0ead6]/30 relative">
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
+        <div className="max-w-6xl mx-auto relative">
+          <SectionTitle sub="传统语言学习的困境">学外语的素材，永远不够"自己"</SectionTitle>
+          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
+            variants={fadeUp} className="text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
+            传统语言学习 App 提供的是固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的新闻、追的剧、工作文档里的专业术语——这些最贴近你生活的内容，恰恰无法被标准化课程覆盖。
+          </motion.p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {PAIN_POINTS.map((p, i) => {
+              const Icon = p.icon;
+              return (
+                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
+                  variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-[#c45c3c]" />
+                  <div className="w-11 h-11 rounded flex items-center justify-center mb-4 bg-[#c45c3c]/10">
+                    <Icon className="w-5 h-5 text-[#c45c3c]" />
+                  </div>
+                  <h3 className="text-lg font-bold text-[#3d3929] mb-2"
+                    style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{p.title}</h3>
+                  <p className="text-sm text-[#8b7e5e] leading-relaxed">{p.desc}</p>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -376,77 +432,42 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 学习体系 */}
+      {/* 练习体系 */}
       <section className="py-24 px-6 bg-[#f0ead6]/40 relative">
-        <div className="max-w-5xl mx-auto">
-          <SectionTitle sub="两阶段 + 错题回顾">
-            学习<span className="text-[#d4a853]">体系</span>
-          </SectionTitle>
-
-          <div className="grid md:grid-cols-2 gap-8 mb-8">
-            {/* 阶段一 */}
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}
-              variants={fadeUp}
-              className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded bg-[#d4a853] flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-[#3d3929]" />
+        <div className="max-w-6xl mx-auto">
+          <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">五大题型，从认到用</SectionTitle>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {EXERCISES.map((ex, i) => (
+              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
+                variants={fadeUp} custom={i} whileHover={{ y: -3, transition: { duration: 0.2 } }}
+                className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow">
+                <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold tracking-wide mb-3 ${
+                  ex.phase === 1
+                    ? 'bg-[#8b7e5e]/10 text-[#8b7e5e] border border-[#8b7e5e]/20'
+                    : 'bg-[#d4a853]/10 text-[#B8860B] border border-[#d4a853]/20'
+                }`}>
+                  阶段{ex.phase === 1 ? '一' : '二'}
+                </span>
+                <h3 className="text-lg font-bold text-[#3d3929] mb-2"
+                  style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{ex.title}</h3>
+                <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">{ex.desc}</p>
+                <div className="bg-[#f0ead6] rounded px-3 py-2 text-sm text-[#8b7e5e] border-l-2 border-[#d4a853]">
+                  <code className="bg-[#d4a853]/10 px-1.5 py-0.5 rounded text-xs text-[#B8860B]">{ex.demo}</code>
                 </div>
-                <div>
-                  <h3 className="font-bold text-[#3d3929]"
-                    style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>阶段一 · 词汇认知</h3>
-                </div>
-              </div>
-              <ul className="space-y-3">
-                {PHASE1.map((item, j) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={j} className="flex items-start gap-3 text-sm text-[#524d3c]">
-                      <Icon className="w-4 h-4 mt-0.5 text-[#d4a853] flex-shrink-0" />
-                      {item.text}
-                    </li>
-                  );
-                })}
-              </ul>
-            </motion.div>
-
-            {/* 阶段二 */}
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}
-              variants={fadeUp} custom={1}
-              className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded bg-[#524d3c] flex items-center justify-center">
-                  <Brain className="w-5 h-5 text-[#faf8f0]" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-[#3d3929]"
-                    style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>阶段二 · 综合训练</h3>
-                </div>
-              </div>
-              <ul className="space-y-3">
-                {PHASE2.map((item, j) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={j} className="flex items-start gap-3 text-sm text-[#524d3c]">
-                      <Icon className="w-4 h-4 mt-0.5 text-[#524d3c] flex-shrink-0" />
-                      {item.text}
-                    </li>
-                  );
-                })}
-              </ul>
-            </motion.div>
+              </motion.div>
+            ))}
           </div>
 
           {/* 错题回顾 */}
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}
-            variants={fadeUp} custom={2}
-            className="bg-[#3d3929] text-[#faf8f0] rounded-lg p-6 flex items-center gap-4">
+            variants={fadeUp} custom={5}
+            className="mt-6 bg-[#3d3929] text-[#faf8f0] rounded-lg p-6 flex items-center gap-4 max-w-2xl mx-auto">
             <div className="w-10 h-10 rounded bg-[#d4a853] flex items-center justify-center flex-shrink-0">
               <Trophy className="w-5 h-5 text-[#3d3929]" />
             </div>
             <div>
-              <h3 className="font-bold mb-1" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>错题回顾</h3>
-              <p className="text-sm text-[#b5ae8e]">答错的题自动收集，强化练习直到掌握为止</p>
+              <h3 className="font-bold mb-1" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>错题回顾 + 星级评价</h3>
+              <p className="text-sm text-[#b5ae8e]">答错的题自动收集，强化练习直到掌握。每个单元根据错误数量给出 0-3 星评价，激励持续进步。</p>
             </div>
           </motion.div>
         </div>
@@ -474,6 +495,49 @@ export default function LandingPage() {
                 </motion.div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* 目标用户 */}
+      <section id="users" className="py-24 px-6 bg-[#faf8f0] relative">
+        <div className="max-w-6xl mx-auto">
+          <SectionTitle sub="任何想要用自己感兴趣的内容学外语的人">谁需要呱邻国？</SectionTitle>
+          <div className="grid md:grid-cols-3 gap-6">
+            {TARGET_USERS.map((u, i) => (
+              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
+                variants={fadeUp} custom={i} whileHover={{ y: -3, transition: { duration: 0.2 } }}
+                className="bg-[#f0ead6]/50 border border-[#d4c9a8] rounded-lg p-6 text-center">
+                <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl bg-[#8b7e5e]/10 border-2 border-[#8b7e5e]/15">
+                  {u.icon}
+                </div>
+                <h3 className="text-lg font-bold text-[#3d3929] mb-1"
+                  style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{u.title}</h3>
+                <p className="text-sm text-[#8b7e5e] font-medium mb-3">{u.scene}</p>
+                <p className="text-sm text-[#524d3c] leading-relaxed">{u.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 语言云 */}
+      <section className="py-16 px-6 bg-[#3d3929] relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
+        <div className="max-w-4xl mx-auto relative text-center">
+          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
+            variants={fadeUp} className="text-sm text-[#b5ae8e] mb-4">支持的语言（部分展示）</motion.p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {LANG_CLOUD.map((lang, i) => (
+              <motion.span key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
+                variants={fadeUp} custom={i}
+                className="px-3 py-1 rounded text-xs font-semibold text-white tracking-wide hover:scale-110 transition-transform cursor-default"
+                style={{ backgroundColor: lang.color }}>
+                {lang.name}
+              </motion.span>
+            ))}
+            <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">100+ ...</span>
           </div>
         </div>
       </section>
