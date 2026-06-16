@@ -2136,8 +2136,8 @@ git commit -m "feat: add all admin frontend pages (dashboard, api-keys, users, q
 
 ```bash
 pkill -f "uvicorn main:app"
-rm -f /workspace/Gualingo/data/*.db
-cd /workspace/Gualingo/backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+rm -f /workspace/data/*.db
+cd /workspace/backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 ```
 
 - [ ] **Step 2: 测试 admin 登录**
@@ -2197,7 +2197,7 @@ curl -s http://localhost:8000/api/process-text -X POST -H "Authorization: Bearer
 - [ ] **Step 7: 构建前端并验证**
 
 ```bash
-cd /workspace/Gualingo/frontend && npm run build
+cd /workspace/frontend && npm run build
 ```
 
 在浏览器中访问 `/login`，输入 admin/123456，应跳转到 `/admin` 仪表盘。

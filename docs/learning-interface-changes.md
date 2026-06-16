@@ -3,12 +3,12 @@
 ## 一、Bug 修复
 
 ### 1. 翻译方向错误
-- **文件**: `Gualingo/backend/routers/text_processing.py`
+- **文件**: `backend/routers/text_processing.py`
 - **问题**: 翻译模式下，翻译方向为 source→target（学习语言→母语），应该是 target→source（母语→学习语言），即把母语翻译为正在学习的语言
 - **修复**: 将翻译方向从 source→target 改为 target→source
 
 ### 2. Auto 模式语言闪现 "en"
-- **文件**: `Gualingo/frontend/src/components/DictionaryStep.jsx`、`Gualingo/frontend/src/pages/LearningApp.jsx`
+- **文件**: `frontend/src/components/DictionaryStep.jsx`、`frontend/src/pages/LearningApp.jsx`
 - **问题**: Auto 模式下，语言检测完成前 DictionaryStep 会短暂显示默认值 "en"，导致用户看到错误的语言标识闪现
 - **修复**:
   - LearningApp 新增 `detectedLang` 状态，轮询检测到语言后更新该状态并传递给 DictionaryStep
@@ -16,27 +16,27 @@
   - 语言图标在未检测到语言时不显示，避免显示错误语言
 
 ### 3. 语言检测后状态未同步
-- **文件**: `Gualingo/backend/routers/text_processing.py`
+- **文件**: `backend/routers/text_processing.py`
 - **问题**: 语言检测完成后，processing_status 中的 source_lang 未更新，导致后续流程可能使用错误的语言信息
 - **修复**: 语言检测完成后同步更新 processing_status 中的 source_lang
 
 ### 4. 历史记录写入时机过晚
-- **文件**: `Gualingo/backend/routers/text_processing.py`
+- **文件**: `backend/routers/text_processing.py`
 - **问题**: 历史记录在文本处理完成后才写入，用户在处理期间看不到新条目
 - **修复**: 将历史记录写入时机从文本处理完成后提前到处理前立即写入；非 auto 模式在后台任务启动前立即保存语言设置和历史记录
 
 ### 5. 非 Auto 模式切换时语言重置
-- **文件**: `Gualingo/frontend/src/components/InputStep.jsx`
+- **文件**: `frontend/src/components/InputStep.jsx`
 - **问题**: 从直接输入（非 auto）切到翻译/生成模式时，会切换到记住的语言而非保持当前选的语言
 - **修复**: 切换模式时保持当前选的语言，不再切换到记住的语言
 
 ### 6. nonDirectModeLangRef 默认值导致语言闪现
-- **文件**: `Gualingo/frontend/src/components/InputStep.jsx`
+- **文件**: `frontend/src/components/InputStep.jsx`
 - **问题**: nonDirectModeLangRef 默认值为 'en'，在 recentLanguages 加载完成前会使用错误默认值
 - **修复**: 默认值从 'en' 改为 null，等 recentLanguages 加载后再初始化
 
 ### 7. 提交文本后历史记录未及时刷新
-- **文件**: `Gualingo/frontend/src/pages/LearningApp.jsx`
+- **文件**: `frontend/src/pages/LearningApp.jsx`
 - **问题**: 提交文本后历史记录列表不会立即刷新，用户需手动刷新才能看到新条目
 - **修复**: 处理开始后立即刷新历史记录列表；提交文本时重置 detectedLang
 
@@ -45,7 +45,7 @@
 ## 二、Prompt 修改
 
 ### 分词规则：固定搭配合并条件收紧
-- **文件**: `Gualingo/backend/utils/exercise_generators.py`
+- **文件**: `backend/utils/exercise_generators.py`
 - **问题**: 原规则"当整体含义不等于各组成部分字面含义的简单叠加时，必须将整个多词表达作为一个 token"过于宽泛，LLM 会过度解读，将介词+动词、冠词+名词等语法上经常搭配但语义各自独立的组合强行合并
 - **修改前**:
   ```
