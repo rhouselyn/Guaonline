@@ -12,15 +12,6 @@ from config import DATA_DIR
 TIER_KEYS_FILE = str(DATA_DIR / "tier_keys.json")
 GLOBAL_SETTINGS_FILE = str(DATA_DIR / "global_settings.json")
 
-# 默认 API 配置（SiliconFlow Qwen3.6-27B）
-DEFAULT_API_CONFIG = {
-    "api_key": "sk-tszhvcglvfqiivwqqtqwkxmxsneyuymjjywtfxteofmfvkct",
-    "base_url": "https://api.siliconflow.cn/v1",
-    "model": "Qwen/Qwen3.6-27B",
-    "input_price_per_million": 0,
-    "output_price_per_million": 0,
-}
-
 
 def _load_tier_keys() -> dict:
     try:
@@ -164,10 +155,6 @@ class LLMGateway:
             configs = pool_data.get("configs", [])
             if configs:
                 new_pools[tier] = TierKeyPool(tier, configs, batch_size, interval)
-
-        # 如果 free tier 没有配置，使用默认 API
-        if "free" not in new_pools:
-            new_pools["free"] = TierKeyPool("free", [dict(DEFAULT_API_CONFIG)], batch_size, interval)
 
         self.pools = new_pools
 

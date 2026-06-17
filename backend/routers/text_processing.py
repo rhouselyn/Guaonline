@@ -13,6 +13,7 @@ from utils.state import storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title
 from auth.deps import get_current_user, require_auth, TokenData
 from auth.quota import check_and_refill_quota, consume_quota
+from utils.state import text_processor
 from vocab import global_vocab, user_vocab
 
 router = APIRouter(prefix="/api", tags=["text-processing"])
@@ -195,8 +196,9 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         from auth.quota import check_and_refill_quota
         quota_info = check_and_refill_quota(current_user.user_id)
         if quota_info["max"] != -1:  # 非无限额度
-            # 估算句子数
-            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
+            # 使用与实际处理相同的分句逻辑估算句子数
+            estimated_sentences = text_processor.split_sentences(text.strip())
+            sentence_count = max(1, len(estimated_sentences))
             sentence_count = min(sentence_count, 50)
             if quota_info["available"] < sentence_count:
                 # 获取用户界面语言对应的翻译

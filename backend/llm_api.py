@@ -40,17 +40,6 @@ def get_tier_keys() -> dict:
                 "output_price_per_million": cfg.get("output_price_per_million", 0),
             })
         masked[tier] = {"configs": configs, "active_index": pool.get("active_index", 0)}
-
-    # 如果 free tier 没有配置，显示默认配置（脱敏）
-    if "free" not in masked:
-        from utils.llm_gateway import DEFAULT_API_CONFIG
-        default_cfg = dict(DEFAULT_API_CONFIG)
-        key = default_cfg.get("api_key", "")
-        if key and len(key) > 8:
-            default_cfg["api_key"] = key[:4] + "*" * (len(key) - 8) + key[-4:]
-        default_cfg["has_key"] = bool(key)
-        masked["free"] = {"configs": [default_cfg], "active_index": 0}
-
     return masked
 
 
