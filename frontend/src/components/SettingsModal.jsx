@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
+import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle, Volume2 } from 'lucide-react'
 import { api } from '../utils/api'
+import { setTtsEngine } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 
 function NativeLangSelector({ value, onChange, recentLangs = [] }) {
@@ -143,6 +144,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   // Learning options state
   const [skipListening, setSkipListening] = useState(false)
   const [onlyNewWords, setOnlyNewWords] = useState(false)
+  const [ttsEngine, setTtsEngine] = useState('edge')
 
   useEffect(() => {
     if (isOpen) {
@@ -156,6 +158,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
         if (prefs.skip_listening !== undefined) setSkipListening(prefs.skip_listening)
         if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
+        if (prefs.tts_engine) setTtsEngine(prefs.tts_engine)
         setLoading(false)
       }).catch(() => {
         setLoading(false)
@@ -176,6 +179,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         recent_languages: updatedRecentLangs,
         skip_listening: skipListening,
         only_new_words: onlyNewWords,
+        tts_engine: ttsEngine,
       })
 
       if (onRecentLangsChange) {
@@ -281,6 +285,40 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
             ) : (
               <svg className="w-8 h-5 text-aged-300" viewBox="0 0 32 20" fill="currentColor"><rect x="0" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="white"/></svg>
             )}
+          </button>
+        </div>
+      </div>
+
+      {/* TTS Engine */}
+      <div className="space-y-2 pt-2 border-t border-aged-200/60">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Volume2 className="w-3 h-3" />
+          {t.ttsEngine || '发音引擎'}
+        </label>
+        <div className="space-y-1.5">
+          <button
+            onClick={() => setTtsEngine('edge')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-sm border-2 transition-colors text-left ${
+              ttsEngine === 'edge' ? 'border-amber-400 bg-amber-50/60' : 'border-aged-200 bg-parchment-50 hover:bg-parchment-100'
+            }`}
+          >
+            <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${ttsEngine === 'edge' ? 'border-amber-500 bg-amber-500' : 'border-aged-300'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-ink-700">Edge TTS</p>
+              <p className="text-[10px] text-ink-400">{t.ttsEdgeDesc || '效果好，但加载稍慢'}</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setTtsEngine('webspeech')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-sm border-2 transition-colors text-left ${
+              ttsEngine === 'webspeech' ? 'border-amber-400 bg-amber-50/60' : 'border-aged-200 bg-parchment-50 hover:bg-parchment-100'
+            }`}
+          >
+            <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${ttsEngine === 'webspeech' ? 'border-amber-500 bg-amber-500' : 'border-aged-300'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-ink-700">Web Speech API</p>
+              <p className="text-[10px] text-ink-400">{t.ttsWebSpeechDesc || '实时发音，取决于电脑和浏览器质量'}</p>
+            </div>
           </button>
         </div>
       </div>

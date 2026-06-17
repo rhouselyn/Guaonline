@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
-import { warmupSpeech } from '../utils/speech'
+import { warmupSpeech, setTtsEngine } from '../utils/speech'
 import { auth } from '../utils/auth'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AlertDialog from '../components/AlertDialog'
@@ -148,6 +148,7 @@ function App() {
         setRecentLanguages(prefs.recent_languages)
       }
       if (prefs.page_size) setPageSize(prefs.page_size)
+      if (prefs.tts_engine) setTtsEngine(prefs.tts_engine)
     }).catch(() => {})
   }, [])
 
