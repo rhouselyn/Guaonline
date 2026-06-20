@@ -143,6 +143,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   // Learning options state
   const [skipListening, setSkipListening] = useState(false)
   const [onlyNewWords, setOnlyNewWords] = useState(false)
+  const [ttsEngine, setTtsEngine] = useState('edge')
 
   useEffect(() => {
     if (isOpen) {
@@ -156,6 +157,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
         if (prefs.skip_listening !== undefined) setSkipListening(prefs.skip_listening)
         if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
+        if (prefs.tts_engine) setTtsEngine(prefs.tts_engine)
         setLoading(false)
       }).catch(() => {
         setLoading(false)
@@ -176,6 +178,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         recent_languages: updatedRecentLangs,
         skip_listening: skipListening,
         only_new_words: onlyNewWords,
+        tts_engine: ttsEngine,
       })
 
       if (onRecentLangsChange) {
@@ -189,6 +192,12 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
       if (onPageSizeChange && localPageSize !== pageSize) {
         onPageSizeChange(localPageSize)
       }
+
+      try {
+        const stored = JSON.parse(localStorage.getItem('gualingo_preferences') || '{}')
+        stored.tts_engine = ttsEngine
+        localStorage.setItem('gualingo_preferences', JSON.stringify(stored))
+      } catch {}
 
       setSaved(true)
       setTimeout(() => {
@@ -281,6 +290,54 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
             ) : (
               <svg className="w-8 h-5 text-aged-300" viewBox="0 0 32 20" fill="currentColor"><rect x="0" y="0" width="20" height="20" rx="10" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="white"/></svg>
             )}
+          </button>
+        </div>
+      </div>
+
+      {/* Voice Engine */}
+      <div className="space-y-3 pt-2 border-t border-aged-200/60">
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Settings className="w-3 h-3" />
+          {t.voiceEngine || '语音引擎'}
+        </label>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => setTtsEngine('edge')}
+            className={`w-full text-left px-3 py-2 rounded-sm border-2 transition-all ${
+              ttsEngine === 'edge'
+                ? 'border-amber-400 bg-amber-50'
+                : 'border-aged-200 bg-parchment-50 hover:border-aged-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-ink-700">{t.edgeTTS || 'Edge TTS'}</p>
+                <p className="text-[10px] text-ink-400">{t.edgeTTSDesc || '效果好，但需要联网'}</p>
+              </div>
+              {ttsEngine === 'edge' && (
+                <svg className="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg>
+              )}
+            </div>
+          </button>
+
+          <button
+            onClick={() => setTtsEngine('webspeech')}
+            className={`w-full text-left px-3 py-2 rounded-sm border-2 transition-all ${
+              ttsEngine === 'webspeech'
+                ? 'border-amber-400 bg-amber-50'
+                : 'border-aged-200 bg-parchment-50 hover:border-aged-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-ink-700">{t.webSpeechAPI || 'Web Speech API'}</p>
+                <p className="text-[10px] text-ink-400">{t.webSpeechDesc || '实时发音，质量取决于电脑和浏览器'}</p>
+              </div>
+              {ttsEngine === 'webspeech' && (
+                <svg className="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg>
+              )}
+            </div>
           </button>
         </div>
       </div>
