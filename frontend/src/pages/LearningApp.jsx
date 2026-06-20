@@ -148,13 +148,6 @@ function App() {
         setRecentLanguages(prefs.recent_languages)
       }
       if (prefs.page_size) setPageSize(prefs.page_size)
-      if (prefs.tts_engine) {
-        try {
-          const stored = JSON.parse(localStorage.getItem('gualingo_preferences') || '{}')
-          stored.tts_engine = prefs.tts_engine
-          localStorage.setItem('gualingo_preferences', JSON.stringify(stored))
-        } catch {}
-      }
     }).catch(() => {})
   }, [])
 
