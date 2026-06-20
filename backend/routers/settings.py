@@ -23,7 +23,6 @@ class UserPreferencesUpdate(BaseModel):
     page_size: Optional[int] = None
     only_new_words: Optional[bool] = None
     auto_update: Optional[bool] = None
-    tts_engine: Optional[str] = None
 
 
 @router.get("/user-preferences")
@@ -56,8 +55,6 @@ async def update_user_preferences(req: UserPreferencesUpdate, current_user: Toke
             current["only_new_words"] = req.only_new_words
         if req.auto_update is not None:
             current["auto_update"] = req.auto_update
-        if req.tts_engine is not None:
-            current["tts_engine"] = req.tts_engine
         storage.save_user_preferences(current, user_id=current_user.user_id)
         return current
     except Exception as e:

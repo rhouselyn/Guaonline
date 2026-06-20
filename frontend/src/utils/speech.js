@@ -125,59 +125,13 @@ const SPEECH_LANG_MAP = {
 // 当前播放的 Audio 对象
 let currentAudio = null
 
-// TTS 引擎设置：'edge'（默认）或 'webspeech'
-let ttsEngine = 'edge'
-
-function setTtsEngine(engine) {
-  ttsEngine = engine || 'edge'
-}
-
-function getTtsEngine() {
-  return ttsEngine
-}
-
 function warmupSpeech() {
   // Edge TTS 不需要 warmup，保留空函数以兼容
-}
-
-// 使用浏览器 Web Speech API 发音
-function speakWithWebSpeech(text, lang, slow) {
-  if (!window.speechSynthesis) {
-    console.warn('Web Speech API not supported')
-    return
-  }
-  // 停止当前播放
-  window.speechSynthesis.cancel()
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio = null
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.lang = lang
-  utterance.rate = slow ? 0.7 : 1.0
-
-  // 尝试匹配对应语言的语音
-  const voices = window.speechSynthesis.getVoices()
-  const matchedVoice = voices.find(v => v.lang === lang) ||
-                       voices.find(v => v.lang.startsWith(lang.split('-')[0]))
-  if (matchedVoice) utterance.voice = matchedVoice
-
-  window.speechSynthesis.speak(utterance)
 }
 
 async function speakText(text, sourceLang = 'en', slow = false) {
   if (!text) return
 
-  const lang = SPEECH_LANG_MAP[sourceLang] || sourceLang
-
-  // 根据设置选择引擎
-  if (ttsEngine === 'webspeech') {
-    speakWithWebSpeech(text, lang, slow)
-    return
-  }
-
-  // Edge TTS
   // 停止当前播放
   if (currentAudio) {
     currentAudio.pause()
@@ -185,6 +139,7 @@ async function speakText(text, sourceLang = 'en', slow = false) {
   }
 
   try {
+    const lang = SPEECH_LANG_MAP[sourceLang] || sourceLang
     const url = `/api/tts/speak?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&slow=${slow}`
 
     // 使用 fetch 流式获取音频，边下载边播放
@@ -212,6 +167,7 @@ async function speakText(text, sourceLang = 'en', slow = false) {
     })
 
     const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
+    let firstChunk = true
 
     sourceBuffer.addEventListener('updateend', async () => {
       try {
@@ -234,6 +190,7 @@ async function speakText(text, sourceLang = 'en', slow = false) {
       return
     }
     sourceBuffer.appendBuffer(value)
+    firstChunk = false
 
     await audio.play()
   } catch (e) {
@@ -242,4 +199,4 @@ async function speakText(text, sourceLang = 'en', slow = false) {
   }
 }
 
-export { SPEECH_LANG_MAP as LANG_MAP, speakText, warmupSpeech, setTtsEngine, getTtsEngine }
+export { SPEECH_LANG_MAP as LANG_MAP, speakText, warmupSpeech }
