@@ -155,6 +155,9 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
         for opt in raw_options:
             if isinstance(opt, dict) and "text" in opt:
                 text = opt["text"]
+                if text is None:
+                    continue
+                text = str(text)
                 is_correct = opt.get("is_correct", None)
                 if is_correct is not None:
                     if isinstance(is_correct, str):
@@ -181,7 +184,7 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
         for opt in normalized_options:
             if opt["is_correct"]:
                 correct_opt = opt
-            elif placeholder_pattern.match(opt["text"].strip()):
+            elif not isinstance(opt["text"], str) or placeholder_pattern.match(opt["text"].strip()):
                 continue
             else:
                 filtered_options.append(opt)
