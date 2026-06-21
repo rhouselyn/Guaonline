@@ -259,7 +259,7 @@ class LLMGateway:
                 pool.mark_complete(idx)
                 raise Exception(f"LLM API error: {resp.status_code} - {resp.text[:200]}")
 
-        except (httpx.TimeoutException, httpx.ConnectError):
+        except httpx.TimeoutException:
             pool.mark_server_error(idx)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
         except Exception as e:
