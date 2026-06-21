@@ -18,7 +18,7 @@ from utils.helpers import (
     get_listening_distractors_from_sentences, filter_eligible_sentences,
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
-    MAX_SENTENCE_WORDS_FOR_QUIZ, ZH_FUNCTION_WORDS,
+    MAX_SENTENCE_WORDS_FOR_QUIZ, ZH_FUNCTION_WORDS, is_word_cache_complete,
 )
 
 
@@ -704,7 +704,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                if storage.load_word_cache(file_id, word_to_gen):
+                existing = storage.load_word_cache(file_id, word_to_gen)
+                if existing and is_word_cache_complete(existing):
                     return
                 word_entry = None
                 for v in vocab:
@@ -750,7 +751,7 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 if not vocab_hit:
                     vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
 
-                if vocab_hit:
+                if vocab_hit and is_word_cache_complete(vocab_hit):
                     print(f"[CACHE] 词汇缓存命中: {word_to_gen}，跳过 LLM 调用")
                     cache_data = {
                         "word": word_to_gen,
@@ -815,6 +816,31 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 if "context_translations" in cache_data:
                     del cache_data["context_translations"]
                 storage.save_word_cache(file_id, word_to_gen, cache_data)
+                # 同时更新 global_vocab 和 user_vocab 缓存
+                try:
+                    global_vocab.upsert(word_to_gen, source_lang, target_lang, {
+                        "phonetic": cache_data.get("ipa", ""),
+                        "morphology": cache_data.get("morphology", ""),
+                        "meaning": correct_meaning,
+                        "enriched_meaning": cache_data.get("enriched_meaning", ""),
+                        "variants_detail": cache_data.get("variants_detail", []),
+                        "examples": cache_data.get("examples", []),
+                        "memory_hint": cache_data.get("memory_hint", ""),
+                        "multiple_choice": cache_data.get("multiple_choice", {}),
+                    })
+                    if user_id:
+                        user_vocab.upsert(user_id, word_to_gen, source_lang, target_lang, {
+                            "phonetic": cache_data.get("ipa", ""),
+                            "morphology": cache_data.get("morphology", ""),
+                            "meaning": correct_meaning,
+                            "enriched_meaning": cache_data.get("enriched_meaning", ""),
+                            "variants_detail": cache_data.get("variants_detail", []),
+                            "examples": cache_data.get("examples", []),
+                            "memory_hint": cache_data.get("memory_hint", ""),
+                            "multiple_choice": cache_data.get("multiple_choice", {}),
+                        })
+                except Exception as e_save:
+                    print(f"[WARN] 更新 global/user vocab 缓存失败: {e_save}")
                 print(f"[DEBUG] Cached word gen: {word_to_gen}")
                 return
             except Exception as e:
@@ -863,9 +889,11 @@ async def background_word_gen(file_id: str):
     for pi, vi in enumerate(plan_word_order):
         if vi < len(vocab):
             w = vocab[vi].get("word", "")
-            if w and not storage.load_word_cache(file_id, w):
-                first_uncached = pi
-                break
+            if w:
+                existing = storage.load_word_cache(file_id, w)
+                if not existing or not is_word_cache_complete(existing):
+                    first_uncached = pi
+                    break
     if first_uncached is not None:
         state["plan_position"] = min(state.get("plan_position", 0), first_uncached)
     elif "plan_position" not in state:
@@ -885,7 +913,8 @@ async def background_word_gen(file_id: str):
             await asyncio.sleep(1)
             continue
 
-        if storage.load_word_cache(file_id, word_to_gen):
+        existing = storage.load_word_cache(file_id, word_to_gen)
+        if existing and is_word_cache_complete(existing):
             continue
 
         # 词汇缓存查询：user_vocab → global_vocab → 旧 find_global_word_cache

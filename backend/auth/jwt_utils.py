@@ -7,7 +7,7 @@ from auth.models import UserTier, TokenData, AdminTokenData
 
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 7 * 24 * 60  # 7天
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 

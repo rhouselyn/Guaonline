@@ -14,7 +14,7 @@ from utils.helpers import (
     get_listening_distractors_from_sentences, filter_eligible_sentences,
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
-    MAX_SENTENCE_WORDS_FOR_QUIZ,
+    MAX_SENTENCE_WORDS_FOR_QUIZ, is_word_cache_complete,
 )
 from utils.exercise_generators import (
     background_word_gen, process_single_word_gen, pre_generate_next_word,
@@ -140,8 +140,10 @@ async def get_word_gen_progress(file_id: str):
         completed = 0
         for w in vocab:
             word = w.get("word", "")
-            if word and storage.load_word_cache(file_id, word):
-                completed += 1
+            if word:
+                cached = storage.load_word_cache(file_id, word)
+                if cached and is_word_cache_complete(cached):
+                    completed += 1
 
         state = word_gen_state.get(file_id)
         running = state.get("running", False) if state else False

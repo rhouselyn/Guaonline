@@ -8,7 +8,7 @@ from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result
+from utils.helpers import fix_llm_options_result, is_word_cache_complete
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
@@ -108,57 +108,63 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 storage.save_word_cache(file_id, word, cached_word)
 
         if cached_word:
-            print(f"[DEBUG] 从缓存中获取单词信息: {word}")
-            cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-            mc = cached_word.get("multiple_choice", {})
-            mc_options = []
-            placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
-            if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                mc_options = [o for o in mc["options"] if isinstance(o, dict) and isinstance(o.get("text"), str) and not placeholder_check.match(o["text"].strip())]
+            # 缓存完整性检查：不完整则当作无缓存，走重新生成流程
+            if not is_word_cache_complete(cached_word):
+                print(f"[DEBUG] 缓存不完整，将重新生成: {word}")
+                cached_word = None
+                storage.delete_word_cache(file_id, word)
+            else:
+                print(f"[DEBUG] 从缓存中获取单词信息: {word}")
+                cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
+                mc = cached_word.get("multiple_choice", {})
+                mc_options = []
+                placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
+                if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
+                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and isinstance(o.get("text"), str) and not placeholder_check.match(o["text"].strip())]
 
-            if "options" not in cached_word and mc_options:
-                options = []
-                correct_index = 0
-                for i, opt in enumerate(mc_options):
-                    options.append(opt["text"])
-                    if opt.get("is_correct"):
-                        correct_index = i
-                cached_word["options"] = options
-                cached_word["correct_index"] = correct_index
+                if "options" not in cached_word and mc_options:
+                    options = []
+                    correct_index = 0
+                    for i, opt in enumerate(mc_options):
+                        options.append(opt["text"])
+                        if opt.get("is_correct"):
+                            correct_index = i
+                    cached_word["options"] = options
+                    cached_word["correct_index"] = correct_index
 
-            context_sents = cached_word.get("context_sentences", [])
-            needs_rebuild = False
-            for cs in context_sents:
-                if isinstance(cs, dict) and "sentence_index" not in cs:
-                    needs_rebuild = True
-                    break
-                if isinstance(cs, str):
-                    needs_rebuild = True
-                    break
+                context_sents = cached_word.get("context_sentences", [])
+                needs_rebuild = False
+                for cs in context_sents:
+                    if isinstance(cs, dict) and "sentence_index" not in cs:
+                        needs_rebuild = True
+                        break
+                    if isinstance(cs, str):
+                        needs_rebuild = True
+                        break
 
-            if needs_rebuild or not context_sents:
-                sentences = storage.load_pipeline_data(file_id)
-                if sentences:
-                    try:
-                        word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-                    except re.error:
-                        word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-                    rebuilt = []
-                    for sent_idx, sentence_data in enumerate(sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                rebuilt.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
-                    cached_word["context_sentences"] = rebuilt
-                    storage.save_word_cache(file_id, word, cached_word)
+                if needs_rebuild or not context_sents:
+                    sentences = storage.load_pipeline_data(file_id)
+                    if sentences:
+                        try:
+                            word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+                        except re.error:
+                            word_pattern = re.compile(re.escape(word), re.IGNORECASE)
+                        rebuilt = []
+                        for sent_idx, sentence_data in enumerate(sentences):
+                            if "sentence" in sentence_data:
+                                if word_pattern.search(sentence_data["sentence"]):
+                                    translation = ""
+                                    if "translation_result" in sentence_data:
+                                        translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                                    rebuilt.append({
+                                        "sentence": sentence_data["sentence"],
+                                        "translation": translation,
+                                        "sentence_index": sent_idx
+                                    })
+                        cached_word["context_sentences"] = rebuilt
+                        storage.save_word_cache(file_id, word, cached_word)
 
-            return cached_word
+                return cached_word
 
         # 无缓存：判断是否所有单词已生成完
         print(f"[DEBUG] 单词详情无缓存: {word}")
@@ -170,9 +176,9 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
         if isinstance(vocab, dict) and "vocab" in vocab:
             vocab = vocab["vocab"]
 
-        # 检查所有单词是否已生成完
+        # 检查所有单词是否已生成完（含完整性检查）
         all_completed = all(
-            storage.load_word_cache(file_id, w.get("word", ""))
+            (lambda c: c is not None and is_word_cache_complete(c))(storage.load_word_cache(file_id, w.get("word", "")))
             for w in vocab if w.get("word")
         )
 

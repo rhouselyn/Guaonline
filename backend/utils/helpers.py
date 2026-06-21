@@ -104,6 +104,62 @@ def split_translation_to_phrases(translation, max_phrases=8):
     return result
 
 
+def is_word_cache_complete(cached: dict) -> bool:
+    """检查单词缓存是否完整。任一必需字段缺失或无效则返回 False。"""
+    if not isinstance(cached, dict):
+        return False
+
+    # enriched_meaning: 非空字符串
+    enriched = cached.get("enriched_meaning")
+    if not isinstance(enriched, str) or not enriched.strip():
+        return False
+
+    # memory_hint: 非空字符串
+    hint = cached.get("memory_hint")
+    if not isinstance(hint, str) or not hint.strip():
+        return False
+
+    # variants_detail: 非空列表
+    variants = cached.get("variants_detail")
+    if not isinstance(variants, list) or len(variants) == 0:
+        return False
+
+    # examples: 非空列表，每项有 sentence 和 translation
+    examples = cached.get("examples")
+    if not isinstance(examples, list) or len(examples) == 0:
+        return False
+    for ex in examples:
+        if not isinstance(ex, dict):
+            return False
+        if not isinstance(ex.get("sentence"), str) or not ex["sentence"].strip():
+            return False
+        if not isinstance(ex.get("translation"), str) or not ex["translation"].strip():
+            return False
+
+    # multiple_choice: 有 options 列表，至少2个有效选项
+    mc = cached.get("multiple_choice")
+    if not isinstance(mc, dict):
+        return False
+    options = mc.get("options")
+    if not isinstance(options, list) or len(options) < 2:
+        return False
+    valid_opts = 0
+    has_correct = False
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        text = opt.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        valid_opts += 1
+        if opt.get("is_correct"):
+            has_correct = True
+    if valid_opts < 2 or not has_correct:
+        return False
+
+    return True
+
+
 def select_key_tokens(seg_words, max_tokens=10):
     content_words = []
     function_words = []
