@@ -467,7 +467,7 @@ class TextProcessor:
             if 'translation' in result:
                 filtered_translation = []
                 for token in result['translation']:
-                    if isinstance(token, dict) and 'text' in token and token['text'] is not None:
+                    if isinstance(token, dict) and 'text' in token:
                         token_text = token['text'].strip()
                         if not token_text or is_punctuation_only(token_text):
                             continue
