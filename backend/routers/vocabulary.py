@@ -114,7 +114,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
             mc_options = []
             placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
             if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
+                mc_options = [o for o in mc["options"] if isinstance(o, dict) and o.get("text") and not placeholder_check.match(o["text"].strip())]
 
             if "options" not in cached_word and mc_options:
                 options = []
@@ -205,7 +205,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 mc_options = []
                 placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
                 if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
+                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and o.get("text") and not placeholder_check.match(o["text"].strip())]
                 if mc_options:
                     options = []
                     correct_index = 0
@@ -246,7 +246,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                     mc = cached_word.get("multiple_choice", {})
                     mc_options = []
                     if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                        mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o]
+                        mc_options = [o for o in mc["options"] if isinstance(o, dict) and o.get("text")]
                     if mc_options:
                         break
 
@@ -256,7 +256,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 mc_options = []
                 placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
                 if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
+                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and o.get("text") and not placeholder_check.match(o["text"].strip())]
                 if mc_options:
                     options = []
                     correct_index = 0
@@ -415,7 +415,7 @@ async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: 
         mc_options = []
         placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
         if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-            mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
+            mc_options = [o for o in mc["options"] if isinstance(o, dict) and o.get("text") and not placeholder_check.match(o["text"].strip())]
 
         options = []
         correct_index = 0
