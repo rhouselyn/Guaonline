@@ -303,7 +303,7 @@ async def get_phase_unit_exercise(file_id: str, phase_number: int, unit_id: int)
 
                 if "translation" in translation_result:
                     for token in translation_result["translation"]:
-                        if isinstance(token, dict) and "text" in token:
+                        if isinstance(token, dict) and "text" in token and token["text"] is not None:
                             token_text = strip_edge_punctuation(token["text"].strip())
                             if token_text and not is_punctuation_only(token_text) and not is_speaker_label(token_text):
                                 original_tokens.append(token_text)
@@ -331,7 +331,7 @@ async def get_phase_unit_exercise(file_id: str, phase_number: int, unit_id: int)
                         continue
                     if "translation_result" in sent_data and "translation" in sent_data["translation_result"]:
                         for token in sent_data["translation_result"]["translation"]:
-                            if isinstance(token, dict) and "text" in token:
+                            if isinstance(token, dict) and "text" in token and token["text"] is not None:
                                 token_text = token["text"].strip()
                                 if token_text and token_text.lower() not in original_lower_set and token_text.lower() not in candidate_set:
                                     all_candidate_distractors.append(token_text)
