@@ -155,8 +155,6 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
         for opt in raw_options:
             if isinstance(opt, dict) and "text" in opt:
                 text = opt["text"]
-                if text is None:
-                    continue
                 is_correct = opt.get("is_correct", None)
                 if is_correct is not None:
                     if isinstance(is_correct, str):
@@ -183,7 +181,7 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
         for opt in normalized_options:
             if opt["is_correct"]:
                 correct_opt = opt
-            elif placeholder_pattern.match((opt["text"] or "").strip()):
+            elif placeholder_pattern.match(opt["text"].strip()):
                 continue
             else:
                 filtered_options.append(opt)
@@ -273,7 +271,7 @@ def get_listening_correct_words(sentence, sentence_data):
         raw_words = []
         for token in translation_tokens:
             if isinstance(token, dict) and "text" in token:
-                t = (token["text"] or "").strip()
+                t = token["text"].strip()
                 if t and not is_punctuation_only(t) and not is_speaker_label(t):
                     cleaned = strip_edge_punctuation(t)
                     if cleaned and not is_speaker_label(cleaned):
@@ -332,7 +330,7 @@ def get_listening_distractors_from_sentences(sentence, all_sentences, correct_lo
         if other_translation and isinstance(other_translation, list):
             for token in other_translation:
                 if isinstance(token, dict) and "text" in token:
-                    vt = (token["text"] or "").strip()
+                    vt = token["text"].strip()
                     if vt and not is_punctuation_only(vt) and vt.lower() not in correct_lower_set and vt.lower() not in distractor_set:
                         distractor_words.append(vt)
                         distractor_set.add(vt.lower())
