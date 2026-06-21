@@ -95,25 +95,25 @@ function FrogLogo({ size = 48, className = '' }) {
 
 const FEATURES = [
   { icon: Sparkles, title: '自动生成内容', desc: '粘贴任何文本，自动检测语言、分句翻译、提取词汇，省去手动整理的麻烦。', color: '#D4A853' },
-  { icon: Globe, title: '任意语言互学', desc: '120+ 种语言 TTS 朗读，自动识别语种，不受平台资源限制。', color: '#8B7E5E' },
+  { icon: Globe, title: '日语法语德语等120+语言', desc: '留学热门语言全覆盖，120+ 种语言 TTS 朗读，自动识别语种，不受平台资源限制。', color: '#8B7E5E' },
   { icon: List, title: '完整词汇表', desc: '自动生成词汇表，支持字母索引、搜索、逐词详情，随时查阅。', color: '#524D3C' },
   { icon: Star, title: '收藏单词', desc: '一键收藏生词，跨文本收藏夹随时复习，重点词汇不再遗漏。', color: '#D4A853' },
-  { icon: Volume2, title: '语音朗读', desc: '基于 Edge TTS，单词和句子都能朗读，常速/慢速自由切换。', color: '#8B7E5E' },
-  { icon: Trophy, title: '星级评价', desc: '每个单元完成后获得星级评价，答错的题自动进入错题回顾。', color: '#524D3C' },
+  { icon: Volume2, title: '语音朗读', desc: '基于 Edge TTS，单词和句子都能朗读，常速/慢速自由切换，强化听力理解。', color: '#8B7E5E' },
+  { icon: Trophy, title: '阅读理解训练', desc: '六大题型从单词辨认到句子输出，阶梯式提升阅读理解能力，答错自动回顾。', color: '#524D3C' },
 ];
 
 const COMPARISON = [
   { duo: '没有单词表，复习无门', gua: '自动生成完整词汇表' },
   { duo: '做题时想查其它单词', gua: '学习过程中随时打开单词表' },
   { duo: '学了也很难用上', gua: '你提供什么素材就学什么' },
-  { duo: '小众语种不支持', gua: '支持任意语言互学，120+ TTS' },
-  { duo: '无法深入理解一篇文章', gua: '分句翻译，彻底吃透' },
+  { duo: '日语法语德语阅读理解训练不足', gua: '粘贴文章即可生成阅读理解练习' },
+  { duo: '无法深入理解一篇文章', gua: '分句翻译，彻底吃透阅读内容' },
 ];
 
 const PAIN_POINTS = [
   { icon: BookOpen, title: '课程内容千篇一律', desc: '市面上的 App 用统一教材教所有人，你被迫学跟自己无关的对话场景，学了忘、忘了学。' },
   { icon: Search, title: '生词脱离上下文', desc: '单独背单词没有语境，记住的只是翻译对照，真到阅读和交流时还是不会用。' },
-  { icon: Globe, title: '小语种资源匮乏', desc: '想学泰语、越南语、阿拉伯语？主流 App 要么不支持，要么内容极少。' },
+  { icon: Globe, title: '小语种资源匮乏', desc: '想学日语、法语、德语？留学备考需要大量阅读理解训练，主流 App 要么内容极少，要么无法自定义素材。' },
 ];
 
 const EXERCISES = [
@@ -126,9 +126,9 @@ const EXERCISES = [
 ];
 
 const TARGET_USERS = [
-  { icon: '🎓', title: '语言学习者', scene: '备考 / 日常提升', desc: '厌倦了固定教材？粘贴你喜欢的文章、新闻、播客文本，立刻生成专属练习。' },
+  { icon: '🎓', title: '留学备考', scene: '日语 / 法语 / 德语', desc: '留学日本、法国、德国？粘贴考试真题、学术文章，自动生成阅读理解练习和词汇表，高效备考。' },
   { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把工作邮件、行业报告变成学习材料，学到的就是用得上的。' },
-  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语……主流 App 忽略的语言，这里都能学。' },
+  { icon: '🌏', title: '语言爱好者', scene: '阅读理解 / 文化探索', desc: '100+ 种语言支持，日语、法语、德语阅读理解训练，用你喜欢的文章学外语。' },
 ];
 
 const LANG_CLOUD = [
@@ -288,13 +288,13 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.25 }}
             className="text-lg md:text-xl text-[#8b7e5e] mb-2"
             style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-            用你喜欢的文本学外语
+            留学备考 · 日语法语德语 · 阅读理解
           </motion.p>
 
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.35 }}
             className="text-[#8b7e5e]/70 mb-10 max-w-lg mx-auto leading-relaxed">
-            粘贴任何文本，自动生成词汇表、分句翻译和练习题。<br />
+            粘贴任何文本，自动生成词汇表、分句翻译和阅读理解练习题。<br />
             任何语言 → 任何语言，你的素材你做主。
           </motion.p>
 
@@ -320,7 +320,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-6xl mx-auto relative">
-          <SectionTitle sub="传统语言学习的困境">学外语的素材，永远不够"自己"</SectionTitle>
+          <SectionTitle sub="传统语言学习的困境">留学备考、阅读理解，素材永远不够"自己"</SectionTitle>
           <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
             variants={fadeUp} className="text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
             传统语言 App 提供固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的新闻、追的剧、工作文档里的专业术语——这些最贴近你生活的内容，标准化课程覆盖不了。
@@ -404,7 +404,7 @@ export default function LandingPage() {
       {/* 练习体系 */}
       <section id="exercises" className="py-24 px-6 bg-[#faf8f0] relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">六大题型，从认到用</SectionTitle>
+          <SectionTitle sub="从单词辨认到句子输出，阶梯式提升阅读理解能力">六大题型，从认到用</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {EXERCISES.map((ex, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
@@ -510,7 +510,7 @@ export default function LandingPage() {
       {/* 目标用户 */}
       <section id="users" className="py-24 px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="任何想要用自己感兴趣的内容学外语的人">谁需要呱邻国？</SectionTitle>
+          <SectionTitle sub="留学备考、阅读理解、多语言学习">谁需要呱邻国？</SectionTitle>
           <div className="grid md:grid-cols-3 gap-6">
             {TARGET_USERS.map((u, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
