@@ -8,10 +8,55 @@ from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result
+from utils.helpers import fix_llm_options_result, is_word_cache_complete
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
+
+
+def _update_vocab_entry(file_id: str, word: str, cache_data: dict):
+    """将生成的单词详情写回 vocab 表对应条目，同时更新 user/global 缓存索引。"""
+    try:
+        vocab = storage.load_vocab(file_id)
+        vocab_list = vocab.get("vocab", vocab) if isinstance(vocab, dict) else vocab
+        if not isinstance(vocab_list, list):
+            return
+
+        updated = False
+        for entry in vocab_list:
+            if entry.get("word", "").lower() == word.lower():
+                if cache_data.get("enriched_meaning"):
+                    entry["enriched_meaning"] = cache_data["enriched_meaning"]
+                if cache_data.get("ipa"):
+                    entry["ipa"] = cache_data["ipa"]
+                if cache_data.get("morphology"):
+                    entry["morphology"] = cache_data["morphology"]
+                if cache_data.get("variants_detail"):
+                    entry["variants_detail"] = cache_data["variants_detail"]
+                if cache_data.get("examples"):
+                    entry["examples"] = cache_data["examples"]
+                if cache_data.get("memory_hint"):
+                    entry["memory_hint"] = cache_data["memory_hint"]
+                updated = True
+                break
+
+        if updated:
+            storage.save_vocab(file_id, vocab_list)
+    except Exception as e:
+        print(f"[WARN] 更新 vocab 条目失败 {word}: {e}")
+
+
+def _get_incomplete_words(file_id: str, vocab: list) -> list:
+    """返回 vocab 中缓存缺失或不完整的单词列表（保持原顺序）。"""
+    incomplete = []
+    for entry in vocab:
+        w = entry.get("word", "")
+        if not w:
+            continue
+        cached = storage.load_word_cache(file_id, w)
+        if not cached or not is_word_cache_complete(cached):
+            incomplete.append(w)
+    return incomplete
 
 
 @router.get("/vocab/{file_id}")
@@ -50,6 +95,38 @@ async def get_vocab(file_id: str):
                 if cached.get("memory_hint"):
                     enriched_entry["memory_hint"] = cached["memory_hint"]
             enriched_list.append(enriched_entry)
+
+        # 检测不完整单词并触发后台生成，返回进度信息供前端展示进度条
+        incomplete_words = _get_incomplete_words(file_id, vocab_list)
+        if incomplete_words:
+            from utils.state import word_gen_state
+            from utils.exercise_generators import background_word_gen
+            import asyncio
+            state = word_gen_state.get(file_id)
+            if state:
+                existing = {w.lower() for w in state.get("priority_queue", [])}
+                for w in incomplete_words:
+                    if w.lower() not in existing:
+                        state["priority_queue"].append(w)
+                if not state.get("running"):
+                    state["running"] = True
+                    state["task"] = asyncio.create_task(background_word_gen(file_id))
+            else:
+                word_gen_state[file_id] = {
+                    "running": True,
+                    "vocab": vocab_list,
+                    "priority_queue": list(incomplete_words),
+                    "task": asyncio.create_task(background_word_gen(file_id)),
+                    "processing_words": set(),
+                }
+            return {
+                "vocab": enriched_list,
+                "word_gen_progress": {
+                    "total": len(vocab_list),
+                    "pending": len(incomplete_words),
+                    "completed": len(vocab_list) - len(incomplete_words),
+                }
+            }
 
         return {"vocab": enriched_list}
     except Exception as e:
@@ -107,6 +184,12 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 # 保存到当前文件的缓存
                 storage.save_word_cache(file_id, word, cached_word)
 
+        # 3. 缓存命中时检查完整性，不完整则删除旧缓存重新生成
+        if cached_word and not is_word_cache_complete(cached_word):
+            print(f"[DEBUG] 缓存命中但不完整，重新生成: {word}")
+            storage.delete_word_cache(file_id, word)
+            cached_word = None
+
         if cached_word:
             print(f"[DEBUG] 从缓存中获取单词信息: {word}")
             cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
@@ -158,6 +241,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                     cached_word["context_sentences"] = rebuilt
                     storage.save_word_cache(file_id, word, cached_word)
 
+            _update_vocab_entry(file_id, word, cached_word)
             return cached_word
 
         # 无缓存：判断是否所有单词已生成完
@@ -215,15 +299,25 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                             correct_index = i
                     cached_word["options"] = options
                     cached_word["correct_index"] = correct_index
+                    _update_vocab_entry(file_id, word, cached_word)
                     return cached_word
 
             raise HTTPException(status_code=404, detail="Word detail generation failed")
         else:
-            # 还有单词未生成完，加入优先队列等待后台任务处理
-            print(f"[DEBUG] 单词生成未完成，加入优先队列: {word}")
+            # 还有单词未生成完，先检测所有不完整单词，再把它们加入优先队列等待后台处理
+            print(f"[DEBUG] 单词生成未完成，检测并加入所有缺失单词: {word}")
+            incomplete_words = _get_incomplete_words(file_id, vocab)
+            print(f"[DEBUG] 待生成单词数: {len(incomplete_words)}")
+
             state = word_gen_state.get(file_id)
             if state:
-                state["priority_queue"] = [w for w in state.get("priority_queue", []) if w.lower() != word.lower()]
+                # 移除已在队列中的待生成单词，避免重复
+                existing = {w.lower() for w in state.get("priority_queue", [])}
+                for w in incomplete_words:
+                    if w.lower() not in existing and w.lower() != word.lower():
+                        state["priority_queue"].append(w)
+                # 当前单词置顶
+                state["priority_queue"] = [w for w in state["priority_queue"] if w.lower() != word.lower()]
                 state["priority_queue"].insert(0, word)
                 if not state.get("running"):
                     state["running"] = True
@@ -232,7 +326,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 word_gen_state[file_id] = {
                     "running": True,
                     "vocab": vocab,
-                    "priority_queue": [word],
+                    "priority_queue": [word] + [w for w in incomplete_words if w.lower() != word.lower()],
                     "task": asyncio.create_task(background_word_gen(file_id)),
                     "processing_words": set(),
                     "user_id": current_user.user_id,
@@ -242,13 +336,8 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
             for _ in range(60):
                 await asyncio.sleep(1)
                 cached_word = storage.load_word_cache(file_id, word)
-                if cached_word:
-                    mc = cached_word.get("multiple_choice", {})
-                    mc_options = []
-                    if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                        mc_options = [o for o in mc["options"] if isinstance(o, dict) and isinstance(o.get("text"), str)]
-                    if mc_options:
-                        break
+                if cached_word and is_word_cache_complete(cached_word):
+                    break
 
             if cached_word:
                 cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
@@ -266,6 +355,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                             correct_index = i
                     cached_word["options"] = options
                     cached_word["correct_index"] = correct_index
+                    _update_vocab_entry(file_id, word, cached_word)
                     return cached_word
 
             raise HTTPException(status_code=404, detail="Word detail generation timed out")

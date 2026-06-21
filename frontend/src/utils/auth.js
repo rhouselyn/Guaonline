@@ -110,7 +110,17 @@ axios.interceptors.request.use((config) => {
 });
 
 axios.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    const newToken = r.headers['x-access-token'];
+    if (newToken) {
+      const tokens = auth.getTokens();
+      if (tokens) {
+        tokens.access_token = newToken;
+        auth.setTokens(tokens);
+      }
+    }
+    return r;
+  },
   async (error) => {
     const orig = error.config;
     if (error.response?.status === 401 && !orig._retry) {
