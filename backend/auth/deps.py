@@ -47,11 +47,8 @@ async def require_admin(credentials: HTTPAuthorizationCredentials = Depends(secu
     """要求 admin 角色。"""
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
-    from auth.jwt_utils import decode_admin_token, decode_token
+    from auth.jwt_utils import decode_admin_token
     admin_data = decode_admin_token(credentials.credentials)
     if admin_data is None:
-        # 区分：token 无效/过期 -> 401（让前端拦截器刷新）；token 有效但非 admin -> 403
-        if decode_token(credentials.credentials) is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已过期，请重新登录")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return admin_data

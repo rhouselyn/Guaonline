@@ -99,11 +99,6 @@ async def login(user_data: UserLogin):
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(refresh_token: str):
-    # 先尝试 admin refresh token
-    from auth.jwt_utils import decode_admin_token, create_admin_tokens
-    admin_data = decode_admin_token(refresh_token)
-    if admin_data is not None:
-        return create_admin_tokens()
     token_data = decode_token(refresh_token)
     if token_data is None:
         raise HTTPException(status_code=401, detail="无效的刷新令牌")
