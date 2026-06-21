@@ -94,26 +94,26 @@ function FrogLogo({ size = 48, className = '' }) {
 }
 
 const FEATURES = [
-  { icon: Sparkles, title: '自动生成内容', desc: '粘贴任何文本，自动检测语言、分句翻译、提取词汇，省去手动整理的麻烦。', color: '#D4A853' },
-  { icon: Globe, title: '任意语言互学', desc: '120+ 种语言 TTS 朗读，自动识别语种，不受平台资源限制。', color: '#8B7E5E' },
-  { icon: List, title: '完整词汇表', desc: '自动生成词汇表，支持字母索引、搜索、逐词详情，随时查阅。', color: '#524D3C' },
+  { icon: Sparkles, title: '自动生成内容', desc: '粘贴英语新闻、日语歌词、法语文章——任何文本丢进来，AI 自动检测语言、分句翻译、提取词汇，省去手动整理的麻烦。', color: '#D4A853' },
+  { icon: Globe, title: '任意语言互学', desc: '英语、日语、法语、德语、泰语、越南语……120+ 种语言 TTS 朗读，小语种也能学，不受平台资源限制。', color: '#8B7E5E' },
+  { icon: List, title: '完整词汇表', desc: '自动生成词汇表，支持字母索引、搜索、逐词详情，随时查阅。比手动抄单词本高效 10 倍。', color: '#524D3C' },
   { icon: Star, title: '收藏单词', desc: '一键收藏生词，跨文本收藏夹随时复习，重点词汇不再遗漏。', color: '#D4A853' },
-  { icon: Volume2, title: '语音朗读', desc: '基于 Edge TTS，单词和句子都能朗读，常速/慢速自由切换。', color: '#8B7E5E' },
-  { icon: Trophy, title: '星级评价', desc: '每个单元完成后获得星级评价，答错的题自动进入错题回顾。', color: '#524D3C' },
+  { icon: Volume2, title: '语音朗读', desc: '基于 Edge TTS，单词和句子都能朗读，常速/慢速自由切换。练听力、练发音一步到位。', color: '#8B7E5E' },
+  { icon: Trophy, title: '星级评价', desc: '每个单元完成后获得星级评价，答错的题自动进入错题回顾。像游戏一样有成就感。', color: '#524D3C' },
 ];
 
 const COMPARISON = [
   { duo: '没有单词表，复习无门', gua: '自动生成完整词汇表' },
   { duo: '做题时想查其它单词', gua: '学习过程中随时打开单词表' },
   { duo: '学了也很难用上', gua: '你提供什么素材就学什么' },
-  { duo: '小众语种不支持', gua: '支持任意语言互学，120+ TTS' },
-  { duo: '无法深入理解一篇文章', gua: '分句翻译，彻底吃透' },
+  { duo: '小众语种不支持', gua: '英语日语法语德语泰语越南语都能学' },
+  { duo: '无法深入理解一篇文章', gua: '分句翻译，彻底吃透阅读理解' },
 ];
 
 const PAIN_POINTS = [
-  { icon: BookOpen, title: '课程内容千篇一律', desc: '市面上的 App 用统一教材教所有人，你被迫学跟自己无关的对话场景，学了忘、忘了学。' },
-  { icon: Search, title: '生词脱离上下文', desc: '单独背单词没有语境，记住的只是翻译对照，真到阅读和交流时还是不会用。' },
-  { icon: Globe, title: '小语种资源匮乏', desc: '想学泰语、越南语、阿拉伯语？主流 App 要么不支持，要么内容极少。' },
+  { icon: BookOpen, title: '课程内容千篇一律', desc: '市面上的 App 用统一教材教所有人，你被迫学跟自己无关的对话场景，学了忘、忘了学。留学备考想练真题阅读？中学英语想精读课文？固定课程帮不了你。' },
+  { icon: Search, title: '生词脱离上下文', desc: '单独背单词没有语境，记住的只是翻译对照，真到阅读理解和写作时还是不会用。英语阅读理解丢分，往往就是生词没吃透。' },
+  { icon: Globe, title: '小语种资源匮乏', desc: '想学泰语、越南语、阿拉伯语？法语 DELF、德语德福备考？主流 App 要么不支持，要么内容极少。' },
 ];
 
 const EXERCISES = [
@@ -126,9 +126,10 @@ const EXERCISES = [
 ];
 
 const TARGET_USERS = [
-  { icon: '🎓', title: '语言学习者', scene: '备考 / 日常提升', desc: '厌倦了固定教材？粘贴你喜欢的文章、新闻、播客文本，立刻生成专属练习。' },
-  { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把工作邮件、行业报告变成学习材料，学到的就是用得上的。' },
-  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语……主流 App 忽略的语言，这里都能学。' },
+  { icon: '🎓', title: '留学备考 & 语言学习者', scene: '雅思托福 / 日语N1N2 / 法语DELF', desc: '厌倦了固定教材？粘贴真题阅读、留学文书、播客文本，立刻生成专属练习。比刷题更高效，比背单词更深入。' },
+  { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把英文邮件、德语行业报告、法语商务文档变成学习材料，学到的就是用得上的。' },
+  { icon: '📖', title: '中学生 & 家长', scene: '英语阅读理解 / 课文精读', desc: '粘贴英语课文或阅读理解原文，自动生成词汇表和练习题。生词在语境中记忆，阅读理解不再丢分。' },
+  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
 ];
 
 const LANG_CLOUD = [
@@ -149,17 +150,17 @@ const LANG_CLOUD = [
 const MODES = [
   {
     icon: PenTool, title: '直接输入', subtitle: '我有素材，想直接学',
-    desc: '粘贴一篇文章、一首歌词、一段新闻——任何外语文本丢进来，自动检测语言、分句翻译、提取词汇。',
+    desc: '粘贴一篇 BBC 英语新闻、一首日语歌词、一段法语课文——任何外语文本丢进来，自动检测语言、分句翻译、提取词汇。',
     bg: '#d4a853',
   },
   {
     icon: Languages, title: '自动翻译', subtitle: '我想用母语素材来学外语',
-    desc: '输入你母语的文本，自动翻译成你想学的语言，然后基于翻译后的文本生成词汇和练习。',
+    desc: '输入中文，自动翻译成英语、日语、法语等目标语言，然后基于翻译后的文本生成词汇和练习。留学文书也能这样练。',
     bg: '#8b7e5e',
   },
   {
     icon: Zap, title: '自由生成', subtitle: '我没有素材，帮我生成',
-    desc: '告诉它你想学什么主题，自动生成目标语言的文本，然后开始学习。没有素材也能学。',
+    desc: '告诉它你想学什么主题——"日语旅行对话""德语商务邮件""法语日常会话"——自动生成目标语言文本，然后开始学习。',
     bg: '#524d3c',
   },
 ];
@@ -294,8 +295,8 @@ export default function LandingPage() {
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.35 }}
             className="text-[#8b7e5e]/70 mb-10 max-w-lg mx-auto leading-relaxed">
-            粘贴任何文本，自动生成词汇表、分句翻译和练习题。<br />
-            任何语言 → 任何语言，你的素材你做主。
+            学英语、日语、法语、德语、小语种——粘贴任何文本，自动生成词汇表、分句翻译和练习题。<br />
+            留学备考、阅读理解辅助、职场外语，你的素材你做主。
           </motion.p>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -323,7 +324,7 @@ export default function LandingPage() {
           <SectionTitle sub="传统语言学习的困境">学外语的素材，永远不够"自己"</SectionTitle>
           <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
             variants={fadeUp} className="text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
-            传统语言 App 提供固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的新闻、追的剧、工作文档里的专业术语——这些最贴近你生活的内容，标准化课程覆盖不了。
+            传统语言 App 提供固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的英语新闻、追的日剧台词、留学文书里的专业术语、中学英语课文——这些最贴近你生活的内容，标准化课程覆盖不了。
           </motion.p>
           <div className="grid md:grid-cols-3 gap-6">
             {PAIN_POINTS.map((p, i) => {
@@ -510,8 +511,8 @@ export default function LandingPage() {
       {/* 目标用户 */}
       <section id="users" className="py-24 px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="任何想要用自己感兴趣的内容学外语的人">谁需要呱邻国？</SectionTitle>
-          <div className="grid md:grid-cols-3 gap-6">
+          <SectionTitle sub="留学备考、阅读理解辅助、职场外语、小语种学习">谁需要呱邻国？</SectionTitle>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {TARGET_USERS.map((u, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
                 variants={fadeUp} custom={i} whileHover={{ y: -3, transition: { duration: 0.2 } }}
@@ -535,7 +536,9 @@ export default function LandingPage() {
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative text-center">
           <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
-            variants={fadeUp} className="text-sm text-[#b5ae8e] mb-4">支持的语言（部分展示）</motion.p>
+            variants={fadeUp} className="text-sm text-[#b5ae8e] mb-2">英语、日语、法语、德语、小语种……</motion.p>
+          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
+            variants={fadeUp} className="text-xs text-[#b5ae8e]/60 mb-4">支持的语言（部分展示）</motion.p>
           <div className="flex flex-wrap justify-center gap-2">
             {LANG_CLOUD.map((lang, i) => (
               <motion.span key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
@@ -605,16 +608,34 @@ export default function LandingPage() {
             准备好了吗？
           </h2>
           <p className="text-[#b5ae8e] mb-2">
-            注册即可免费使用，没有任何门槛。
+            学英语、日语、法语、德语、小语种，注册即可免费使用。
           </p>
           <p className="text-[#b5ae8e]/70 text-sm mb-8">
-            任何语言 → 任何语言，你的素材你做主。
+            留学备考 · 阅读理解辅助 · 职场外语 · 你的素材你做主
           </p>
           <button onClick={() => navigate(user ? '/learn' : '/login')}
             className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg inline-flex items-center gap-2 shadow-[2px_2px_0_#faf8f0/20]">
             {user ? '进入学习' : '立即开始'}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
+        </div>
+      </section>
+
+      {/* SEO: 长尾关键词覆盖 */}
+      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="更多语言学习信息">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-lg font-bold text-[#3d3929] mb-4" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+            适用于各种语言学习场景
+          </h2>
+          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
+            呱邻国 Gualingo 适合学英语、学日语、学法语、学德语、学韩语、学西班牙语、学意大利语、学葡萄牙语、学俄语等主流语言，也支持学泰语、学越南语、学阿拉伯语、学印地语、学土耳其语、学芬兰语、学匈牙利语等小语种。
+          </p>
+          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
+            无论你是留学备考（雅思、托福、日语N1N2、法语DELF、德语德福）、中学英语阅读理解辅助、职场外语提升，还是纯粹的语言爱好者，呱邻国都能把你的文本变成个性化学习材料。
+          </p>
+          <p className="text-xs text-[#b5ae8e]">
+            AI外语学习 · 英语阅读理解练习 · 日语分句翻译 · 法语词汇表生成 · 德语听力练习 · 小语种学习工具 · 留学语言备考 · 中学英语辅助
+          </p>
         </div>
       </section>
 
