@@ -146,7 +146,7 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 
     response = await gateway.call(
         user_id, tier, messages,
-        temperature=0.0, max_tokens=8192,
+        temperature=0.0, max_tokens=4096,
         request_type="process_text", tools=tools,
     )
 
@@ -274,7 +274,7 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 
     response = await gateway.call(
         user_id, tier, messages,
-        temperature=temperature, max_tokens=8192,
+        temperature=temperature, max_tokens=4096,
         request_type="generate_multiple_choice", tools=tools,
     )
 
@@ -358,7 +358,7 @@ async def _gateway_process_remaining_words(user_id, tier, words, source_lang, ta
 
     response = await gateway.call(
         user_id, tier, messages,
-        temperature=0.0, max_tokens=8192,
+        temperature=0.0, max_tokens=4096,
         request_type="process_remaining_words", tools=tools,
     )
 
