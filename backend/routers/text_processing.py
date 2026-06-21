@@ -109,46 +109,10 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             text_preview = text.strip()[:100]
             storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
 
-        # 6. 基于实际处理的文本句子数检查并扣减额度
-        from auth.quota import check_and_refill_quota, consume_quota
-        quota_info = check_and_refill_quota(user_id)
-        if quota_info["max"] != -1:  # 非无限额度
-            estimated_sentences = text_processor.split_sentences(text.strip())
-            sentence_count = max(1, len(estimated_sentences))
-            sentence_count = min(sentence_count, 50)
-            if quota_info["available"] < sentence_count:
-                # 获取用户界面语言对应的翻译
-                from db_storage import DatabaseStorage
-                db = DatabaseStorage()
-                prefs = db.load_user_preferences(user_id=user_id)
-                ui_lang = prefs.get("ui_lang", prefs.get("target_lang", "zh"))
-
-                template = None
-                translations = db.load_ui_translations(ui_lang)
-                if translations:
-                    template = translations.get("quotaInsufficient")
-                if not template:
-                    from ui_translations import UI_TRANSLATION_SCHEMA
-                    schema = UI_TRANSLATION_SCHEMA.get("quotaInsufficient", {})
-                    template = schema.get(ui_lang) or schema.get("zh", "额度不足：需要 {0} 句，剩余 {1} 句")
-
-                error_msg = template.replace("{0}", str(sentence_count)).replace("{1}", str(quota_info["available"]))
-                processing_status[file_id] = {
-                    "status": "error",
-                    "error": error_msg
-                }
-                try:
-                    storage.delete_history_record(file_id)
-                except Exception:
-                    pass
-                return
-            consume_quota(user_id, sentence_count)
-            consumed_quota = sentence_count
-
-        # 7. 执行文本处理
+        # 6. 执行文本处理
         await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)
 
-        # 8. 写入词汇缓存（从处理结果中提取）
+        # 7. 写入词汇缓存（从处理结果中提取）
         try:
             vocab_list = storage.load_vocab(file_id)
             if vocab_list:
@@ -170,7 +134,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             error_msg = "API 请求频率超限，请稍后重试或降低 LLM 速率"
         elif "402" in error_msg or "payment" in error_msg.lower() or "quota" in error_msg.lower() or "balance" in error_msg.lower():
             error_msg = "API 余额不足，请充值后重试"
-        elif "ConnectionError" in error_msg or "ConnectionRefused" in error_msg:
+        elif "ConnectError" in error_msg or "ConnectionError" in error_msg or "ConnectionRefused" in error_msg:
             error_msg = "无法连接到 API 服务，请检查网络或 API 地址"
         processing_status[file_id] = {
             "status": "error",
@@ -227,8 +191,40 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         now = datetime.datetime.now()
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
 
-        # 额度检查和扣减移到 _preprocess_and_run 中，基于实际处理的文本句子数
+        # 预估句子数并检查额度
         consumed_quota = 0
+        from auth.quota import check_and_refill_quota
+        quota_info = check_and_refill_quota(current_user.user_id)
+        if quota_info["max"] != -1:  # 非无限额度
+            # 使用与实际处理相同的分句逻辑估算句子数
+            estimated_sentences = text_processor.split_sentences(text.strip())
+            sentence_count = max(1, len(estimated_sentences))
+            sentence_count = min(sentence_count, 50)
+            if quota_info["available"] < sentence_count:
+                # 获取用户界面语言对应的翻译
+                from db_storage import DatabaseStorage
+                db = DatabaseStorage()
+                prefs = db.load_user_preferences(user_id=current_user.user_id)
+                ui_lang = prefs.get("ui_lang", prefs.get("target_lang", "zh"))
+
+                # 从 UI 翻译缓存获取 quotaInsufficient 翻译
+                template = None
+                translations = db.load_ui_translations(ui_lang)
+                if translations:
+                    template = translations.get("quotaInsufficient")
+                # 回退到中文
+                if not template:
+                    from ui_translations import UI_TRANSLATION_SCHEMA
+                    schema = UI_TRANSLATION_SCHEMA.get("quotaInsufficient", {})
+                    template = schema.get(ui_lang) or schema.get("zh", "额度不足：需要 {0} 句，剩余 {1} 句")
+
+                detail = template.replace("{0}", str(sentence_count)).replace("{1}", str(quota_info["available"]))
+                raise HTTPException(status_code=402, detail=detail)
+
+            # 额度足够，立即扣减
+            from auth.quota import consume_quota
+            consume_quota(current_user.user_id, sentence_count)
+            consumed_quota = sentence_count
 
         # 立即设置初始状态
         preprocess_label = ""
