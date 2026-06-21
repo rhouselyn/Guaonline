@@ -14,23 +14,6 @@ from utils.state import storage
 # ── 创建应用 ──────────────────────────────────────────────
 app = FastAPI(title="呱邻国 - Gualingo", version="1.0.0")
 
-# ── token 滑动刷新中间件 ──────────────────────────────────
-@app.middleware("http")
-async def refresh_access_token_middleware(request: Request, call_next):
-    """每次请求后，如果 access_token 有效，则生成新 token 延期 48 小时。"""
-    response = await call_next(request)
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        from auth.jwt_utils import decode_token, create_access_token
-        from auth.models import UserTier
-        token = auth_header[7:]
-        token_data = decode_token(token)
-        if token_data:
-            new_token = create_access_token(token_data.user_id, token_data.tier)
-            response.headers["X-Access-Token"] = new_token
-    return response
-
-
 # ── CORS 中间件 ───────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -38,7 +21,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Access-Token"],
 )
 
 # ── 注册路由 ──────────────────────────────────────────────

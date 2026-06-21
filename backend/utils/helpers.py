@@ -259,53 +259,6 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
     return result
 
 
-def is_word_cache_complete(word_info: dict) -> bool:
-    """检查单词缓存是否完整：包含释义、例句、记忆法、选择题、词形变化等核心字段。"""
-    if not isinstance(word_info, dict):
-        return False
-
-    # 核心字段必须非空
-    if not word_info.get("enriched_meaning"):
-        return False
-    if not word_info.get("memory_hint"):
-        return False
-
-    # 例句必须包含至少 2 个完整对象
-    examples = word_info.get("examples", [])
-    if not isinstance(examples, list) or len(examples) < 2:
-        return False
-    valid_examples = [
-        ex for ex in examples
-        if isinstance(ex, dict) and isinstance(ex.get("sentence"), str) and ex["sentence"].strip()
-        and isinstance(ex.get("translation"), str) and ex["translation"].strip()
-    ]
-    if len(valid_examples) < 2:
-        return False
-
-    # multiple_choice.options 必须包含至少 4 个有效选项，其中一个是正确答案
-    mc = word_info.get("multiple_choice", {})
-    if not isinstance(mc, dict):
-        return False
-    options = mc.get("options", [])
-    if not isinstance(options, list) or len(options) < 4:
-        return False
-    valid_options = [
-        opt for opt in options
-        if isinstance(opt, dict) and isinstance(opt.get("text"), str) and opt["text"].strip()
-    ]
-    if len(valid_options) < 4:
-        return False
-    if not any(opt.get("is_correct") for opt in valid_options):
-        return False
-
-    # variants_detail 至少要有释义或词形（允许为空，但必须是列表）
-    variants = word_info.get("variants_detail", [])
-    if not isinstance(variants, list):
-        return False
-
-    return True
-
-
 def get_listening_correct_words(sentence, sentence_data):
     clean_sentence = re.sub(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]\s*', '', sentence)
 
