@@ -14,7 +14,7 @@ from vocab import global_vocab, user_vocab
 from utils.helpers import (
     RateLimiter, vocab_sort_key, is_speaker_label, is_punctuation_only as _is_punct,
     get_translation_phrases, split_translation_to_phrases, select_key_tokens,
-    fix_llm_options_result, is_word_cache_incomplete, get_fallback_options, get_listening_correct_words,
+    fix_llm_options_result, get_fallback_options, get_listening_correct_words,
     get_listening_distractors_from_sentences, filter_eligible_sentences,
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
@@ -704,8 +704,7 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                existing = storage.load_word_cache(file_id, word_to_gen)
-                if existing and not is_word_cache_incomplete(existing):
+                if storage.load_word_cache(file_id, word_to_gen):
                     return
                 word_entry = None
                 for v in vocab:
@@ -753,26 +752,23 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
 
                 if vocab_hit:
                     print(f"[CACHE] 词汇缓存命中: {word_to_gen}，跳过 LLM 调用")
-                    if is_word_cache_incomplete(vocab_hit):
-                        print(f"[CACHE] 词汇缓存数据不完整，走 LLM 重新生成: {word_to_gen}")
-                    else:
-                        cache_data = {
-                            "word": word_to_gen,
-                            "ipa": word_entry.get("ipa", "") or vocab_hit.get("phonetic", ""),
-                            "meaning": correct_meaning or vocab_hit.get("meaning", ""),
-                            "enriched_meaning": vocab_hit.get("enriched_meaning") or correct_meaning,
-                            "variants_detail": vocab_hit.get("variants_detail", []),
-                            "examples": vocab_hit.get("examples", []),
-                            "memory_hint": vocab_hit.get("memory_hint", ""),
-                            "multiple_choice": vocab_hit.get("multiple_choice", {}),
-                            "context": context,
-                            "context_sentences": context_sentences,
-                            "morphology": word_entry.get("morphology", "") or vocab_hit.get("morphology", ""),
-                        }
-                        if "context_translations" in cache_data:
-                            del cache_data["context_translations"]
-                        storage.save_word_cache(file_id, word_to_gen, cache_data)
-                        return
+                    cache_data = {
+                        "word": word_to_gen,
+                        "ipa": word_entry.get("ipa", "") or vocab_hit.get("phonetic", ""),
+                        "meaning": correct_meaning or vocab_hit.get("meaning", ""),
+                        "enriched_meaning": vocab_hit.get("enriched_meaning") or correct_meaning,
+                        "variants_detail": vocab_hit.get("variants_detail", []),
+                        "examples": vocab_hit.get("examples", []),
+                        "memory_hint": vocab_hit.get("memory_hint", ""),
+                        "multiple_choice": vocab_hit.get("multiple_choice", {}),
+                        "context": context,
+                        "context_sentences": context_sentences,
+                        "morphology": word_entry.get("morphology", "") or vocab_hit.get("morphology", ""),
+                    }
+                    if "context_translations" in cache_data:
+                        del cache_data["context_translations"]
+                    storage.save_word_cache(file_id, word_to_gen, cache_data)
+                    return
                 # --- 缓存未命中，走 LLM ---
 
                 print(f"[DEBUG] Background word gen: {word_to_gen} (attempt {attempt + 1})")
@@ -889,8 +885,7 @@ async def background_word_gen(file_id: str):
             await asyncio.sleep(1)
             continue
 
-        existing_file_cache = storage.load_word_cache(file_id, word_to_gen)
-        if existing_file_cache and not is_word_cache_incomplete(existing_file_cache):
+        if storage.load_word_cache(file_id, word_to_gen):
             continue
 
         # 词汇缓存查询：user_vocab → global_vocab → 旧 find_global_word_cache
@@ -902,64 +897,58 @@ async def background_word_gen(file_id: str):
             vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
 
         if vocab_hit:
-            if is_word_cache_incomplete(vocab_hit):
-                print(f"[CACHE] background_word_gen: 词汇缓存数据不完整，走 LLM 重新生成: {word_to_gen}")
-            else:
-                import copy
-                cached = copy.deepcopy(vocab_hit)
-                # 补充 context_sentences
-                context_sents = []
-                all_sentences = storage.load_pipeline_data(file_id)
-                if all_sentences:
-                    try:
-                        word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                    except re.error:
-                        word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
-                    for sent_idx, sentence_data in enumerate(all_sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                context_sents.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
-                if context_sents:
-                    cached["context_sentences"] = context_sents
-                    cached["context"] = context_sents[0]["sentence"]
-                storage.save_word_cache(file_id, word_to_gen, cached)
-                print(f"[CACHE] background_word_gen: 词汇缓存命中 {word_to_gen}")
-                continue
+            import copy
+            cached = copy.deepcopy(vocab_hit)
+            # 补充 context_sentences
+            context_sents = []
+            all_sentences = storage.load_pipeline_data(file_id)
+            if all_sentences:
+                try:
+                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
+                except re.error:
+                    word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
+                for sent_idx, sentence_data in enumerate(all_sentences):
+                    if "sentence" in sentence_data:
+                        if word_pattern.search(sentence_data["sentence"]):
+                            translation = ""
+                            if "translation_result" in sentence_data:
+                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                            context_sents.append({
+                                "sentence": sentence_data["sentence"],
+                                "translation": translation,
+                                "sentence_index": sent_idx
+                            })
+            if context_sents:
+                cached["context_sentences"] = context_sents
+                cached["context"] = context_sents[0]["sentence"]
+            storage.save_word_cache(file_id, word_to_gen, cached)
+            print(f"[CACHE] background_word_gen: 词汇缓存命中 {word_to_gen}")
+            continue
 
         existing_cache = storage.find_global_word_cache(word_to_gen, source_lang)
         if existing_cache:
-            if is_word_cache_incomplete(existing_cache):
-                print(f"[CACHE] background_word_gen: 全局单词缓存数据不完整，走 LLM 重新生成: {word_to_gen}")
-            else:
-                import copy
-                cached = copy.deepcopy(existing_cache)
-                context_sents = []
-                all_sentences = storage.load_pipeline_data(file_id)
-                if all_sentences:
-                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                    for sent_idx, sentence_data in enumerate(all_sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                context_sents.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
-                if context_sents:
-                    cached["context_sentences"] = context_sents
-                    cached["context"] = context_sents[0]["sentence"]
-                storage.save_word_cache(file_id, word_to_gen, cached)
-                continue
+            import copy
+            cached = copy.deepcopy(existing_cache)
+            context_sents = []
+            all_sentences = storage.load_pipeline_data(file_id)
+            if all_sentences:
+                word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
+                for sent_idx, sentence_data in enumerate(all_sentences):
+                    if "sentence" in sentence_data:
+                        if word_pattern.search(sentence_data["sentence"]):
+                            translation = ""
+                            if "translation_result" in sentence_data:
+                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
+                            context_sents.append({
+                                "sentence": sentence_data["sentence"],
+                                "translation": translation,
+                                "sentence_index": sent_idx
+                            })
+            if context_sents:
+                cached["context_sentences"] = context_sents
+                cached["context"] = context_sents[0]["sentence"]
+            storage.save_word_cache(file_id, word_to_gen, cached)
+            continue
 
         processing = state.get("processing_words", set())
         if word_to_gen.lower() in {w.lower() for w in processing}:

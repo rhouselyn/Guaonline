@@ -8,78 +8,10 @@ from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result, is_word_cache_incomplete
+from utils.helpers import fix_llm_options_result
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
-
-
-async def _regenerate_word_cache(file_id: str, word: str, source_lang: str, target_lang: str,
-                                  user_id: str, tier: str) -> dict:
-    """根据 file_id 的 vocab 和 pipeline 数据，重新生成单词缓存并保存。"""
-    vocab = storage.load_vocab(file_id)
-    if isinstance(vocab, dict) and "vocab" in vocab:
-        vocab = vocab["vocab"]
-    word_entry = None
-    for v in vocab:
-        if v.get("word", "").lower() == word.lower():
-            word_entry = v
-            break
-    if not word_entry:
-        return None
-
-    correct_meaning = word_entry.get("meaning", "")
-    if not correct_meaning:
-        if "translation" in word_entry:
-            correct_meaning = word_entry["translation"]
-        elif "context_meaning" in word_entry:
-            correct_meaning = word_entry["context_meaning"]
-
-    sentences = storage.load_pipeline_data(file_id)
-    context = ""
-    context_sentences = []
-    if sentences:
-        has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in word[:10])
-        if has_cjk:
-            word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-        else:
-            word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-        for sent_idx, sentence_data in enumerate(sentences):
-            if "sentence" in sentence_data:
-                if word_pattern.search(sentence_data["sentence"]):
-                    context = sentence_data["sentence"]
-                    translation = ""
-                    if "translation_result" in sentence_data:
-                        translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                    context_sentences.append({
-                        "sentence": sentence_data["sentence"],
-                        "translation": translation,
-                        "sentence_index": sent_idx
-                    })
-        if not context and sentences:
-            context = sentences[0].get("sentence", "")
-
-    options_result = await _gateway_generate_multiple_choice(
-        user_id, tier, word, correct_meaning, context, target_lang, source_lang, 0.7
-    )
-    options_result = fix_llm_options_result(options_result, source_lang, file_id)
-
-    cache_data = dict(options_result)
-    cache_data["word"] = options_result.get("word", word)
-    cache_data["ipa"] = word_entry.get("ipa", "")
-    cache_data["meaning"] = correct_meaning
-    cache_data["examples"] = options_result.get("examples", [])
-    cache_data["context"] = context
-    cache_data["context_sentences"] = context_sentences
-    cache_data["morphology"] = word_entry.get("morphology", "")
-    cache_data["variants_detail"] = options_result.get("variants_detail", [])
-    cache_data["memory_hint"] = options_result.get("memory_hint", "")
-    cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
-    cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
-    if "context_translations" in cache_data:
-        del cache_data["context_translations"]
-    storage.save_word_cache(file_id, word, cache_data, overwrite_index=True)
-    return cache_data
 
 
 @router.get("/vocab/{file_id}")
@@ -178,17 +110,6 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
         if cached_word:
             print(f"[DEBUG] 从缓存中获取单词信息: {word}")
             cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-
-            # 检查缓存是否完整，缺漏则重新生成
-            if is_word_cache_incomplete(cached_word):
-                print(f"[DEBUG] 缓存数据不完整，重新生成: {word}")
-                regenerated = await _regenerate_word_cache(
-                    file_id, word, source_lang, target_lang,
-                    current_user.user_id, current_user.tier.value
-                )
-                if regenerated:
-                    cached_word = regenerated
-
             mc = cached_word.get("multiple_choice", {})
             mc_options = []
             placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
@@ -520,22 +441,12 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
         records = storage.load_history(user_id=current_user.user_id)
         matching = [r for r in records if r.get("source_lang") == source_lang]
 
-        # 检查用户缓存是否完整，缺漏则重新生成
         for record in matching:
             file_id = record.get("file_id")
             if not file_id:
                 continue
             cached = storage.load_word_cache(file_id, word)
             if cached:
-                cached = fix_llm_options_result(cached, source_lang, file_id)
-                if is_word_cache_incomplete(cached):
-                    print(f"[DEBUG] 用户缓存数据不完整，重新生成: {word}")
-                    regenerated = await _regenerate_word_cache(
-                        file_id, word, source_lang, target_lang,
-                        current_user.user_id, current_user.tier.value
-                    )
-                    if regenerated:
-                        cached = regenerated
                 return {
                     "word": cached.get("word", word),
                     "ipa": cached.get("ipa", ""),
@@ -550,17 +461,6 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
         # 2. 个人缓存未命中，查全局缓存
         global_cached = storage.find_global_word_cache(word, source_lang)
         if global_cached:
-            # 全局缓存不完整时，尝试用用户第一个匹配文件重新生成并更新
-            if is_word_cache_incomplete(global_cached):
-                print(f"[DEBUG] 全局缓存数据不完整，重新生成: {word}")
-                save_file_id = matching[0].get("file_id") if matching else None
-                if save_file_id:
-                    regenerated = await _regenerate_word_cache(
-                        save_file_id, word, source_lang, target_lang,
-                        current_user.user_id, current_user.tier.value
-                    )
-                    if regenerated:
-                        global_cached = regenerated
             return {
                 "word": global_cached.get("word", word),
                 "ipa": global_cached.get("ipa", ""),

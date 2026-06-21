@@ -9,42 +9,6 @@ import unicodedata
 from text_processor import is_punctuation_only, strip_edge_punctuation, is_source_lang_text, NO_SPACE_LANGUAGES
 
 
-def is_word_cache_incomplete(cached: dict) -> bool:
-    """判断单词缓存是否缺漏关键字段，需要重新生成。"""
-    if not isinstance(cached, dict):
-        return True
-
-    required_fields = ["enriched_meaning", "examples", "memory_hint", "variants_detail", "multiple_choice"]
-    for field in required_fields:
-        if field not in cached or not cached[field]:
-            return True
-
-    # examples 必须至少 2 条且都有 sentence 和 translation
-    examples = cached.get("examples", [])
-    if not isinstance(examples, list) or len(examples) < 2:
-        return True
-    for ex in examples:
-        if not isinstance(ex, dict):
-            return True
-        if not isinstance(ex.get("sentence"), str) or not ex.get("sentence").strip():
-            return True
-        if not isinstance(ex.get("translation"), str) or not ex.get("translation").strip():
-            return True
-
-    # multiple_choice 必须有至少 2 个有效选项
-    mc = cached.get("multiple_choice", {})
-    if not isinstance(mc, dict):
-        return True
-    options = mc.get("options", [])
-    if not isinstance(options, list) or len(options) < 2:
-        return True
-    valid_options = [o for o in options if isinstance(o, dict) and isinstance(o.get("text"), str) and o["text"].strip()]
-    if len(valid_options) < 2:
-        return True
-
-    return False
-
-
 class RateLimiter:
     def __init__(self, rpm=None, interval=None):
         if interval is not None:

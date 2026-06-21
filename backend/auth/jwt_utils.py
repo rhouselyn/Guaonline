@@ -8,7 +8,7 @@ from auth.models import UserTier, TokenData, AdminTokenData
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_DAYS = 2
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 def create_access_token(user_id: str, tier: UserTier) -> str:
