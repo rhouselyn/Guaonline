@@ -43,7 +43,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await gateway.call(user_id, tier, messages, temperature=0.3, max_tokens=16384, request_type="translate")
+            response = await gateway.call(user_id, tier, messages, temperature=0.3, max_tokens=4096, request_type="translate")
             if "choices" in response and len(response["choices"]) > 0:
                 translated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if translated:
@@ -64,7 +64,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 },
                 {"role": "user", "content": text}
             ]
-            response = await gateway.call(user_id, tier, messages, temperature=0.7, max_tokens=16384, request_type="generate")
+            response = await gateway.call(user_id, tier, messages, temperature=0.7, max_tokens=4096, request_type="generate")
             if "choices" in response and len(response["choices"]) > 0:
                 generated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if generated:
@@ -308,7 +308,7 @@ async def translate_text(request: dict, current_user: TokenData = Depends(requir
                 "content": text
             }
         ]
-        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.3, max_tokens=16384, request_type="translate")
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.3, max_tokens=4096, request_type="translate")
 
         translated_text = ""
         if "choices" in response and len(response["choices"]) > 0:
@@ -347,7 +347,7 @@ async def generate_text(request: dict, current_user: TokenData = Depends(require
                 "content": prompt
             }
         ]
-        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.7, max_tokens=16384, request_type="generate")
+        response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.7, max_tokens=4096, request_type="generate")
 
         generated_text = ""
         if "choices" in response and len(response["choices"]) > 0:
