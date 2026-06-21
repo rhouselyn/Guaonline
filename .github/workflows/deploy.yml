@@ -1,0 +1,37 @@
+# ============================================================
+# Gualingo Windows Server 自动部署工作流
+#
+# 触发条件：向 main 分支推送代码
+# 运行环境：self-hosted runner（你的 Windows 服务器）
+#
+# 工作流程：
+#   GitHub 收到 push → 通知服务器上的 Runner → 执行 deploy.ps1
+#   deploy.ps1 自动完成：git pull → 构建前端 → 部署 → 平滑重启
+#
+# 前置条件：
+#   1. 已在 Windows 服务器上安装并注册 self-hosted runner
+#   2. 项目已 clone 到 C:\gualingo
+#   3. 已安装 Git、Node.js、Python、Nginx、PM2
+# ============================================================
+
+name: Windows Server Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: 执行部署脚本
+        shell: pwsh
+        run: |
+          & C:\gualingo\deploy\deploy.ps1
+
+      - name: 部署失败通知
+        if: failure()
+        run: |
+          echo "::error::部署失败，请登录服务器检查 pm2 logs 和 Nginx 状态"
