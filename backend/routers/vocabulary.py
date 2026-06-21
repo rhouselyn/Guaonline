@@ -8,46 +8,10 @@ from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result
+from utils.helpers import fix_llm_options_result, is_word_cache_incomplete
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
-
-
-def is_word_cache_incomplete(cached: dict) -> bool:
-    """判断单词缓存是否缺漏关键字段，需要重新生成。"""
-    if not isinstance(cached, dict):
-        return True
-
-    required_fields = ["enriched_meaning", "examples", "memory_hint", "variants_detail", "multiple_choice"]
-    for field in required_fields:
-        if field not in cached or not cached[field]:
-            return True
-
-    # examples 必须至少 2 条且都有 sentence 和 translation
-    examples = cached.get("examples", [])
-    if not isinstance(examples, list) or len(examples) < 2:
-        return True
-    for ex in examples:
-        if not isinstance(ex, dict):
-            return True
-        if not isinstance(ex.get("sentence"), str) or not ex.get("sentence").strip():
-            return True
-        if not isinstance(ex.get("translation"), str) or not ex.get("translation").strip():
-            return True
-
-    # multiple_choice 必须有至少 2 个有效选项
-    mc = cached.get("multiple_choice", {})
-    if not isinstance(mc, dict):
-        return True
-    options = mc.get("options", [])
-    if not isinstance(options, list) or len(options) < 2:
-        return True
-    valid_options = [o for o in options if isinstance(o, dict) and isinstance(o.get("text"), str) and o["text"].strip()]
-    if len(valid_options) < 2:
-        return True
-
-    return False
 
 
 async def _regenerate_word_cache(file_id: str, word: str, source_lang: str, target_lang: str,
