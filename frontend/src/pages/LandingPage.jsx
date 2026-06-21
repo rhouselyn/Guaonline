@@ -634,13 +634,20 @@ export default function LandingPage() {
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors">GitHub</a>
             {/* 小红书 */}
-            <button className="hover:text-[#3d3929] transition-colors" title="小红书（即将开通）">
+            <a href="https://www.xiaohongshu.com" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="小红书">
               <img src="https://cdn.simpleicons.org/xiaohongshu/8b7e5e" alt="小红书" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
-            </button>
+            </a>
             {/* 微信 */}
-            <button className="hover:text-[#3d3929] transition-colors" title="微信（即将开通）">
+            <a href="https://weixin.qq.com" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="微信">
               <img src="https://cdn.simpleicons.org/wechat/8b7e5e" alt="微信" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
-            </button>
+            </a>
+            {/* QQ */}
+            <a href="https://im.qq.com" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="QQ">
+              <img src="https://cdn.simpleicons.org/tencentqq/8b7e5e" alt="QQ" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
+            </a>
           </div>
         </div>
       </footer>
