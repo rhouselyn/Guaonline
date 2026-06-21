@@ -116,7 +116,7 @@ async def _do_translate_ui(lang_code: str, db_storage):
     try:
         result = await gateway.call(
             user_id="system", tier="free", messages=messages,
-            temperature=0, max_tokens=4096, request_type="ui_translation"
+            temperature=0, request_type="ui_translation"
         )
 
         if result and result.get("choices"):
