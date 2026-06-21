@@ -13,12 +13,13 @@ from utils.state import storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title
 from auth.deps import get_current_user, require_auth, TokenData
 from auth.quota import check_and_refill_quota, consume_quota
+from utils.state import text_processor
 from vocab import global_vocab, user_vocab
 
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free"):
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free", consumed_quota: int = 0):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
         # 直接输入模式：原文就是用户输入的文本，立即保存
@@ -113,12 +114,12 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 7. 写入词汇缓存（从处理结果中提取）
         try:
-            file_data = storage.load_pipeline_data(file_id)
-            if file_data and "dictionary" in file_data:
-                words = file_data["dictionary"]
-                if isinstance(words, list):
-                    user_vocab.batch_upsert(user_id, words, source_lang, target_lang)
-                    global_vocab.batch_upsert(words, source_lang, target_lang)
+            vocab_list = storage.load_vocab(file_id)
+            if vocab_list:
+                if isinstance(vocab_list, dict) and "vocab" in vocab_list:
+                    vocab_list = vocab_list["vocab"]
+                user_vocab.batch_upsert(user_id, vocab_list, source_lang, target_lang)
+                global_vocab.batch_upsert(vocab_list, source_lang, target_lang)
         except Exception as e:
             print(f"[WARN] 词汇缓存写入失败: {e}")
     except Exception as e:
@@ -139,6 +140,17 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             "status": "error",
             "error": error_msg
         }
+        # 处理失败：删除历史记录，退还额度
+        try:
+            storage.delete_history_record(file_id)
+        except Exception:
+            pass
+        if consumed_quota > 0 and user_id:
+            try:
+                from auth.quota import refund_quota
+                refund_quota(user_id, consumed_quota)
+            except Exception:
+                pass
 
 
 # 每用户每分钟最高请求数
@@ -180,11 +192,13 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         file_id = f"text_{now.strftime('%Y%m%d_%H%M%S_%f')[:-3]}"
 
         # 预估句子数并检查额度
+        consumed_quota = 0
         from auth.quota import check_and_refill_quota
         quota_info = check_and_refill_quota(current_user.user_id)
         if quota_info["max"] != -1:  # 非无限额度
-            # 估算句子数
-            sentence_count = max(1, len(re.split(r'[。！？.!?]+', text.strip())))
+            # 使用与实际处理相同的分句逻辑估算句子数
+            estimated_sentences = text_processor.split_sentences(text.strip())
+            sentence_count = max(1, len(estimated_sentences))
             sentence_count = min(sentence_count, 50)
             if quota_info["available"] < sentence_count:
                 # 获取用户界面语言对应的翻译
@@ -210,6 +224,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
             # 额度足够，立即扣减
             from auth.quota import consume_quota
             consume_quota(current_user.user_id, sentence_count)
+            consumed_quota = sentence_count
 
         # 立即设置初始状态
         preprocess_label = ""
@@ -237,7 +252,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         storage.add_history_record(file_id, "", source_lang, target_lang, text_preview, user_id=current_user.user_id)
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value, consumed_quota)
 
         return {
             "file_id": file_id,

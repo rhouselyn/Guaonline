@@ -730,7 +730,7 @@ async def get_top_cost_users(
                COUNT(*) as request_count,
                SUM(cost_usd) as cost
         FROM token_usage
-        WHERE {date_filter} AND user_id != 'system'
+        WHERE {date_filter} AND user_id != 'system' AND (request_type IS NULL OR request_type != 'admin_vocab_refresh')
         GROUP BY user_id
         ORDER BY cost DESC
         LIMIT ? OFFSET ?

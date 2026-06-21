@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
+import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle, Volume2 } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
+import { setTtsEngine, getTtsEngine } from '../utils/speech'
 
 function NativeLangSelector({ value, onChange, recentLangs = [] }) {
   const [open, setOpen] = useState(false)
@@ -143,6 +144,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   // Learning options state
   const [skipListening, setSkipListening] = useState(false)
   const [onlyNewWords, setOnlyNewWords] = useState(false)
+  const [ttsEngine, setLocalTtsEngine] = useState(getTtsEngine())
 
   useEffect(() => {
     if (isOpen) {
@@ -150,12 +152,17 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
       setSaved(false)
       setSaveError('')
       setActiveSection('general')
+      setLocalTtsEngine(getTtsEngine())
       api.getUserPreferences().catch(() => ({})).then(prefs => {
         if (prefs.ui_lang) setLocalUiLang(prefs.ui_lang)
         else if (prefs.target_lang) setLocalUiLang(prefs.target_lang)
         if (prefs.page_size) setLocalPageSize(prefs.page_size)
         if (prefs.skip_listening !== undefined) setSkipListening(prefs.skip_listening)
         if (prefs.only_new_words !== undefined) setOnlyNewWords(prefs.only_new_words)
+        if (prefs.tts_engine) {
+          setLocalTtsEngine(prefs.tts_engine)
+          setTtsEngine(prefs.tts_engine)
+        }
         setLoading(false)
       }).catch(() => {
         setLoading(false)
@@ -176,6 +183,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         recent_languages: updatedRecentLangs,
         skip_listening: skipListening,
         only_new_words: onlyNewWords,
+        tts_engine: ttsEngine,
       })
 
       if (onRecentLangsChange) {
@@ -217,6 +225,42 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
   const renderGeneralSection = () => (
     <div className="space-y-5">
+      {/* TTS Engine */}
+      <div>
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Volume2 className="w-3 h-3" />
+          {t.ttsEngine || '发音引擎'}
+        </label>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setLocalTtsEngine('edge'); setTtsEngine('edge') }}
+              className={`flex-1 px-3 py-2 rounded-sm border-2 text-xs font-medium transition-colors text-left ${
+                ttsEngine === 'edge'
+                  ? 'border-amber-400 bg-amber-50/80 text-amber-600'
+                  : 'border-aged-200 bg-parchment-50 text-ink-500 hover:bg-parchment-100'
+              }`}
+            >
+              <div className="font-bold">Edge TTS</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">{t.ttsEdgeDesc || '效果好，需联网'}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLocalTtsEngine('webspeech'); setTtsEngine('webspeech') }}
+              className={`flex-1 px-3 py-2 rounded-sm border-2 text-xs font-medium transition-colors text-left ${
+                ttsEngine === 'webspeech'
+                  ? 'border-amber-400 bg-amber-50/80 text-amber-600'
+                  : 'border-aged-200 bg-parchment-50 text-ink-500 hover:bg-parchment-100'
+              }`}
+            >
+              <div className="font-bold">Web Speech API</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">{t.ttsWebSpeechDesc || '实时发音，取决于设备'}</div>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Items Per Page */}
       <div>
         <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
