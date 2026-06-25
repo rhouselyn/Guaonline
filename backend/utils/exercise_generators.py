@@ -19,6 +19,7 @@ from utils.helpers import (
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
     MAX_SENTENCE_WORDS_FOR_QUIZ, ZH_FUNCTION_WORDS, is_word_cache_complete,
+    collect_context_sentences,
 )
 
 
@@ -715,28 +716,10 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 if not word_entry:
                     return
                 sentences = storage.load_pipeline_data(file_id)
-                context = ""
-                context_sentences = []
-                if sentences:
-                    has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in word_to_gen[:10])
-                    if has_cjk:
-                        word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
-                    else:
-                        word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                    for sent_idx, sentence_data in enumerate(sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                context = sentence_data["sentence"]
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                context_sentences.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
-                    if not context and sentences:
-                        context = sentences[0].get("sentence", "")
+                context_sentences = collect_context_sentences(word_to_gen, sentences)
+                context = context_sentences[0]["sentence"] if context_sentences else (
+                    sentences[0].get("sentence", "") if sentences else ""
+                )
                 correct_meaning = word_entry.get("meaning", "")
                 if not correct_meaning:
                     if "translation" in word_entry:
@@ -924,59 +907,18 @@ async def background_word_gen(file_id: str):
             vocab_hit = user_vocab.lookup(uid, word_to_gen, source_lang, target_lang)
         if not vocab_hit:
             vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
+        if not vocab_hit:
+            vocab_hit = storage.find_global_word_cache(word_to_gen, source_lang)
 
         if vocab_hit:
             import copy
             cached = copy.deepcopy(vocab_hit)
-            # 补充 context_sentences
-            context_sents = []
-            all_sentences = storage.load_pipeline_data(file_id)
-            if all_sentences:
-                try:
-                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                except re.error:
-                    word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
-                for sent_idx, sentence_data in enumerate(all_sentences):
-                    if "sentence" in sentence_data:
-                        if word_pattern.search(sentence_data["sentence"]):
-                            translation = ""
-                            if "translation_result" in sentence_data:
-                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                            context_sents.append({
-                                "sentence": sentence_data["sentence"],
-                                "translation": translation,
-                                "sentence_index": sent_idx
-                            })
+            context_sents = collect_context_sentences(word_to_gen, storage.load_pipeline_data(file_id))
             if context_sents:
                 cached["context_sentences"] = context_sents
                 cached["context"] = context_sents[0]["sentence"]
             storage.save_word_cache(file_id, word_to_gen, cached)
             print(f"[CACHE] background_word_gen: 词汇缓存命中 {word_to_gen}")
-            continue
-
-        existing_cache = storage.find_global_word_cache(word_to_gen, source_lang)
-        if existing_cache:
-            import copy
-            cached = copy.deepcopy(existing_cache)
-            context_sents = []
-            all_sentences = storage.load_pipeline_data(file_id)
-            if all_sentences:
-                word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                for sent_idx, sentence_data in enumerate(all_sentences):
-                    if "sentence" in sentence_data:
-                        if word_pattern.search(sentence_data["sentence"]):
-                            translation = ""
-                            if "translation_result" in sentence_data:
-                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                            context_sents.append({
-                                "sentence": sentence_data["sentence"],
-                                "translation": translation,
-                                "sentence_index": sent_idx
-                            })
-            if context_sents:
-                cached["context_sentences"] = context_sents
-                cached["context"] = context_sents[0]["sentence"]
-            storage.save_word_cache(file_id, word_to_gen, cached)
             continue
 
         processing = state.get("processing_words", set())
@@ -1275,14 +1217,6 @@ async def generate_title(text: str, source_lang: str, user_id: str = None, tier:
 
 async def pre_generate_next_word(file_id: str, vocab, next_index: int):
     try:
-        language_settings = storage.load_language_settings(file_id)
-        target_lang = language_settings["target_lang"]
-        source_lang = language_settings.get("source_lang", "en")
-
-        state = word_gen_state.get(file_id, {})
-        uid = state.get("user_id")
-        tier = state.get("tier", "free")
-
         plan = storage.load_learning_plan(file_id)
         if not plan:
             return
@@ -1296,74 +1230,26 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
             return
 
         next_item = items[step_in_unit]
-        if next_item["type"] == "sentence_quiz":
+        # ponytail: sentence_quiz 没有 vocab_index，listening_quiz 也不预热单词详情
+        if next_item.get("type") != "word":
             return
 
-        vocab_idx = next_item["vocab_index"]
-        random_word = vocab[vocab_idx]
-        word = random_word["word"]
+        word = vocab[next_item["vocab_index"]]["word"]
 
-        if storage.load_word_cache(file_id, word):
+        # 命中且完整则跳过；不完整也交给 process_single_word_gen 重生成（统一完整性校验）
+        if is_word_cache_complete(storage.load_word_cache(file_id, word)):
             print(f"[DEBUG] 预生成单词已缓存: {word}")
             return
 
-        sentences = storage.load_pipeline_data(file_id)
-        context = ""
-        context_sentences = []
-        if sentences:
-            word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-            for sent_idx, sentence_data in enumerate(sentences):
-                if "sentence" in sentence_data:
-                    if word_pattern.search(sentence_data["sentence"]):
-                        context = sentence_data["sentence"]
-                        translation = ""
-                        if "translation_result" in sentence_data:
-                            translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                        context_sentences.append({
-                            "sentence": sentence_data["sentence"],
-                            "translation": translation,
-                            "sentence_index": sent_idx
-                        })
-            if not context and sentences:
-                context = sentences[0].get("sentence", "")
-
-        correct_meaning = random_word.get("meaning", "")
-
-        if not correct_meaning:
-            if "context_meaning" in random_word:
-                correct_meaning = random_word["context_meaning"]
-            elif "translation" in random_word:
-                correct_meaning = random_word["translation"]
-
+        language_settings = storage.load_language_settings(file_id)
+        state = word_gen_state.get(file_id, {})
         print(f"[DEBUG] 后台预生成单词信息: {word}")
-
-        options_result = await _gateway_generate_multiple_choice(
-            uid, tier, word,
-            correct_meaning,
-            context,
-            target_lang,
-            source_lang,
-            0
+        await process_single_word_gen(
+            file_id, word, vocab,
+            language_settings.get("source_lang", "en"),
+            language_settings["target_lang"],
+            user_id=state.get("user_id"),
+            tier=state.get("tier", "free"),
         )
-        options_result = fix_llm_options_result(options_result, source_lang, file_id)
-
-        cache_data = dict(options_result)
-        cache_data["word"] = options_result.get("word", word)
-        cache_data["ipa"] = random_word.get("ipa", "")
-        cache_data["meaning"] = correct_meaning
-        cache_data["examples"] = options_result.get("examples", [])
-        cache_data["context"] = context
-        cache_data["context_sentences"] = context_sentences
-        cache_data["morphology"] = random_word.get("morphology", "")
-        cache_data["variants_detail"] = options_result.get("variants_detail", [])
-        cache_data["memory_hint"] = options_result.get("memory_hint", "")
-        cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
-        cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
-        if "context_translations" in cache_data:
-            del cache_data["context_translations"]
-
-        storage.save_word_cache(file_id, word, cache_data)
-        print(f"[DEBUG] 缓存预生成单词信息: {word}")
-
     except Exception as e:
         print(f"[ERROR] 预生成单词信息失败: {str(e)}")
