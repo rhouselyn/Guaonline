@@ -215,17 +215,16 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
-                            "options": {
+                            "correct_option": {"type": "string", "description": "单词的正确释义（必须是该单词真实存在的意思）"},
+                            "distractors": {
                                 "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "text": {"type": "string", "description": "A concrete, meaningful translation or definition. MUST NOT be a placeholder like 'meaning 1', '释义1', '含义1', etc."},
-                                        "is_correct": {"type": "boolean"},
-                                    },
-                                },
+                                "items": {"type": "string"},
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "description": "3 个错误释义（该单词所没有的意思，用作干扰项）。不要标记哪个是对错，系统会自动把 correct_option 设为正确答案",
                             },
                         },
+                        "required": ["correct_option", "distractors"],
                     },
                 },
                 "required": ["word", "enriched_meaning", "variants_detail", "examples", "memory_hint", "multiple_choice"],
@@ -251,7 +250,9 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户的母语）。绝不能反过来用母语写例句再用学习语言翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
 4. memory_hint: 记忆辅助（与用户母语的联想或对比）
 5. multiple_choice: 选择题，包含：
-   - options: 4个选项，【极其重要】第一个选项必须是正确答案，其余3个是错误答案
+   - correct_option: 1 个正确释义（单词的真实释义）
+   - distractors: 3 个错误释义（单词所没有的意思，用作干扰项）
+   【极其重要】只需分别给出 1 个正确释义和 3 个错误释义，不要自行标记哪个是对错，系统会自动把 correct_option 设为正确答案
 
 要求：
 - 所有输出必须使用 {target_lang_name}

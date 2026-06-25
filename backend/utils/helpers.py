@@ -261,6 +261,13 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
     if not isinstance(result, dict):
         return result
     mc = result.get("multiple_choice")
+    # 新格式：correct_option + distractors → 转 options（系统赋 is_correct，不依赖模型判断对错）
+    if isinstance(mc, dict) and ("correct_option" in mc or "distractors" in mc):
+        correct_text = str(mc.get("correct_option") or result.get("enriched_meaning", result.get("meaning", "")))
+        distractors = [str(d) for d in mc.get("distractors", []) if d]
+        mc["options"] = [{"text": correct_text, "is_correct": True}] + [{"text": d, "is_correct": False} for d in distractors]
+        mc.pop("correct_option", None)
+        mc.pop("distractors", None)
     if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
         raw_options = mc["options"]
         correct_text = result.get("enriched_meaning", result.get("meaning", ""))
