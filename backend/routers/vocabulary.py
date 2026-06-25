@@ -1,14 +1,12 @@
 """词汇相关路由：vocab/*, word/*, word-detail/*, word-list"""
 
-import re
-
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result, is_word_cache_complete
+from utils.helpers import fix_llm_options_result, is_word_cache_complete, extract_mc_options, build_context_sentences
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
@@ -83,24 +81,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 import copy
                 cached_word = copy.deepcopy(global_cached)
                 # 补充当前文件的 context_sentences
-                context_sents = []
-                sentences = storage.load_pipeline_data(file_id)
-                if sentences:
-                    try:
-                        word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-                    except re.error:
-                        word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-                    for sent_idx, sentence_data in enumerate(sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                context_sents.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
+                context_sents = build_context_sentences(storage.load_pipeline_data(file_id), word)
                 if context_sents:
                     cached_word["context_sentences"] = context_sents
                     cached_word["context"] = context_sents[0]["sentence"]
@@ -116,51 +97,20 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
             else:
                 print(f"[DEBUG] 从缓存中获取单词信息: {word}")
                 cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-                mc = cached_word.get("multiple_choice", {})
-                mc_options = []
-                placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
-                if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and isinstance(o.get("text"), str) and not placeholder_check.match(o["text"].strip())]
-
-                if "options" not in cached_word and mc_options:
-                    options = []
-                    correct_index = 0
-                    for i, opt in enumerate(mc_options):
-                        options.append(opt["text"])
-                        if opt.get("is_correct"):
-                            correct_index = i
-                    cached_word["options"] = options
-                    cached_word["correct_index"] = correct_index
+                if "options" not in cached_word:
+                    options, correct_index = extract_mc_options(cached_word)
+                    if options:
+                        cached_word["options"] = options
+                        cached_word["correct_index"] = correct_index
 
                 context_sents = cached_word.get("context_sentences", [])
-                needs_rebuild = False
-                for cs in context_sents:
-                    if isinstance(cs, dict) and "sentence_index" not in cs:
-                        needs_rebuild = True
-                        break
-                    if isinstance(cs, str):
-                        needs_rebuild = True
-                        break
-
+                needs_rebuild = any(
+                    isinstance(cs, str) or (isinstance(cs, dict) and "sentence_index" not in cs)
+                    for cs in context_sents
+                )
                 if needs_rebuild or not context_sents:
-                    sentences = storage.load_pipeline_data(file_id)
-                    if sentences:
-                        try:
-                            word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-                        except re.error:
-                            word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-                        rebuilt = []
-                        for sent_idx, sentence_data in enumerate(sentences):
-                            if "sentence" in sentence_data:
-                                if word_pattern.search(sentence_data["sentence"]):
-                                    translation = ""
-                                    if "translation_result" in sentence_data:
-                                        translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                    rebuilt.append({
-                                        "sentence": sentence_data["sentence"],
-                                        "translation": translation,
-                                        "sentence_index": sent_idx
-                                    })
+                    rebuilt = build_context_sentences(storage.load_pipeline_data(file_id), word)
+                    if rebuilt:
                         cached_word["context_sentences"] = rebuilt
                         storage.save_word_cache(file_id, word, cached_word)
 
@@ -207,18 +157,8 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
             cached_word = storage.load_word_cache(file_id, word)
             if cached_word:
                 cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-                mc = cached_word.get("multiple_choice", {})
-                mc_options = []
-                placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
-                if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
-                if mc_options:
-                    options = []
-                    correct_index = 0
-                    for i, opt in enumerate(mc_options):
-                        options.append(opt["text"])
-                        if opt.get("is_correct"):
-                            correct_index = i
+                options, correct_index = extract_mc_options(cached_word)
+                if options:
                     cached_word["options"] = options
                     cached_word["correct_index"] = correct_index
                     return cached_word
@@ -248,28 +188,13 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
             for _ in range(60):
                 await asyncio.sleep(1)
                 cached_word = storage.load_word_cache(file_id, word)
-                if cached_word:
-                    mc = cached_word.get("multiple_choice", {})
-                    mc_options = []
-                    if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                        mc_options = [o for o in mc["options"] if isinstance(o, dict) and isinstance(o.get("text"), str)]
-                    if mc_options:
-                        break
+                if cached_word and is_word_cache_complete(cached_word):
+                    break
 
-            if cached_word:
+            if cached_word and is_word_cache_complete(cached_word):
                 cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-                mc = cached_word.get("multiple_choice", {})
-                mc_options = []
-                placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
-                if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-                    mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
-                if mc_options:
-                    options = []
-                    correct_index = 0
-                    for i, opt in enumerate(mc_options):
-                        options.append(opt["text"])
-                        if opt.get("is_correct"):
-                            correct_index = i
+                options, correct_index = extract_mc_options(cached_word)
+                if options:
                     cached_word["options"] = options
                     cached_word["correct_index"] = correct_index
                     return cached_word
@@ -357,28 +282,8 @@ async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: 
 
         # Load pipeline data to find context sentences
         sentences = storage.load_pipeline_data(file_id)
-        context = ""
-        context_sentences = []
-        if sentences:
-            has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in word[:10])
-            if has_cjk:
-                word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-            else:
-                word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-            for sent_idx, sentence_data in enumerate(sentences):
-                if "sentence" in sentence_data:
-                    if word_pattern.search(sentence_data["sentence"]):
-                        context = sentence_data["sentence"]
-                        translation = ""
-                        if "translation_result" in sentence_data:
-                            translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                        context_sentences.append({
-                            "sentence": sentence_data["sentence"],
-                            "translation": translation,
-                            "sentence_index": sent_idx
-                        })
-            if not context and sentences:
-                context = sentences[0].get("sentence", "")
+        context_sentences = build_context_sentences(sentences, word)
+        context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
 
         correct_meaning = word_entry.get("meaning", "")
         if not correct_meaning:
@@ -417,19 +322,7 @@ async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: 
         storage.save_word_cache(file_id, word, cache_data, overwrite_index=True)
 
         # Compute options and correct_index from multiple_choice
-        mc = options_result.get("multiple_choice", {})
-        mc_options = []
-        placeholder_check = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
-        if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
-            mc_options = [o for o in mc["options"] if isinstance(o, dict) and "text" in o and not placeholder_check.match(o["text"].strip())]
-
-        options = []
-        correct_index = 0
-        for i, opt in enumerate(mc_options):
-            options.append(opt["text"])
-            if opt.get("is_correct"):
-                correct_index = i
-
+        options, correct_index = extract_mc_options(options_result)
         cache_data["options"] = options
         cache_data["correct_index"] = correct_index
         return cache_data

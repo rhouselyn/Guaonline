@@ -160,6 +160,64 @@ def is_word_cache_complete(cached: dict) -> bool:
     return True
 
 
+# ponytail: 占位符选项过滤 ceiling——仅覆盖已知的 LLM 占位符前缀（释义/含义/meaning/sense/definition + 数字），
+# 新增占位符模式需在此扩展正则。
+_MC_PLACEHOLDER = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
+
+
+def extract_mc_options(cached, filter_placeholders=True):
+    """从 cached['multiple_choice'] 提取 (options 文本列表, correct_index)。
+    filter_placeholders=True 时过滤 LLM 占位符选项。"""
+    mc = cached.get("multiple_choice") if isinstance(cached, dict) else None
+    if not isinstance(mc, dict):
+        return [], 0
+    raw = mc.get("options")
+    if not isinstance(raw, list):
+        return [], 0
+    options, correct_index = [], 0
+    for opt in raw:
+        if not isinstance(opt, dict):
+            continue
+        text = opt.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        if filter_placeholders and _MC_PLACEHOLDER.match(text.strip()):
+            continue
+        options.append(text)
+        if opt.get("is_correct"):
+            correct_index = len(options) - 1
+    return options, correct_index
+
+
+def build_context_sentences(sentences, word):
+    """从 sentences 中提取包含 word 的上下文句子列表。
+    CJK 词汇用裸匹配，其它用 \\b 边界；re.error 时回退到裸匹配。"""
+    if not sentences:
+        return []
+    has_cjk = any(
+        '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f'
+        or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af'
+        for c in word[:10]
+    )
+    try:
+        pat = re.compile(
+            re.escape(word) if has_cjk else r'\b' + re.escape(word) + r'\b',
+            re.IGNORECASE,
+        )
+    except re.error:
+        pat = re.compile(re.escape(word), re.IGNORECASE)
+    result = []
+    for sent_idx, sd in enumerate(sentences):
+        if "sentence" in sd and pat.search(sd["sentence"]):
+            tr = sd["translation_result"].get("tokenized_translation", "") if "translation_result" in sd else ""
+            result.append({
+                "sentence": sd["sentence"],
+                "translation": tr,
+                "sentence_index": sent_idx,
+            })
+    return result
+
+
 def select_key_tokens(seg_words, max_tokens=10):
     content_words = []
     function_words = []
@@ -203,6 +261,13 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
     if not isinstance(result, dict):
         return result
     mc = result.get("multiple_choice")
+    # 新格式：correct_option + distractors → 转 options（系统赋 is_correct，不依赖模型判断对错）
+    if isinstance(mc, dict) and ("correct_option" in mc or "distractors" in mc):
+        correct_text = str(mc.get("correct_option") or result.get("enriched_meaning", result.get("meaning", "")))
+        distractors = [str(d) for d in mc.get("distractors", []) if d]
+        mc["options"] = [{"text": correct_text, "is_correct": True}] + [{"text": d, "is_correct": False} for d in distractors]
+        mc.pop("correct_option", None)
+        mc.pop("distractors", None)
     if isinstance(mc, dict) and "options" in mc and isinstance(mc["options"], list):
         raw_options = mc["options"]
         correct_text = result.get("enriched_meaning", result.get("meaning", ""))
