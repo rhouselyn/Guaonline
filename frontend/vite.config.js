@@ -15,4 +15,16 @@ export default defineConfig({
       }
     }
   },
+  // ponytail: 分离重依赖到独立 chunk，浏览器并行加载 + 长缓存（依赖不变时不重新下载）
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'framer-motion': ['framer-motion'],
+          'lucide': ['lucide-react'],
+        },
+      },
+    },
+  },
 })
