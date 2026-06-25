@@ -168,14 +168,39 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" rel="stylesheet" />
+    <style>
+      /* ponytail: FOUC 消除——首屏 loading 层盖住预渲染骨架（纯文本），React 挂载后 #root 整体被替换，loading 与骨架一起消失。
+         视觉与落地页首屏一致（#faf8f0 背景 + 居中 logo + CSS spinner），无纯文本闪烁。 */
+      #root > .app-bootstrap {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #faf8f0; color: #8b7e5e;
+        font-family: system-ui, 'Noto Serif SC', Georgia, serif;
+      }
+      #root > .app-bootstrap img { width: 72px; height: 72px; margin-bottom: 20px; opacity: 0.92; }
+      #root > .app-bootstrap .bs-spinner {
+        width: 32px; height: 32px; border: 3px solid #d4c9a8; border-top-color: #d4a853;
+        border-radius: 50%; animation: bs-spin 0.8s linear infinite;
+      }
+      #root > .app-bootstrap .bs-hint { margin-top: 16px; font-size: 13px; letter-spacing: 0.04em; }
+      @keyframes bs-spin { to { transform: rotate(360deg); } }
+      /* 预渲染骨架对视觉用户隐藏（仍在 DOM 中供爬虫读取），避免 React 挂载前的纯文本闪烁 */
+      #root > .seo-prerender { position: absolute; left: -9999px; top: 0; visibility: hidden; }
+    </style>
   </head>
   <body>
     <!--
       预渲染骨架：爬虫在 JS 执行前即可拿到完整内容（H1、文案、内链、定价）。
-      React 通过 createRoot().render() 挂载时会替换此内容并运行动画，用户无感。
-      保留此静态内容仅服务于不执行 JS 的爬虫（如百度）与禁用 JS 的浏览器。
+      React 通过 createRoot().render() 挂载时会替换 #root 全部内容并运行动画。
+      骨架对视觉用户用 CSS 移出视口隐藏（仍在 DOM 供爬虫读取），首屏 loading 层盖住。
     -->
-    <div id="root"><div style="font-family:system-ui,'Noto Serif SC',Georgia,serif;color:#3d3929;background:#faf8f0;min-height:100vh;">
+    <div id="root">
+      <div class="app-bootstrap" aria-hidden="true">
+        <img src="/gualingo.png" alt="" />
+        <div class="bs-spinner"></div>
+        <div class="bs-hint">呱邻国加载中…</div>
+      </div>
+      <div class="seo-prerender" aria-hidden="true"><div style="font-family:system-ui,'Noto Serif SC',Georgia,serif;color:#3d3929;background:#faf8f0;min-height:100vh;">
       <header style="padding:16px 24px;display:flex;align-items:center;gap:10px;">
         <span style="font-weight:700;font-size:18px;">呱邻国 Gualingo</span>
         <nav style="margin-left:auto;display:flex;gap:16px;font-size:14px;">
@@ -236,6 +261,7 @@
         </span>
       </footer>
     </div></div>
+    </div>
     <noscript>
       <p style="text-align:center;padding:16px;color:#8b7e5e;">本页面的完整交互体验需要 JavaScript，请在现代浏览器中访问。上方内容为搜索引擎可见的页面摘要。</p>
     </noscript>
