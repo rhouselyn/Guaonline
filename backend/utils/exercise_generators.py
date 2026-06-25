@@ -796,6 +796,11 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
                 if "context_translations" in cache_data:
                     del cache_data["context_translations"]
+                # ponytail: 生成完整性检查——不完整且非最后一轮则重试，最后一轮仍不完整则 save 残缺兜底
+                # （用户打开时 is_word_cache_complete 会再 delete + 重新生成）
+                if attempt < max_retries - 1 and not is_word_cache_complete(cache_data):
+                    print(f"[WARN] 生成不完整，重试 ({attempt + 2}/{max_retries}): {word_to_gen}")
+                    continue
                 storage.save_word_cache(file_id, word_to_gen, cache_data)
                 # 同时更新 global_vocab 和 user_vocab 缓存
                 try:
@@ -1296,6 +1301,10 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
         if "context_translations" in cache_data:
             del cache_data["context_translations"]
 
+        # ponytail: 预生成不完整则不写入，避免污染缓存；用户打开时会触发重新生成
+        if not is_word_cache_complete(cache_data):
+            print(f"[WARN] 预生成不完整，跳过写入: {word}")
+            return
         storage.save_word_cache(file_id, word, cache_data)
         print(f"[DEBUG] 缓存预生成单词信息: {word}")
 
