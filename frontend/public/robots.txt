@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://gualingo.com/sitemap.xml
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: Bingbot
+Allow: /
