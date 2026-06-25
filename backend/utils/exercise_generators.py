@@ -19,6 +19,7 @@ from utils.helpers import (
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
     MAX_SENTENCE_WORDS_FOR_QUIZ, ZH_FUNCTION_WORDS, is_word_cache_complete,
+    build_context_sentences,
 )
 
 
@@ -715,28 +716,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 if not word_entry:
                     return
                 sentences = storage.load_pipeline_data(file_id)
-                context = ""
-                context_sentences = []
-                if sentences:
-                    has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in word_to_gen[:10])
-                    if has_cjk:
-                        word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
-                    else:
-                        word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                    for sent_idx, sentence_data in enumerate(sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                context = sentence_data["sentence"]
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                context_sentences.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
-                    if not context and sentences:
-                        context = sentences[0].get("sentence", "")
+                context_sentences = build_context_sentences(sentences, word_to_gen)
+                context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
                 correct_meaning = word_entry.get("meaning", "")
                 if not correct_meaning:
                     if "translation" in word_entry:
@@ -929,24 +910,7 @@ async def background_word_gen(file_id: str):
             import copy
             cached = copy.deepcopy(vocab_hit)
             # 补充 context_sentences
-            context_sents = []
-            all_sentences = storage.load_pipeline_data(file_id)
-            if all_sentences:
-                try:
-                    word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                except re.error:
-                    word_pattern = re.compile(re.escape(word_to_gen), re.IGNORECASE)
-                for sent_idx, sentence_data in enumerate(all_sentences):
-                    if "sentence" in sentence_data:
-                        if word_pattern.search(sentence_data["sentence"]):
-                            translation = ""
-                            if "translation_result" in sentence_data:
-                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                            context_sents.append({
-                                "sentence": sentence_data["sentence"],
-                                "translation": translation,
-                                "sentence_index": sent_idx
-                            })
+            context_sents = build_context_sentences(storage.load_pipeline_data(file_id), word_to_gen)
             if context_sents:
                 cached["context_sentences"] = context_sents
                 cached["context"] = context_sents[0]["sentence"]
@@ -958,21 +922,7 @@ async def background_word_gen(file_id: str):
         if existing_cache:
             import copy
             cached = copy.deepcopy(existing_cache)
-            context_sents = []
-            all_sentences = storage.load_pipeline_data(file_id)
-            if all_sentences:
-                word_pattern = re.compile(r'\b' + re.escape(word_to_gen) + r'\b', re.IGNORECASE)
-                for sent_idx, sentence_data in enumerate(all_sentences):
-                    if "sentence" in sentence_data:
-                        if word_pattern.search(sentence_data["sentence"]):
-                            translation = ""
-                            if "translation_result" in sentence_data:
-                                translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                            context_sents.append({
-                                "sentence": sentence_data["sentence"],
-                                "translation": translation,
-                                "sentence_index": sent_idx
-                            })
+            context_sents = build_context_sentences(storage.load_pipeline_data(file_id), word_to_gen)
             if context_sents:
                 cached["context_sentences"] = context_sents
                 cached["context"] = context_sents[0]["sentence"]
@@ -1308,24 +1258,8 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
             return
 
         sentences = storage.load_pipeline_data(file_id)
-        context = ""
-        context_sentences = []
-        if sentences:
-            word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-            for sent_idx, sentence_data in enumerate(sentences):
-                if "sentence" in sentence_data:
-                    if word_pattern.search(sentence_data["sentence"]):
-                        context = sentence_data["sentence"]
-                        translation = ""
-                        if "translation_result" in sentence_data:
-                            translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                        context_sentences.append({
-                            "sentence": sentence_data["sentence"],
-                            "translation": translation,
-                            "sentence_index": sent_idx
-                        })
-            if not context and sentences:
-                context = sentences[0].get("sentence", "")
+        context_sentences = build_context_sentences(sentences, word)
+        context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
 
         correct_meaning = random_word.get("meaning", "")
 

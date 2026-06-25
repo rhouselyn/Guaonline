@@ -15,6 +15,7 @@ from utils.helpers import (
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
     get_filtered_unit_total, get_filtered_step_in_unit, find_next_non_learned_position,
     MAX_SENTENCE_WORDS_FOR_QUIZ, is_word_cache_complete,
+    extract_mc_options, build_context_sentences,
 )
 from utils.exercise_generators import (
     background_word_gen, process_single_word_gen, pre_generate_next_word,
@@ -334,14 +335,7 @@ async def get_random_word(file_id: str):
             cached_word = None
         if cached_word:
             print(f"[DEBUG] 从缓存中获取随机单词信息: {word}")
-            mc = cached_word.get("multiple_choice", {})
-            mc_options = [o for o in mc.get("options", []) if isinstance(o, dict) and "text" in o] if isinstance(mc, dict) else []
-            options = []
-            correct_index = 0
-            for i, opt in enumerate(mc_options):
-                options.append(opt["text"])
-                if opt.get("is_correct"):
-                    correct_index = i
+            options, correct_index = extract_mc_options(cached_word)
 
             asyncio.create_task(pre_generate_next_word(file_id, vocab, current_index + 1))
 
@@ -351,21 +345,8 @@ async def get_random_word(file_id: str):
                 for cs in context_sents
             )
             if needs_rebuild or not context_sents:
-                all_sentences = storage.load_pipeline_data(file_id)
-                if all_sentences:
-                    word_pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-                    rebuilt = []
-                    for sent_idx, sentence_data in enumerate(all_sentences):
-                        if "sentence" in sentence_data:
-                            if word_pattern.search(sentence_data["sentence"]):
-                                translation = ""
-                                if "translation_result" in sentence_data:
-                                    translation = sentence_data["translation_result"].get("tokenized_translation", "")
-                                rebuilt.append({
-                                    "sentence": sentence_data["sentence"],
-                                    "translation": translation,
-                                    "sentence_index": sent_idx
-                                })
+                rebuilt = build_context_sentences(storage.load_pipeline_data(file_id), word)
+                if rebuilt:
                     context_sents = rebuilt
                     cached_word["context_sentences"] = rebuilt
                     storage.save_word_cache(file_id, word, cached_word)
@@ -416,15 +397,7 @@ async def get_random_word(file_id: str):
                 break
 
         if cached_word and is_word_cache_complete(cached_word):
-            mc = cached_word["multiple_choice"]
-            mc_options = [o for o in mc.get("options", []) if isinstance(o, dict) and "text" in o]
-            options = []
-            correct_index = 0
-            for i, opt in enumerate(mc_options):
-                options.append(opt["text"])
-                if opt.get("is_correct"):
-                    correct_index = i
-
+            options, correct_index = extract_mc_options(cached_word)
             context_sents = cached_word.get("context_sentences", [])
 
             asyncio.create_task(pre_generate_next_word(file_id, vocab, current_index + 1))
