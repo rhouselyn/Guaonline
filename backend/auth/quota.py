@@ -120,7 +120,7 @@ def check_and_refill_quota(user_id: str) -> dict:
         return {"used": used, "max": max_q, "available": available, "tier_max": _tier_max(tier)}
 
     else:  # free
-        # Free: 每日恢复50句，上限200
+        # Free: 每日恢复50句，上限200（quota_max 固定为上限，恢复时减少 quota_used）
         if reset_at:
             try:
                 last_reset = datetime.fromisoformat(reset_at)
@@ -130,12 +130,11 @@ def check_and_refill_quota(user_id: str) -> dict:
                 days_passed = (now - last_reset).days
                 if days_passed >= 1:
                     refill = days_passed * FREE_DAILY_REFILL
-                    max_q = min(max_q + refill, FREE_MAX_QUOTA)
-                    # 确保额度不低于已用
-                    max_q = max(max_q, used)
+                    # 恢复已用额度，下限 0；max_q 保持为等级上限
+                    used = max(0, used - refill)
                     conn.execute(
-                        "UPDATE users SET quota_max = ?, quota_reset_at = ? WHERE id = ?",
-                        (max_q, now.isoformat(), user_id)
+                        "UPDATE users SET quota_used = ?, quota_reset_at = ? WHERE id = ?",
+                        (used, now.isoformat(), user_id)
                     )
                     conn.commit()
             except (ValueError, TypeError):
