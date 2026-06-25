@@ -160,39 +160,6 @@ def is_word_cache_complete(cached: dict) -> bool:
     return True
 
 
-def collect_context_sentences(word, all_sentences):
-    """从句子列表中收集包含 word 的上下文句子。
-
-    返回 [{"sentence", "translation", "sentence_index"}]。CJK 词用纯转义
-    匹配（\b 在中文边界不生效），其余用词边界；re.error 时回退到纯转义。
-    ponytail: 统一 learning.py / exercise_generators.py 中 5 处重复实现。"""
-    if not word or not all_sentences:
-        return []
-    has_cjk = any(
-        '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u309f'
-        or '\u30a0' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af'
-        for c in word[:10]
-    )
-    pattern_str = re.escape(word) if has_cjk else r'\b' + re.escape(word) + r'\b'
-    try:
-        word_pattern = re.compile(pattern_str, re.IGNORECASE)
-    except re.error:
-        word_pattern = re.compile(re.escape(word), re.IGNORECASE)
-    result = []
-    for sent_idx, sd in enumerate(all_sentences):
-        if not isinstance(sd, dict) or "sentence" not in sd:
-            continue
-        if word_pattern.search(sd["sentence"]):
-            tr = sd.get("translation_result", {})
-            translation = tr.get("tokenized_translation", "") if isinstance(tr, dict) else ""
-            result.append({
-                "sentence": sd["sentence"],
-                "translation": translation,
-                "sentence_index": sent_idx,
-            })
-    return result
-
-
 def select_key_tokens(seg_words, max_tokens=10):
     content_words = []
     function_words = []
