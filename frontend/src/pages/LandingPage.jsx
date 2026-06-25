@@ -699,7 +699,7 @@ export default function LandingPage() {
             {/* QQ */}
             <a href="https://im.qq.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="QQ">
-              <img src="https://cdn.simpleicons.org/tencentqq/8b7e5e" alt="QQ" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
+              <img src="https://cdn.simpleicons.org/qq/8b7e5e" alt="QQ" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
             </a>
           </div>
         </div>
