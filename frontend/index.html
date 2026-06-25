@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/duolingo.jpg" />
+    <link rel="icon" type="image/png" href="/gualingo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>呱邻国 Gualingo - 用你喜欢的文本学外语 | AI语言学习平台</title>
     <meta name="description" content="呱邻国 Gualingo 是AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助、职场外语，120+种语言TTS朗读，你的素材你做主。" />
@@ -10,14 +10,14 @@
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#3d3929" />
     <link rel="canonical" href="https://gualingo.dpdns.org/" />
-    <link rel="apple-touch-icon" href="/duolingo.jpg" />
+    <link rel="apple-touch-icon" href="/gualingo.png" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="呱邻国 Gualingo" />
     <meta property="og:title" content="呱邻国 Gualingo - 用你喜欢的文本学外语" />
     <meta property="og:description" content="AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助，120+种语言，你的素材你做主。" />
-    <meta property="og:image" content="https://gualingo.dpdns.org/duolingo.jpg" />
+    <meta property="og:image" content="https://gualingo.dpdns.org/gualingo.png" />
     <meta property="og:image:width" content="500" />
     <meta property="og:image:height" content="500" />
     <meta property="og:image:alt" content="呱邻国 Gualingo - AI驱动的沉浸式外语学习平台" />
@@ -28,7 +28,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="呱邻国 Gualingo - 用你喜欢的文本学外语" />
     <meta name="twitter:description" content="AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助，120+种语言，你的素材你做主。" />
-    <meta name="twitter:image" content="https://gualingo.dpdns.org/duolingo.jpg" />
+    <meta name="twitter:image" content="https://gualingo.dpdns.org/gualingo.png" />
 
     <!-- Structured Data: WebApplication -->
     <script type="application/ld+json">
@@ -85,7 +85,7 @@
           "@type": "Organization",
           "name": "呱邻国 Gualingo",
           "url": "https://gualingo.dpdns.org",
-          "logo": "https://gualingo.dpdns.org/duolingo.jpg",
+          "logo": "https://gualingo.dpdns.org/gualingo.png",
           "sameAs": ["https://github.com/rhouselyn/Gualingo"]
         },
         {
@@ -104,18 +104,73 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div id="root"></div>
-    <noscript>
-      <div style="max-width:720px;margin:0 auto;padding:24px;font-family:system-ui,sans-serif;color:#3d3929;">
-        <h1>呱邻国 Gualingo — 用你喜欢的文本学外语</h1>
-        <p>呱邻国 Gualingo 是 AI 驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助、职场外语，120+ 种语言 TTS 朗读，你的素材你做主。</p>
-        <ul>
-          <li><a href="/login">登录 / 免费开始</a></li>
-          <li><a href="/learn">进入学习</a></li>
-          <li><a href="https://github.com/rhouselyn/Gualingo" rel="noopener noreferrer">GitHub 项目</a></li>
+    <!--
+      预渲染骨架：爬虫在 JS 执行前即可拿到完整内容（H1、文案、内链、定价）。
+      React 通过 createRoot().render() 挂载时会替换此内容并运行动画，用户无感。
+      保留此静态内容仅服务于不执行 JS 的爬虫（如百度）与禁用 JS 的浏览器。
+    -->
+    <div id="root"><div style="font-family:system-ui,'Noto Serif SC',Georgia,serif;color:#3d3929;background:#faf8f0;min-height:100vh;">
+      <header style="padding:16px 24px;display:flex;align-items:center;gap:10px;">
+        <span style="font-weight:700;font-size:18px;">呱邻国 Gualingo</span>
+        <nav style="margin-left:auto;display:flex;gap:16px;font-size:14px;">
+          <a href="/login" style="color:#3d3929;background:#3d3929;color:#faf8f0;padding:4px 12px;border-radius:4px;text-decoration:none;">登录</a>
+        </nav>
+      </header>
+      <main style="max-width:720px;margin:0 auto;padding:48px 24px;">
+        <h1 style="font-size:48px;margin:0 0 16px;">呱邻国</h1>
+        <p style="font-size:22px;color:#8b7e5e;margin:0 0 8px;">用你喜欢的文本学外语</p>
+        <p style="color:#8b7e5e;line-height:1.7;">学英语、日语、法语、德语、小语种——粘贴任何文本，自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助、职场外语，你的素材你做主。支持 120+ 种语言 TTS 朗读。</p>
+        <p style="margin-top:24px;"><a href="/login" style="display:inline-block;padding:12px 28px;background:#d4a853;color:#3d3929;font-weight:600;border-radius:6px;text-decoration:none;">免费开始</a></p>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">三种模式</h2>
+        <ul style="line-height:1.9;color:#524d3c;">
+          <li><strong>直接输入</strong>：粘贴英语新闻、日语歌词、法语文章，AI 自动检测语言、分句翻译、提取词汇。</li>
+          <li><strong>自动翻译</strong>：输入中文，自动翻译成目标语言，再生成词汇和练习。</li>
+          <li><strong>自由生成</strong>：指定主题（如日语旅行对话），自动生成目标语言文本后学习。</li>
         </ul>
-        <p>支持英语、日语、法语、德语、韩语、西班牙语、泰语、越南语、阿拉伯语等 120+ 种语言。适合留学备考（雅思、托福、日语 N1N2、法语 DELF、德语德福）、中学英语阅读理解辅助、职场外语提升。本页面需要 JavaScript，请在现代浏览器中访问。</p>
-      </div>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">六大练习题型</h2>
+        <p style="color:#524d3c;line-height:1.9;">单词选择题、句子翻译排序、听力理解、遮蔽填空、翻译重组、错题回顾 + 星级评价。从单词辨认到句子输出，阶梯式设计。</p>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">特色功能</h2>
+        <ul style="line-height:1.9;color:#524d3c;">
+          <li>自动生成内容：任何文本丢进来，AI 自动检测语言、分句翻译、提取词汇。</li>
+          <li>任意语言互学：120+ 种语言 TTS 朗读，小语种也能学。</li>
+          <li>完整词汇表：字母索引、搜索、逐词详情。</li>
+          <li>收藏单词：跨文本收藏夹随时复习。</li>
+          <li>语音朗读：Edge TTS，常速/慢速自由切换。</li>
+          <li>星级评价：单元完成后获星级，错题自动进入复习。</li>
+        </ul>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">谁需要呱邻国？</h2>
+        <ul style="line-height:1.9;color:#524d3c;">
+          <li>留学备考 & 语言学习者：雅思托福 / 日语 N1N2 / 法语 DELF。</li>
+          <li>职场人士：外企沟通 / 专业阅读。</li>
+          <li>中学生 & 家长：英语阅读理解 / 课文精读。</li>
+          <li>小语种爱好者：泰语、越南语、阿拉伯语、韩语等 100+ 种语言。</li>
+        </ul>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">定价</h2>
+        <ul style="line-height:1.9;color:#524d3c;">
+          <li>免费版 ¥0：免费 200 句额度，每日恢复 50 句（上限 200）。</li>
+          <li>基础版 ¥19/月：2000 句/月，更优模型，云同步，SRS 间隔复习。</li>
+          <li>专业版 ¥49/月：无限 API 额度，口语对话，学习分析。</li>
+        </ul>
+
+        <h2 style="font-size:28px;margin:48px 0 16px;">适用于各种语言学习场景</h2>
+        <p style="color:#8b7e5e;line-height:1.7;">呱邻国 Gualingo 适合学英语、学日语、学法语、学德语、学韩语、学西班牙语、学意大利语、学葡萄牙语、学俄语等主流语言，也支持学泰语、学越南语、学阿拉伯语、学印地语、学土耳其语、学芬兰语、学匈牙利语等小语种。无论你是留学备考（雅思、托福、日语 N1N2、法语 DELF、德语德福）、中学英语阅读理解辅助、职场外语提升，还是纯粹的语言爱好者，呱邻国都能把你的文本变成个性化学习材料。</p>
+      </main>
+      <footer style="padding:16px 24px;border-top:1px solid #d4c9a8;font-size:14px;color:#8b7e5e;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span>呱邻国 Gualingo</span>
+        <span>
+          <a href="/login" style="color:#8b7e5e;">登录</a> ·
+          <a href="https://github.com/rhouselyn/Gualingo" rel="noopener noreferrer" style="color:#8b7e5e;">GitHub</a> ·
+          AGPL v3 开源
+        </span>
+      </footer>
+    </div></div>
+    <noscript>
+      <p style="text-align:center;padding:16px;color:#8b7e5e;">本页面的完整交互体验需要 JavaScript，请在现代浏览器中访问。上方内容为搜索引擎可见的页面摘要。</p>
     </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
