@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { auth } from '../utils/auth';
 import {
@@ -8,16 +7,20 @@ import {
   X, MessageSquare, Zap, Search, Headphones, Languages, Code
 } from 'lucide-react';
 
-// 算法艺术背景 - Retro 波点 + 流动纹理
+// 算法艺术背景 - Retro 波点 + 流动纹理（性能优化：不可见/后台时暂停，降低密度）
 function AlgorithmicArtBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // 尊重“减少动态效果”偏好，直接静态绘制一帧
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d');
     let animId;
     let time = 0;
+    let visible = true;
+    let pageVisible = true;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -34,7 +37,8 @@ function AlgorithmicArtBackground() {
       ctx.fillStyle = '#faf8f0';
       ctx.fillRect(0, 0, w, h);
 
-      const dotSpacing = 32;
+      // 加大间距，减少绘制点数量，降低主线程负载（INP）
+      const dotSpacing = 44;
       for (let x = dotSpacing / 2; x < w; x += dotSpacing) {
         for (let y = dotSpacing / 2; y < h; y += dotSpacing) {
           const dist = Math.sqrt((x - w / 2) ** 2 + (y - h / 2) ** 2);
@@ -58,18 +62,36 @@ function AlgorithmicArtBackground() {
         ctx.fillStyle = gradient;
         ctx.fillRect(px - radius, py - radius, radius * 2, radius * 2);
       }
-
-      animId = requestAnimationFrame(draw);
     };
 
-    draw();
+    const loop = () => {
+      if (visible && pageVisible) draw();
+      animId = requestAnimationFrame(loop);
+    };
+
+    // 仅绘制一帧用于降级场景
+    if (prefersReduced) {
+      draw();
+      return () => window.removeEventListener('resize', resize);
+    }
+
+    // 视口外暂停（节省主线程）
+    const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { threshold: 0 });
+    io.observe(canvas);
+    // 标签页隐藏时暂停
+    const onVis = () => { pageVisible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVis);
+
+    loop();
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" aria-hidden="true" />;
 }
 
 function FrogLogo({ size = 48, className = '' }) {
@@ -129,7 +151,7 @@ const TARGET_USERS = [
   { icon: '🎓', title: '留学备考 & 语言学习者', scene: '雅思托福 / 日语N1N2 / 法语DELF', desc: '厌倦了固定教材？粘贴真题阅读、留学文书、播客文本，立刻生成专属练习。比刷题更高效，比背单词更深入。' },
   { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把英文邮件、德语行业报告、法语商务文档变成学习材料，学到的就是用得上的。' },
   { icon: '📖', title: '中学生 & 家长', scene: '英语阅读理解 / 课文精读', desc: '粘贴英语课文或阅读理解原文，自动生成词汇表和练习题。生词在语境中记忆，阅读理解不再丢分。' },
-  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
+  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '120+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
 ];
 
 const LANG_CLOUD = [
@@ -212,7 +234,6 @@ function SectionTitle({ children, sub }) {
 }
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -250,11 +271,11 @@ export default function LandingPage() {
             <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">定价</button>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">GitHub</a>
-            <button
-              onClick={() => navigate(user ? '/learn' : '/login')}
+            <a
+              href={user ? '/learn' : '/login'}
               className="px-4 py-1.5 text-sm bg-[#3d3929] text-[#faf8f0] rounded hover:bg-[#524d3c] transition-colors">
               {user ? '进入学习' : '登录'}
-            </button>
+            </a>
           </div>
         </div>
       </nav>
@@ -302,11 +323,11 @@ export default function LandingPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.45 }}
             className="flex justify-center items-center">
-            <button onClick={() => navigate(user ? '/learn' : '/login')}
+            <a href={user ? '/learn' : '/login'}
               className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg flex items-center gap-2 shadow-[2px_2px_0_#8b7e5e]">
               {user ? '进入学习' : '免费开始'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            </a>
           </motion.div>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -548,7 +569,7 @@ export default function LandingPage() {
                 {lang.name}
               </motion.span>
             ))}
-            <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">100+ ...</span>
+            <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">120+ ...</span>
           </div>
         </div>
       </section>
@@ -584,14 +605,25 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => !plan.disabled && navigate('/login')} disabled={plan.disabled}
-                  className={`w-full py-2.5 rounded font-medium transition-all text-sm ${
-                    plan.highlight
-                      ? 'bg-[#d4a853] text-[#3d3929] hover:bg-[#c49a48] shadow-[2px_2px_0_#8b7e5e]'
-                      : 'border border-[#d4c9a8] text-[#524d3c] hover:bg-[#f0ead6]'
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}>
-                  {plan.cta}
-                </button>
+                {plan.disabled ? (
+                  <button disabled
+                    className={`w-full py-2.5 rounded font-medium transition-all text-sm cursor-not-allowed ${
+                      plan.highlight
+                        ? 'bg-[#d4a853] text-[#3d3929] shadow-[2px_2px_0_#8b7e5e]'
+                        : 'border border-[#d4c9a8] text-[#524d3c]'
+                    } opacity-40`}>
+                    {plan.cta}
+                  </button>
+                ) : (
+                  <a href="/login"
+                    className={`w-full py-2.5 rounded font-medium transition-all text-sm block text-center ${
+                      plan.highlight
+                        ? 'bg-[#d4a853] text-[#3d3929] hover:bg-[#c49a48] shadow-[2px_2px_0_#8b7e5e]'
+                        : 'border border-[#d4c9a8] text-[#524d3c] hover:bg-[#f0ead6]'
+                    }`}>
+                    {plan.cta}
+                  </a>
+                )}
               </motion.div>
             ))}
           </div>
@@ -613,29 +645,38 @@ export default function LandingPage() {
           <p className="text-[#b5ae8e]/70 text-sm mb-8">
             留学备考 · 阅读理解辅助 · 职场外语 · 你的素材你做主
           </p>
-          <button onClick={() => navigate(user ? '/learn' : '/login')}
+          <a href={user ? '/learn' : '/login'}
             className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg inline-flex items-center gap-2 shadow-[2px_2px_0_#faf8f0/20]">
             {user ? '进入学习' : '立即开始'}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+          </a>
         </div>
       </section>
 
-      {/* SEO: 长尾关键词覆盖 */}
-      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="更多语言学习信息">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-lg font-bold text-[#3d3929] mb-4" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-            适用于各种语言学习场景
+      {/* FAQ：以问答形式覆盖长尾搜索意图（替代原关键词堆砌带） */}
+      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="常见问题">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold text-[#3d3929] mb-8 text-center" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+            常见问题
           </h2>
-          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
-            呱邻国 Gualingo 适合学英语、学日语、学法语、学德语、学韩语、学西班牙语、学意大利语、学葡萄牙语、学俄语等主流语言，也支持学泰语、学越南语、学阿拉伯语、学印地语、学土耳其语、学芬兰语、学匈牙利语等小语种。
-          </p>
-          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
-            无论你是留学备考（雅思、托福、日语N1N2、法语DELF、德语德福）、中学英语阅读理解辅助、职场外语提升，还是纯粹的语言爱好者，呱邻国都能把你的文本变成个性化学习材料。
-          </p>
-          <p className="text-xs text-[#b5ae8e]">
-            AI外语学习 · 英语阅读理解练习 · 日语分句翻译 · 法语词汇表生成 · 德语听力练习 · 小语种学习工具 · 留学语言备考 · 中学英语辅助
-          </p>
+          <div className="space-y-4">
+            {[
+              { q: '呱邻国适合学哪些语言？', a: '支持英语、日语、法语、德语、韩语、西班牙语、意大利语、葡萄牙语、俄语等主流语言，也支持泰语、越南语、阿拉伯语、印地语、土耳其语、芬兰语等 120+ 种语言，覆盖大部分留学备考与小语种学习需求。' },
+              { q: '留学备考怎么用呱邻国？', a: '把雅思、托福真题阅读，或日语 N1N2、法语 DELF、德语德福的备考材料直接粘贴进来，AI 会自动分句翻译、提取生词并生成练习题。你练的就是你要考的素材，比固定课程更贴合实战。' },
+              { q: '能帮中学英语阅读理解吗？', a: '可以。把课文或考试阅读段落粘贴进来，分句翻译帮助吃透每一句，自动生成的词汇表配合遮蔽填空、翻译重组等题型，针对丢分点反复练习。' },
+              { q: '需要自己准备学习材料吗？', a: '不一定。三种模式任选：直接粘贴你已有的文本、输入中文自动翻译成目标语言，或让 AI 按主题（如旅行对话）自由生成。没有素材也能开始学。' },
+              { q: '呱邻国和多邻国有什么区别？', a: '多邻国提供固定课程，呱邻国则让你用任何文本学——你提供什么素材就学什么，并自动生成完整词汇表、分句翻译和六种练习题型，从单词辨认到句子输出阶梯式训练。' },
+              { q: '免费版够用吗？', a: '免费版含 200 句额度，每天恢复 50 句（上限 200），适合日常精读一篇文章。需要更大练习量可升级基础版（2000 句/月）或专业版（无限额度）。' },
+            ].map((item, i) => (
+              <details key={i} className="group bg-white/60 rounded-lg border border-[#d4c9a8]/60 overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-[#3d3929] font-medium hover:bg-[#f0ead6]/50 transition-colors">
+                  <span>{item.q}</span>
+                  <span className="text-[#8b7e5e] group-open:rotate-180 transition-transform">⌄</span>
+                </summary>
+                <p className="px-5 pb-4 text-sm text-[#8b7e5e] leading-relaxed">{item.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -648,12 +689,15 @@ export default function LandingPage() {
               style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
               呱邻国 Gualingo
             </span>
+            <span className="text-xs text-[#b5ae8e]">由 houselyn 开发</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[#8b7e5e]">
             <span>兼容 LLM API</span>
             <span>AGPL v3 开源</span>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors">GitHub</a>
+            <a href="https://github.com/rhouselyn/Gualingo/issues/new" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#3d3929] transition-colors">反馈建议</a>
             {/* 小红书 */}
             <a href="https://www.xiaohongshu.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="小红书">
@@ -667,7 +711,7 @@ export default function LandingPage() {
             {/* QQ */}
             <a href="https://im.qq.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="QQ">
-              <img src="https://cdn.simpleicons.org/tencentqq/8b7e5e" alt="QQ" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
+              <img src="https://cdn.simpleicons.org/qq/8b7e5e" alt="QQ" width="20" height="20" style={{ filter: 'grayscale(0.3)' }} />
             </a>
           </div>
         </div>
