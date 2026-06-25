@@ -151,7 +151,7 @@ const TARGET_USERS = [
   { icon: '🎓', title: '留学备考 & 语言学习者', scene: '雅思托福 / 日语N1N2 / 法语DELF', desc: '厌倦了固定教材？粘贴真题阅读、留学文书、播客文本，立刻生成专属练习。比刷题更高效，比背单词更深入。' },
   { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把英文邮件、德语行业报告、法语商务文档变成学习材料，学到的就是用得上的。' },
   { icon: '📖', title: '中学生 & 家长', scene: '英语阅读理解 / 课文精读', desc: '粘贴英语课文或阅读理解原文，自动生成词汇表和练习题。生词在语境中记忆，阅读理解不再丢分。' },
-  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '100+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
+  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '120+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
 ];
 
 const LANG_CLOUD = [
@@ -569,7 +569,7 @@ export default function LandingPage() {
                 {lang.name}
               </motion.span>
             ))}
-            <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">100+ ...</span>
+            <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">120+ ...</span>
           </div>
         </div>
       </section>
@@ -653,21 +653,30 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SEO: 长尾关键词覆盖 */}
-      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="更多语言学习信息">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-lg font-bold text-[#3d3929] mb-4" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-            适用于各种语言学习场景
+      {/* FAQ：以问答形式覆盖长尾搜索意图（替代原关键词堆砌带） */}
+      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="常见问题">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold text-[#3d3929] mb-8 text-center" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+            常见问题
           </h2>
-          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
-            呱邻国 Gualingo 适合学英语、学日语、学法语、学德语、学韩语、学西班牙语、学意大利语、学葡萄牙语、学俄语等主流语言，也支持学泰语、学越南语、学阿拉伯语、学印地语、学土耳其语、学芬兰语、学匈牙利语等小语种。
-          </p>
-          <p className="text-sm text-[#8b7e5e] leading-relaxed mb-3">
-            无论你是留学备考（雅思、托福、日语N1N2、法语DELF、德语德福）、中学英语阅读理解辅助、职场外语提升，还是纯粹的语言爱好者，呱邻国都能把你的文本变成个性化学习材料。
-          </p>
-          <p className="text-xs text-[#b5ae8e]">
-            AI外语学习 · 英语阅读理解练习 · 日语分句翻译 · 法语词汇表生成 · 德语听力练习 · 小语种学习工具 · 留学语言备考 · 中学英语辅助
-          </p>
+          <div className="space-y-4">
+            {[
+              { q: '呱邻国适合学哪些语言？', a: '支持英语、日语、法语、德语、韩语、西班牙语、意大利语、葡萄牙语、俄语等主流语言，也支持泰语、越南语、阿拉伯语、印地语、土耳其语、芬兰语等 120+ 种语言，覆盖大部分留学备考与小语种学习需求。' },
+              { q: '留学备考怎么用呱邻国？', a: '把雅思、托福真题阅读，或日语 N1N2、法语 DELF、德语德福的备考材料直接粘贴进来，AI 会自动分句翻译、提取生词并生成练习题。你练的就是你要考的素材，比固定课程更贴合实战。' },
+              { q: '能帮中学英语阅读理解吗？', a: '可以。把课文或考试阅读段落粘贴进来，分句翻译帮助吃透每一句，自动生成的词汇表配合遮蔽填空、翻译重组等题型，针对丢分点反复练习。' },
+              { q: '需要自己准备学习材料吗？', a: '不一定。三种模式任选：直接粘贴你已有的文本、输入中文自动翻译成目标语言，或让 AI 按主题（如旅行对话）自由生成。没有素材也能开始学。' },
+              { q: '呱邻国和多邻国有什么区别？', a: '多邻国提供固定课程，呱邻国则让你用任何文本学——你提供什么素材就学什么，并自动生成完整词汇表、分句翻译和六种练习题型，从单词辨认到句子输出阶梯式训练。' },
+              { q: '免费版够用吗？', a: '免费版含 200 句额度，每天恢复 50 句（上限 200），适合日常精读一篇文章。需要更大练习量可升级基础版（2000 句/月）或专业版（无限额度）。' },
+            ].map((item, i) => (
+              <details key={i} className="group bg-white/60 rounded-lg border border-[#d4c9a8]/60 overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-[#3d3929] font-medium hover:bg-[#f0ead6]/50 transition-colors">
+                  <span>{item.q}</span>
+                  <span className="text-[#8b7e5e] group-open:rotate-180 transition-transform">⌄</span>
+                </summary>
+                <p className="px-5 pb-4 text-sm text-[#8b7e5e] leading-relaxed">{item.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -680,12 +689,15 @@ export default function LandingPage() {
               style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
               呱邻国 Gualingo
             </span>
+            <span className="text-xs text-[#b5ae8e]">由 houselyn 开发</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[#8b7e5e]">
             <span>兼容 LLM API</span>
             <span>AGPL v3 开源</span>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors">GitHub</a>
+            <a href="https://github.com/rhouselyn/Gualingo/issues/new" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#3d3929] transition-colors">反馈建议</a>
             {/* 小红书 */}
             <a href="https://www.xiaohongshu.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors inline-flex items-center" title="小红书">

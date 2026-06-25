@@ -48,6 +48,7 @@
           "name": "免费版",
           "price": "0",
           "priceCurrency": "CNY",
+          "availability": "https://schema.org/InStock",
           "description": "免费200句额度，每日恢复50句"
         },
         {
@@ -55,14 +56,16 @@
           "name": "基础版",
           "price": "19",
           "priceCurrency": "CNY",
-          "description": "2000句/月，更优模型，云同步"
+          "availability": "https://schema.org/PreOrder",
+          "description": "2000句/月，更优模型，云同步（即将推出）"
         },
         {
           "@type": "Offer",
           "name": "专业版",
           "price": "49",
           "priceCurrency": "CNY",
-          "description": "无限API额度，口语对话，学习分析"
+          "availability": "https://schema.org/PreOrder",
+          "description": "无限API额度，口语对话，学习分析（即将推出）"
         }
       ],
       "featureList": [
@@ -86,6 +89,11 @@
           "name": "呱邻国 Gualingo",
           "url": "https://gualingo.dpdns.org",
           "logo": "https://gualingo.dpdns.org/gualingo.png",
+          "founder": {
+            "@type": "Person",
+            "name": "houselyn",
+            "url": "https://github.com/rhouselyn"
+          },
           "sameAs": ["https://github.com/rhouselyn/Gualingo"]
         },
         {
@@ -94,6 +102,64 @@
           "url": "https://gualingo.dpdns.org",
           "inLanguage": "zh-CN",
           "publisher": { "@id": "https://gualingo.dpdns.org#organization" }
+        }
+      ]
+    }
+    </script>
+
+    <!-- Structured Data: FAQPage（长尾搜索意图问答化，提升 AI 引用率） -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "呱邻国适合学哪些语言？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "支持英语、日语、法语、德语、韩语、西班牙语、意大利语、葡萄牙语、俄语等主流语言，也支持泰语、越南语、阿拉伯语、印地语、土耳其语、芬兰语等 120+ 种语言，覆盖大部分留学备考与小语种学习需求。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "留学备考怎么用呱邻国？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "把雅思、托福真题阅读，或日语 N1N2、法语 DELF、德语德福的备考材料直接粘贴进来，AI 会自动分句翻译、提取生词并生成练习题。你练的就是你要考的素材，比固定课程更贴合实战。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "能帮中学英语阅读理解吗？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "可以。把课文或考试阅读段落粘贴进来，分句翻译帮助吃透每一句，自动生成的词汇表配合遮蔽填空、翻译重组等题型，针对丢分点反复练习。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "需要自己准备学习材料吗？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "不一定。三种模式任选：直接粘贴你已有的文本、输入中文自动翻译成目标语言，或让 AI 按主题（如旅行对话）自由生成。没有素材也能开始学。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "呱邻国和多邻国有什么区别？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "多邻国提供固定课程，呱邻国则让你用任何文本学——你提供什么素材就学什么，并自动生成完整词汇表、分句翻译和六种练习题型，从单词辨认到句子输出阶梯式训练。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "免费版够用吗？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "免费版含 200 句额度，每天恢复 50 句（上限 200），适合日常精读一篇文章。需要更大练习量可升级基础版（2000 句/月）或专业版（无限额度）。"
+          }
         }
       ]
     }
@@ -147,7 +213,7 @@
           <li>留学备考 & 语言学习者：雅思托福 / 日语 N1N2 / 法语 DELF。</li>
           <li>职场人士：外企沟通 / 专业阅读。</li>
           <li>中学生 & 家长：英语阅读理解 / 课文精读。</li>
-          <li>小语种爱好者：泰语、越南语、阿拉伯语、韩语等 100+ 种语言。</li>
+          <li>小语种爱好者：泰语、越南语、阿拉伯语、韩语等 120+ 种语言。</li>
         </ul>
 
         <h2 style="font-size:28px;margin:48px 0 16px;">定价</h2>
@@ -157,14 +223,15 @@
           <li>专业版 ¥49/月：无限 API 额度，口语对话，学习分析。</li>
         </ul>
 
-        <h2 style="font-size:28px;margin:48px 0 16px;">适用于各种语言学习场景</h2>
-        <p style="color:#8b7e5e;line-height:1.7;">呱邻国 Gualingo 适合学英语、学日语、学法语、学德语、学韩语、学西班牙语、学意大利语、学葡萄牙语、学俄语等主流语言，也支持学泰语、学越南语、学阿拉伯语、学印地语、学土耳其语、学芬兰语、学匈牙利语等小语种。无论你是留学备考（雅思、托福、日语 N1N2、法语 DELF、德语德福）、中学英语阅读理解辅助、职场外语提升，还是纯粹的语言爱好者，呱邻国都能把你的文本变成个性化学习材料。</p>
+        <h2 style="font-size:28px;margin:48px 0 16px;">适用场景</h2>
+        <p style="color:#8b7e5e;line-height:1.7;">留学备考（雅思/托福/日语 N1N2/法语 DELF/德语德福）、中学英语阅读理解、职场外语、小语种学习——把任何文本变成个性化学习材料。常见问题见页面下方 FAQ。</p>
       </main>
       <footer style="padding:16px 24px;border-top:1px solid #d4c9a8;font-size:14px;color:#8b7e5e;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <span>呱邻国 Gualingo</span>
+        <span>呱邻国 Gualingo · 由 houselyn 开发</span>
         <span>
           <a href="/login" style="color:#8b7e5e;">登录</a> ·
           <a href="https://github.com/rhouselyn/Gualingo" rel="noopener noreferrer" style="color:#8b7e5e;">GitHub</a> ·
+          <a href="https://github.com/rhouselyn/Gualingo/issues/new" rel="noopener noreferrer" style="color:#8b7e5e;">反馈建议</a> ·
           AGPL v3 开源
         </span>
       </footer>
