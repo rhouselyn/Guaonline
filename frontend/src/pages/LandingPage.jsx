@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { auth } from '../utils/auth';
 import {
@@ -8,16 +7,20 @@ import {
   X, MessageSquare, Zap, Search, Headphones, Languages, Code
 } from 'lucide-react';
 
-// 算法艺术背景 - Retro 波点 + 流动纹理
+// 算法艺术背景 - Retro 波点 + 流动纹理（性能优化：不可见/后台时暂停，降低密度）
 function AlgorithmicArtBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // 尊重“减少动态效果”偏好，直接静态绘制一帧
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d');
     let animId;
     let time = 0;
+    let visible = true;
+    let pageVisible = true;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -34,7 +37,8 @@ function AlgorithmicArtBackground() {
       ctx.fillStyle = '#faf8f0';
       ctx.fillRect(0, 0, w, h);
 
-      const dotSpacing = 32;
+      // 加大间距，减少绘制点数量，降低主线程负载（INP）
+      const dotSpacing = 44;
       for (let x = dotSpacing / 2; x < w; x += dotSpacing) {
         for (let y = dotSpacing / 2; y < h; y += dotSpacing) {
           const dist = Math.sqrt((x - w / 2) ** 2 + (y - h / 2) ** 2);
@@ -58,18 +62,36 @@ function AlgorithmicArtBackground() {
         ctx.fillStyle = gradient;
         ctx.fillRect(px - radius, py - radius, radius * 2, radius * 2);
       }
-
-      animId = requestAnimationFrame(draw);
     };
 
-    draw();
+    const loop = () => {
+      if (visible && pageVisible) draw();
+      animId = requestAnimationFrame(loop);
+    };
+
+    // 仅绘制一帧用于降级场景
+    if (prefersReduced) {
+      draw();
+      return () => window.removeEventListener('resize', resize);
+    }
+
+    // 视口外暂停（节省主线程）
+    const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { threshold: 0 });
+    io.observe(canvas);
+    // 标签页隐藏时暂停
+    const onVis = () => { pageVisible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVis);
+
+    loop();
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" aria-hidden="true" />;
 }
 
 function FrogLogo({ size = 48, className = '' }) {
@@ -212,7 +234,6 @@ function SectionTitle({ children, sub }) {
 }
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -250,11 +271,11 @@ export default function LandingPage() {
             <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">定价</button>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">GitHub</a>
-            <button
-              onClick={() => navigate(user ? '/learn' : '/login')}
+            <a
+              href={user ? '/learn' : '/login'}
               className="px-4 py-1.5 text-sm bg-[#3d3929] text-[#faf8f0] rounded hover:bg-[#524d3c] transition-colors">
               {user ? '进入学习' : '登录'}
-            </button>
+            </a>
           </div>
         </div>
       </nav>
@@ -302,11 +323,11 @@ export default function LandingPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.45 }}
             className="flex justify-center items-center">
-            <button onClick={() => navigate(user ? '/learn' : '/login')}
+            <a href={user ? '/learn' : '/login'}
               className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg flex items-center gap-2 shadow-[2px_2px_0_#8b7e5e]">
               {user ? '进入学习' : '免费开始'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            </a>
           </motion.div>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -584,14 +605,25 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => !plan.disabled && navigate('/login')} disabled={plan.disabled}
-                  className={`w-full py-2.5 rounded font-medium transition-all text-sm ${
-                    plan.highlight
-                      ? 'bg-[#d4a853] text-[#3d3929] hover:bg-[#c49a48] shadow-[2px_2px_0_#8b7e5e]'
-                      : 'border border-[#d4c9a8] text-[#524d3c] hover:bg-[#f0ead6]'
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}>
-                  {plan.cta}
-                </button>
+                {plan.disabled ? (
+                  <button disabled
+                    className={`w-full py-2.5 rounded font-medium transition-all text-sm cursor-not-allowed ${
+                      plan.highlight
+                        ? 'bg-[#d4a853] text-[#3d3929] shadow-[2px_2px_0_#8b7e5e]'
+                        : 'border border-[#d4c9a8] text-[#524d3c]'
+                    } opacity-40`}>
+                    {plan.cta}
+                  </button>
+                ) : (
+                  <a href="/login"
+                    className={`w-full py-2.5 rounded font-medium transition-all text-sm block text-center ${
+                      plan.highlight
+                        ? 'bg-[#d4a853] text-[#3d3929] hover:bg-[#c49a48] shadow-[2px_2px_0_#8b7e5e]'
+                        : 'border border-[#d4c9a8] text-[#524d3c] hover:bg-[#f0ead6]'
+                    }`}>
+                    {plan.cta}
+                  </a>
+                )}
               </motion.div>
             ))}
           </div>
@@ -613,11 +645,11 @@ export default function LandingPage() {
           <p className="text-[#b5ae8e]/70 text-sm mb-8">
             留学备考 · 阅读理解辅助 · 职场外语 · 你的素材你做主
           </p>
-          <button onClick={() => navigate(user ? '/learn' : '/login')}
+          <a href={user ? '/learn' : '/login'}
             className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg inline-flex items-center gap-2 shadow-[2px_2px_0_#faf8f0/20]">
             {user ? '进入学习' : '立即开始'}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+          </a>
         </div>
       </section>
 

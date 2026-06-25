@@ -4,12 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpeg" href="/duolingo.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>呱邻国 Gualingo - 用你喜欢的文本学外语 | AI驱动的沉浸式语言学习平台</title>
-    <meta name="description" content="呱邻国 Gualingo 是AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、中学阅读理解辅助、职场外语，120+种语言TTS朗读，你的素材你做主。" />
-    <meta name="keywords" content="呱邻国, Gualingo, 学英语, 学日语, 学法语, 学德语, 小语种学习, 留学备考, 阅读理解辅助, AI学外语, 语言学习, 外语学习, 词汇表, 分句翻译, 沉浸式学习, 多语言学习, AI语言助手, 自定义学习材料, 英语阅读理解, 日语N1N2, 法语DELF, 德语德福, 泰语学习, 越南语学习, 阿拉伯语学习, 中学英语, 外语练习题" />
+    <title>呱邻国 Gualingo - 用你喜欢的文本学外语 | AI语言学习平台</title>
+    <meta name="description" content="呱邻国 Gualingo 是AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助、职场外语，120+种语言TTS朗读，你的素材你做主。" />
     <meta name="author" content="Gualingo" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#3d3929" />
     <link rel="canonical" href="https://gualingo.dpdns.org/" />
+    <link rel="apple-touch-icon" href="/duolingo.jpg" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -17,14 +18,11 @@
     <meta property="og:title" content="呱邻国 Gualingo - 用你喜欢的文本学外语" />
     <meta property="og:description" content="AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助，120+种语言，你的素材你做主。" />
     <meta property="og:image" content="https://gualingo.dpdns.org/duolingo.jpg" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:width" content="500" />
+    <meta property="og:image:height" content="500" />
     <meta property="og:image:alt" content="呱邻国 Gualingo - AI驱动的沉浸式外语学习平台" />
     <meta property="og:url" content="https://gualingo.dpdns.org/" />
     <meta property="og:locale" content="zh_CN" />
-    <meta property="og:locale:alternate" content="en_US" />
-    <meta property="og:locale:alternate" content="ja_JP" />
-    <meta property="og:locale:alternate" content="ko_KR" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -42,6 +40,8 @@
       "description": "AI驱动的沉浸式外语学习平台。粘贴任何文本，自动生成词汇表、分句翻译和练习题。支持120+种语言TTS朗读。",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web",
+      "browserRequirements": "需要支持 JavaScript 的现代浏览器",
+      "inLanguage": ["zh-CN", "en", "ja", "ko", "es", "fr", "de"],
       "offers": [
         {
           "@type": "Offer",
@@ -72,39 +72,51 @@
         "六大练习题型",
         "错题回顾",
         "单词收藏"
-      ],
-      "inLanguage": ["zh-CN", "en", "ja", "ko", "es", "fr", "de"]
+      ]
     }
     </script>
 
-    <!-- Structured Data: SoftwareApplication -->
+    <!-- Structured Data: Organization + WebSite -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "呱邻国 Gualingo",
-      "applicationCategory": "EducationApplication",
-      "operatingSystem": "Web, Windows, macOS, Linux",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "CNY"
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.8",
-        "ratingCount": "120"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "呱邻国 Gualingo",
+          "url": "https://gualingo.dpdns.org",
+          "logo": "https://gualingo.dpdns.org/duolingo.jpg",
+          "sameAs": ["https://github.com/rhouselyn/Gualingo"]
+        },
+        {
+          "@type": "WebSite",
+          "name": "呱邻国 Gualingo",
+          "url": "https://gualingo.dpdns.org",
+          "inLanguage": "zh-CN",
+          "publisher": { "@id": "https://gualingo.dpdns.org#organization" }
+        }
+      ]
     }
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=DM+Sans:wght@300..800&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+IPA&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="max-width:720px;margin:0 auto;padding:24px;font-family:system-ui,sans-serif;color:#3d3929;">
+        <h1>呱邻国 Gualingo — 用你喜欢的文本学外语</h1>
+        <p>呱邻国 Gualingo 是 AI 驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助、职场外语，120+ 种语言 TTS 朗读，你的素材你做主。</p>
+        <ul>
+          <li><a href="/login">登录 / 免费开始</a></li>
+          <li><a href="/learn">进入学习</a></li>
+          <li><a href="https://github.com/rhouselyn/Gualingo" rel="noopener noreferrer">GitHub 项目</a></li>
+        </ul>
+        <p>支持英语、日语、法语、德语、韩语、西班牙语、泰语、越南语、阿拉伯语等 120+ 种语言。适合留学备考（雅思、托福、日语 N1N2、法语 DELF、德语德福）、中学英语阅读理解辅助、职场外语提升。本页面需要 JavaScript，请在现代浏览器中访问。</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
