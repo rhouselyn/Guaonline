@@ -3,6 +3,9 @@ import { adminApi } from '../../utils/adminApi'
 
 const TIERS = ['free', 'basic', 'pro']
 
+// per-key 最高输出默认值：free 16384，其它 65536
+const defaultMaxTokens = (tier) => tier === 'free' ? 16384 : 65536
+
 export default function AdminApiKeys() {
   const [keys, setKeys] = useState({})
   const [activeTier, setActiveTier] = useState('free')
@@ -13,7 +16,9 @@ export default function AdminApiKeys() {
   const [batchSize, setBatchSize] = useState(5)
   const [settingsSaved, setSettingsSaved] = useState(false)
   const [keyStatuses, setKeyStatuses] = useState({})
-  const refreshRef = useRef(null)
+  const esRef = useRef(null)
+  // 拖拽排序：当前拖动的源 index
+  const [dragIndex, setDragIndex] = useState(null)
 
   const loadKeyStatuses = async (tier) => {
     try {
@@ -30,10 +35,18 @@ export default function AdminApiKeys() {
       const ed = {}
       for (const tier of TIERS) {
         const pool = data[tier] || { configs: [], active_index: 0 }
-        ed[tier] = {
-          configs: pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }],
-          active_index: pool.active_index || 0,
-        }
+        const cap = defaultMaxTokens(tier)
+        const configs = (pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }])
+          .map(c => ({
+            api_key: c.api_key || '',
+            base_url: c.base_url || '',
+            model: c.model || '',
+            disabled: c.disabled ?? false,
+            max_tokens: c.max_tokens ?? cap,
+            input_price_per_million: c.input_price_per_million ?? 0,
+            output_price_per_million: c.output_price_per_million ?? 0,
+          }))
+        ed[tier] = { configs, active_index: pool.active_index || 0 }
       }
       setEditing(ed)
     })
@@ -43,15 +56,26 @@ export default function AdminApiKeys() {
     })
   }, [])
 
-  // 加载当前 tier 的 key 状态，并每 30 秒刷新
+  // 实时订阅当前 tier 的 Key 状态（SSE 事件驱动，无 30s 轮询）
   useEffect(() => {
-    loadKeyStatuses(activeTier)
-    if (refreshRef.current) clearInterval(refreshRef.current)
-    refreshRef.current = setInterval(() => {
-      loadKeyStatuses(activeTier)
-    }, 30000)
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+    const es = new EventSource(adminApi.keyStatusStreamUrl(activeTier))
+    esRef.current = es
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.statuses) {
+          setKeyStatuses(prev => ({ ...prev, [activeTier]: data.statuses }))
+        }
+      } catch { /* 忽略心跳/坏包 */ }
+    }
+    es.onerror = () => {
+      // EventSource 浏览器内置会自动重连，这里只关闭避免重复创建
+      // 真正的认证失败会由后端返回 401，浏览器收到后 onerror 触发
+    }
     return () => {
-      if (refreshRef.current) clearInterval(refreshRef.current)
+      es.close()
+      if (esRef.current === es) esRef.current = null
     }
   }, [activeTier])
 
@@ -66,7 +90,11 @@ export default function AdminApiKeys() {
       ...prev,
       [tier]: {
         ...prev[tier],
-        configs: [...prev[tier].configs, { api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }],
+        configs: [...prev[tier].configs, {
+          api_key: '', base_url: '', model: '',
+          disabled: false, max_tokens: defaultMaxTokens(tier),
+          input_price_per_million: 0, output_price_per_million: 0,
+        }],
       }
     }))
   }
@@ -89,6 +117,17 @@ export default function AdminApiKeys() {
     })
   }
 
+  // 拖拽重排序：把 from 移到 to 的位置
+  const moveConfig = (tier, from, to) => {
+    if (from === to) return
+    setEditing(prev => {
+      const configs = [...prev[tier].configs]
+      const [moved] = configs.splice(from, 1)
+      configs.splice(to, 0, moved)
+      return { ...prev, [tier]: { ...prev[tier], configs } }
+    })
+  }
+
   const saveTier = async (tier) => {
     try {
       await adminApi.updateApiKeys(tier, editing[tier].configs, editing[tier].active_index)
@@ -106,9 +145,13 @@ export default function AdminApiKeys() {
     setTestResult(null)
     try {
       const result = await adminApi.testApiKey(tier)
-      setTestResult(result)
+      // 后端返回 {results: [{index, status, message}, ...]}
+      const results = result.results || [result]
+      setTestResult({ tier, results })
+      // 立即刷新状态徽章，让“正常/异常”反映测试结果
+      loadKeyStatuses(tier)
     } catch (e) {
-      setTestResult({ status: 'error', message: e.message })
+      setTestResult({ tier, results: [{ index: 0, status: 'error', message: e.message }] })
     } finally {
       setTesting(null)
     }
@@ -181,27 +224,52 @@ export default function AdminApiKeys() {
           </div>
         </div>
 
-        {testResult && (
-          <div className={`mb-4 p-2 rounded text-sm ${testResult.status === 'ok' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-            {testResult.message}
+        {testResult && testResult.tier === activeTier && (
+          <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
+            <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
+            {testResult.results.map(r => (
+              <div key={r.index} className={
+                r.status === 'ok' ? 'text-green-400' :
+                r.status === 'empty' ? 'text-gray-400' :
+                'text-red-400'
+              }>
+                Key #{r.index + 1}：{r.message}
+              </div>
+            ))}
           </div>
         )}
 
         {editing[activeTier]?.configs.map((cfg, i) => {
           const status = currentStatuses[i]
+          const isDisabled = cfg.disabled
           return (
-            <div key={i} className="flex gap-2 mb-2 items-end">
+            <div key={i}
+              draggable
+              onDragStart={() => setDragIndex(i)}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => { moveConfig(activeTier, dragIndex, i); setDragIndex(null) }}
+              className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${isDisabled ? 'opacity-60' : ''}`}
+            >
+              <div className="w-6 flex-shrink-0 flex flex-col items-center justify-end pb-1 cursor-grab text-[#e8d5b7]/30 hover:text-[#c9a96e]" title="拖动排序">⠿</div>
               <div className="w-20 flex-shrink-0">
                 <label className="text-[#e8d5b7]/60 text-xs">状态</label>
-                <div className="py-1">
+                <div className="py-1 flex flex-col gap-1">
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                     status?.status === 'normal' ? 'bg-green-900/30 text-green-400' :
                     status?.status === 'rate_limited' ? 'bg-yellow-900/30 text-yellow-400' :
                     status?.status === 'invalid' ? 'bg-red-900/30 text-red-400' :
+                    status?.status === 'error' ? 'bg-orange-900/30 text-orange-400' :
+                    status?.status === 'disabled' ? 'bg-blue-900/30 text-blue-400' :
                     'bg-gray-700/30 text-gray-400'
                   }`}>
                     {status?.status_text || '未知'}
                   </span>
+                  {status?.is_busy && (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-900/30 text-cyan-300 flex items-center gap-1 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                      占用中
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex-1">
@@ -220,6 +288,11 @@ export default function AdminApiKeys() {
                   placeholder="gpt-4o-mini" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="w-24">
+                <label className="text-[#e8d5b7]/60 text-xs">最大输出</label>
+                <input type="number" step="1" value={cfg.max_tokens ?? defaultMaxTokens(activeTier)} onChange={e => updateConfig(activeTier, i, 'max_tokens', Number(e.target.value))}
+                  placeholder={String(defaultMaxTokens(activeTier))} className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">输入价格/$1M</label>
                 <input type="number" step="0.01" value={cfg.input_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'input_price_per_million', Number(e.target.value))}
                   placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
@@ -229,6 +302,11 @@ export default function AdminApiKeys() {
                 <input type="number" step="0.01" value={cfg.output_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'output_price_per_million', Number(e.target.value))}
                   placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
+              <button onClick={() => updateConfig(activeTier, i, 'disabled', !cfg.disabled)}
+                className={`px-2 py-1 rounded text-xs font-bold ${isDisabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
+                title={isDisabled ? '点击启用' : '点击禁用（不参与轮询）'}>
+                {isDisabled ? '已禁用' : '启用中'}
+              </button>
               <button onClick={() => removeConfig(activeTier, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
             </div>
           )

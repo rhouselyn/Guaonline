@@ -360,16 +360,20 @@ function App() {
           setLoading(false)
           setSkipPolling(true)
           setPreprocessStatus(null)
-          setStep('input')
           // 停止轮询
           if (pollingInterval) {
             clearInterval(pollingInterval)
           }
-          // 如果是 API Key 相关错误，打开设置
           const errMsg = status.error || ''
-          if (errMsg.includes('API Key') || errMsg.includes('Key')) {
+          // 单句失败（partial）：只提示不退出，下次进入时自动重试
+          if (status.partial && status.failed_sentences && status.failed_sentences.length > 0) {
+            const failedList = status.failed_sentences.map(f => `#${f.index + 1}`).join(', ')
+            showAlert(`${status.error || ''}\n失败句子：${failedList}\n重新进入该条目时会自动重试失败句子。`)
+          } else if (errMsg.includes('API Key') || errMsg.includes('Key')) {
+            setStep('input')
             showAlert(t.processFailed || '处理失败，请重试')
           } else {
+            setStep('input')
             showAlert(t.processFailed || '处理失败，请重试')
           }
         } else if (pollCount >= maxPolls) {
@@ -1205,6 +1209,12 @@ function App() {
           if (status.current_sentence !== undefined && status.total_sentences !== undefined) {
             setProcessingInfo({ current: status.current_sentence, total: status.total_sentences })
           }
+        } else if (status.status === 'error' && status.partial) {
+          // 有失败句子：自动重试，恢复轮询
+          api.retryFailedSentences(fileId).catch(() => {})
+          setSkipPolling(false)
+          setProgress(status.progress || 0)
+          setProcessingInfo(null)
         } else {
           setSkipPolling(true)
           setProgress(100)
@@ -1646,10 +1656,10 @@ function App() {
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
-        title={t.confirmExit || '确认退出'}
-        message={t.exitMessage || '你确定要退出当前练习吗？退出后进度将不会保存。'}
-        confirmText={t.exitAction || '退出'}
-        cancelText={t.continueLearning || '继续练习'}
+        title={confirmDialog.title || t.confirmExit || '确认退出'}
+        message={confirmDialog.message || t.exitMessage || '你确定要退出当前练习吗？退出后进度将不会保存。'}
+        confirmText={confirmDialog.confirmText || t.exitAction || '退出'}
+        cancelText={confirmDialog.cancelText || t.continueLearning || '继续练习'}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog({ isOpen: false, onConfirm: null })}
       />

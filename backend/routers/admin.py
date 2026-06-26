@@ -2,9 +2,11 @@
 
 import os
 import json
+import asyncio
 import sqlite3
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from auth.deps import require_admin
@@ -182,48 +184,115 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
 
 @router.post("/api-keys/{tier}/test")
 async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    """逐个测试该 Tier 池中的所有 Key，并把结果回写到 gateway pool 的状态字段。
+
+    返回 {results: [{index, status, message}, ...]}，status ∈ ok/empty/invalid/rate_limited/error。
+    测试只更新配置上的 is_valid/last_error/last_error_time，不切换 active_index，
+    避免测试行为干扰真实流量轮换。
+    """
     if tier not in ("free", "basic", "pro"):
         raise HTTPException(status_code=400, detail="Invalid tier")
-    from llm_api import get_tier_llm_config
-    config = get_tier_llm_config(tier)
-    if not config or not config.get("api_key"):
-        raise HTTPException(status_code=400, detail="该 Tier 没有配置 API Key")
+    import asyncio
     import httpx
-    base_url = config.get("base_url", "https://api.openai.com/v1")
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
-    payload = {"model": config.get("model", "gpt-4o-mini"), "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                return {"status": "ok", "message": "API Key 可用"}
-            else:
-                return {"status": "error", "message": f"API 返回 {resp.status_code}: {resp.text[:200]}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-@router.get("/api-keys/{tier}/status")
-async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    from datetime import datetime, timezone
     from utils.llm_gateway import gateway
+
     pool = gateway.pools.get(tier)
-    if not pool:
-        return {"statuses": []}
+    if not pool or not pool.configs:
+        raise HTTPException(status_code=400, detail="该 Tier 没有配置 API Key")
+
+    async def _test_one(idx, cfg):
+        api_key = cfg.get("api_key", "")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if not api_key:
+            # ponytail: 空配置只清状态，不报错
+            cfg["is_valid"] = True
+            cfg["last_error"] = None
+            cfg["last_error_time"] = None
+            pool.last_error.pop(idx, None)
+            pool.last_error_time.pop(idx, None)
+            return {"index": idx, "status": "empty", "message": "未配置 Key"}
+        base_url = cfg.get("base_url", "https://api.openai.com/v1")
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": cfg.get("model", "gpt-4o-mini"),
+                   "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+            body = resp.text[:160]
+            if resp.status_code == 200:
+                cfg["is_valid"] = True
+                cfg["last_error"] = None
+                cfg["last_error_time"] = None
+                pool.last_error.pop(idx, None)
+                pool.last_error_time.pop(idx, None)
+                return {"index": idx, "status": "ok", "message": "API Key 可用"}
+            if resp.status_code == 401:
+                cfg["is_valid"] = False
+                cfg["last_error"] = "401 Unauthorized"
+                cfg["last_error_time"] = now_iso
+                pool.last_error[idx] = cfg["last_error"]
+                pool.last_error_time[idx] = now_iso
+                return {"index": idx, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
+            if resp.status_code == 429:
+                cfg["is_valid"] = True
+                cfg["last_error"] = "429 Rate Limited"
+                cfg["last_error_time"] = now_iso
+                pool.last_error[idx] = cfg["last_error"]
+                pool.last_error_time[idx] = now_iso
+                return {"index": idx, "status": "rate_limited", "message": f"限速中: {body}"}
+            # 其它状态码（含 5xx）：标记异常但不永久失效，避免误杀临时性服务端故障
+            cfg["is_valid"] = True
+            cfg["last_error"] = f"{resp.status_code} {body}"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error",
+                    "message": f"API 返回 {resp.status_code}: {body}"}
+        except httpx.TimeoutException:
+            cfg["is_valid"] = True
+            cfg["last_error"] = "network: timeout"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error", "message": "请求超时（30s）"}
+        except Exception as e:
+            msg = str(e)[:160]
+            cfg["is_valid"] = True
+            cfg["last_error"] = f"network: {msg}"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error", "message": f"请求失败: {msg}"}
+
+    # 并发测试所有 Key
+    results = await asyncio.gather(*[_test_one(i, c) for i, c in enumerate(pool.configs)])
+    results = sorted(results, key=lambda r: r["index"])
+    _log_action("test_api_keys", "tier", tier, {"results": results})
+    return {"results": results}
+
+
+def _build_key_statuses(pool) -> list:
+    """从 pool 构建每个 Key 的状态信息（供 HTTP 接口与 SSE 流复用）。"""
     statuses = []
     for i, cfg in enumerate(pool.configs):
         status_info = {
             "index": i,
             "api_key_preview": cfg.get("api_key", "")[:8] + "..." if cfg.get("api_key") else "未配置",
             "model": cfg.get("model", ""),
+            "disabled": cfg.get("disabled", False),
             "is_valid": cfg.get("is_valid", True),
+            "is_busy": pool.is_busy(i),
             "last_error": cfg.get("last_error", None),
             "last_error_time": cfg.get("last_error_time", None),
-            "active_count": pool.active_count.get(i, 0) if isinstance(pool.active_count, dict) else 0,
             "total_calls": pool.total_calls.get(i, 0) if hasattr(pool, 'total_calls') else 0,
         }
-        # 判断状态
-        if not cfg.get("api_key"):
+        # 判断状态（disabled 优先级最高，已禁用的不参与轮询）
+        if cfg.get("disabled"):
+            status_info["status"] = "disabled"
+            status_info["status_text"] = "已禁用"
+        elif not cfg.get("api_key"):
             status_info["status"] = "empty"
             status_info["status_text"] = "未配置"
         elif not cfg.get("is_valid", True):
@@ -232,11 +301,73 @@ async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(requir
         elif cfg.get("last_error") and "429" in str(cfg.get("last_error", "")):
             status_info["status"] = "rate_limited"
             status_info["status_text"] = "限速中"
+        elif cfg.get("last_error"):
+            # 非 429 错误（含 5xx、网络异常等），避免误显示为“正常”
+            status_info["status"] = "error"
+            status_info["status_text"] = "异常"
         else:
             status_info["status"] = "normal"
             status_info["status_text"] = "正常"
         statuses.append(status_info)
-    return {"statuses": statuses}
+    return statuses
+
+
+@router.get("/api-keys/{tier}/status")
+async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    from utils.llm_gateway import gateway
+    pool = gateway.pools.get(tier)
+    if not pool:
+        return {"statuses": []}
+    return {"statuses": _build_key_statuses(pool)}
+
+
+def _require_admin_for_sse(tier: str, token: Optional[str] = Query(None)):
+    """SSE 专用认证：EventSource 不能设置自定义 header，所以接受 ?token=xxx 作为 fallback。
+
+    优先校验 query 中的 token；为空时由 FastAPI 在依赖链失败时报 401。
+    """
+    from auth.jwt_utils import decode_admin_token
+    if not token:
+        raise HTTPException(status_code=401, detail="缺少 token")
+    admin_data = decode_admin_token(token)
+    if admin_data is None:
+        raise HTTPException(status_code=401, detail="token 无效或已过期")
+    return admin_data
+
+
+@router.get("/api-keys/{tier}/status/stream")
+async def stream_api_key_statuses(tier: str, admin: AdminTokenData = Depends(_require_admin_for_sse)):
+    """SSE 实时推送 Key 状态。事件驱动：mark_* 改变状态时立刻推送，无变化时每 15s 发心跳保活。
+
+    资源节约：无订阅时不轮询；有订阅时仅在状态变化时推送一次 JSON，未变化时只发心跳。
+    认证：EventSource 无法携带 Authorization header，所以通过 ?token=xxx 传递 admin JWT。
+    """
+    from utils.llm_gateway import gateway
+    pool = gateway.pools.get(tier)
+    if not pool:
+        async def _empty():
+            yield 'event: end\ndata: no pool\n\n'
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
+    async def event_stream():
+        event = pool.get_status_event()
+        last_sig = None
+        while True:
+            # 立即推送当前快照
+            statuses = _build_key_statuses(pool)
+            sig = json.dumps(statuses, ensure_ascii=False, sort_keys=True)
+            if sig != last_sig:
+                last_sig = sig
+                yield f"data: {json.dumps({'statuses': statuses}, ensure_ascii=False)}\n\n"
+            # 等待状态变化或 15s 心跳保活（避免代理/浏览器断开空闲连接）
+            try:
+                event.clear()
+                await asyncio.wait_for(event.wait(), timeout=15)
+            except asyncio.TimeoutError:
+                yield ': heartbeat\n\n'
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+                            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ── 用户管理 ────────────────────────────────────────────────

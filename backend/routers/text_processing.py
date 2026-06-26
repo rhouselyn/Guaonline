@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from llm_api import detect_language, get_lang_name
 from utils.llm_gateway import gateway
 from utils.state import storage, processing_status
-from utils.exercise_generators import process_text_background, generate_title
+from utils.exercise_generators import process_text_background, generate_title, retry_failed_sentences
 from auth.deps import get_current_user, require_auth, TokenData
 from auth.quota import check_and_refill_quota, consume_quota
 from utils.state import text_processor
@@ -263,6 +263,22 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/process-text/{file_id}/retry-sentences")
+async def retry_sentences(file_id: str, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_auth)):
+    """重试此前失败的句子。仅当 processing_status 为 error+partial 且有 failed_sentences 时有意义。"""
+    st = processing_status.get(file_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="File not found")
+    if st.get("status") != "error" or not st.get("partial"):
+        raise HTTPException(status_code=400, detail="当前状态不支持重试失败句子")
+    # 立即置为处理中，避免前端重复触发
+    _preserve = {k: st[k] for k in ("original_text", "title") if k in st}
+    processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0,
+                                  "total_sentences": st.get("total_sentences", 0), "preprocess": "retrying", **_preserve}
+    background_tasks.add_task(retry_failed_sentences, file_id, current_user.user_id, current_user.tier.value)
+    return {"file_id": file_id, "status": "processing", "preprocess": "retrying"}
 
 
 @router.get("/status/{file_id}")

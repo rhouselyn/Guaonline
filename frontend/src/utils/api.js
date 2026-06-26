@@ -20,6 +20,12 @@ export const api = {
     return response.data;
   },
 
+  // 重试失败的句子（仅重新处理失败句子，已成功句子保留）
+  retryFailedSentences: async (fileId) => {
+    const response = await axios.post(`${baseUrl}/api/process-text/${fileId}/retry-sentences`);
+    return response.data;
+  },
+
   detectLanguage: async (text) => {
     const response = await axios.post(`${baseUrl}/api/detect-language`, {
       text: text.trim(),
