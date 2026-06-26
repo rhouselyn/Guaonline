@@ -168,6 +168,9 @@ class TierKeyPool:
 class LLMGateway:
     """统一 LLM 调用网关。"""
 
+    # max_tokens 非法时折半重试的最大次数（16384→8192→...→512，足够覆盖输入占位）
+    MAX_TOKEN_HALVINGS = 5
+
     _instance = None
     _instance_lock = threading.Lock()
 
@@ -206,10 +209,17 @@ class LLMGateway:
 
     async def call(self, user_id: str, tier: str, messages: List[Dict],
                    temperature: float = 0.0, max_tokens: int = 65536,
-                   request_type: str = "llm_call", tools: List[Dict] = None) -> dict:
+                   request_type: str = "llm_call", tools: List[Dict] = None,
+                   _max_tokens_eff: int = None) -> dict:
         """
         统一 LLM 调用入口。
+
+        _max_tokens_eff: 内部参数，max_tokens 在跨重试间的“当前有效值”。
+        当遇到 max_tokens 非法的 400 时，会折半重试（最多折半 MAX_TOKEN_HALVINGS 次）。
         """
+        # 首次进入时，由调用方传入的 max_tokens 决定有效值
+        if _max_tokens_eff is None:
+            _max_tokens_eff = max_tokens
         # 查找对应 tier 的 Key 池，无则回退到 free
         pool = self.pools.get(tier)
         if not pool and tier != "free":
@@ -240,7 +250,7 @@ class LLMGateway:
             sleep_s = min(max(wait_until - time.time(), 0.1), 60.0)
             print(f"[GATEWAY] --- all keys blocked, wait {sleep_s:.1f}s then retry tier={tier} type={request_type}")
             await asyncio.sleep(sleep_s)
-            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=_max_tokens_eff)
 
         config, idx = result
         api_key = config.get("api_key", "")
@@ -253,8 +263,11 @@ class LLMGateway:
         key_cap = config.get("max_tokens")
         if not key_cap:
             key_cap = 16384 if pool.tier == "free" else 65536
-        if max_tokens is None or max_tokens > key_cap:
-            max_tokens = key_cap
+        # 用本次重试的有效值（可能已被 400 折半过），再受 key_cap 约束
+        eff = _max_tokens_eff
+        if eff is None or eff > key_cap:
+            eff = key_cap
+        max_tokens = eff
 
         # 发请求
         url = f"{base_url.rstrip('/')}/chat/completions"
@@ -307,23 +320,35 @@ class LLMGateway:
                     pass
                 pool.mark_rate_limited(idx, retry_after)
                 # 重试一次
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             elif resp.status_code == 401:
                 pool.mark_invalid(idx)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             elif resp.status_code >= 500:
                 pool.mark_server_error(idx)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
+                # 退避一下，避免对同一故障 Key 密集重试造成 START 日志洪水
+                await asyncio.sleep(1.0)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             else:
+                # 4xx 非 401/429：max_tokens 非法时折半重试，其它直接抛出（不重试，避免无谓延迟）
+                body = resp.text[:300]
+                low = body.lower()
+                if "max_tokens" in low and ("非法" in body or "invalid" in low or "range" in low or "exceed" in low or "maximum" in low):
+                    halved = max(eff // 2, 256)
+                    if halved < eff:
+                        # ponytail: 折半有下限 256，到达后 halved==eff 自动停止，天然有界
+                        print(f"[GATEWAY] max_tokens 非法({eff})，折半为 {halved} 后重试 tier={tier} type={request_type}")
+                        pool.mark_complete(idx)
+                        return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=halved)
                 pool.mark_complete(idx)
-                raise Exception(f"LLM API error: {resp.status_code} - {resp.text[:200]}")
+                raise Exception(f"LLM API error: {resp.status_code} - {body[:200]}")
 
         except httpx.TimeoutException:
             pool.mark_server_error(idx)
-            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except Exception as e:
             if "No API Key" in str(e) or "服务暂时不可用" in str(e):
                 raise

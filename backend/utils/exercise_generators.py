@@ -391,6 +391,231 @@ async def _gateway_process_remaining_words(user_id, tier, words, source_lang, ta
     return []
 
 
+def _finalize_pipeline(file_id, sentence_translations, total_sentences,
+                       source_lang, target_lang, user_id, tier, t_total_start):
+    """句子全部就绪后：提取词典、保存 pipeline/vocab、生成学习计划、启动单词生成、置完成状态。
+
+    返回 all_vocab。供正常处理路径与“重试失败句子”路径共用，避免逻辑重复。
+    """
+    all_vocab = []
+    for i, sentence_data in enumerate(sentence_translations):
+        translation_result = sentence_data.get("translation_result", {})
+        if isinstance(translation_result, dict) and "translation" in translation_result:
+            for ti, token in enumerate(translation_result["translation"]):
+                if isinstance(token, dict) and "text" in token:
+                    word = token["text"]
+                    if not word or is_punctuation_only(word):
+                        continue
+                    entry = {
+                        "word": word,
+                        "ipa": token.get("phonetic", ""),
+                        "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
+                        "tokens": [word],
+                        "morphology": token.get("morphology", ""),
+                        "sentence_index": i,
+                        "token_index": ti
+                    }
+                    all_vocab.append(entry)
+
+    seen = set()
+    unique_vocab = []
+    for entry in all_vocab:
+        word = entry.get("word", "")
+        cleaned = strip_edge_punctuation(word)
+        if cleaned != word:
+            entry["word"] = cleaned
+            tokens = entry.get("tokens", [])
+            if tokens:
+                entry["tokens"] = [cleaned if t == word else t for t in tokens]
+        word = cleaned.lower()
+        if word not in seen and word:
+            seen.add(word)
+            unique_vocab.append(entry)
+    all_vocab = unique_vocab
+
+    all_words_lower = set(entry.get("word", "").lower() for entry in all_vocab)
+    deduplicated = []
+    for entry in all_vocab:
+        tokens = entry.get("tokens", [])
+        if tokens and len(tokens) >= 2:
+            all_tokens_covered = all(
+                any(t.lower() == w.lower() for w in all_words_lower if w != entry.get("word", "").lower())
+                for t in tokens
+            )
+            if all_tokens_covered:
+                continue
+        deduplicated.append(entry)
+    all_vocab = deduplicated
+
+    all_vocab.sort(key=vocab_sort_key)
+    print(f"[DEBUG] 从所有句子中提取词典条目，共 {len(all_vocab)} 个单词: {[word['word'] for word in all_vocab]}")
+
+    learned_words_set = set()
+    for entry in all_vocab:
+        word = entry.get("word", "").lower()
+        if word and storage.find_global_word_cache(word, source_lang):
+            learned_words_set.add(word)
+    if learned_words_set:
+        storage.save_learned_words(file_id, sorted(learned_words_set))
+        print(f"[DEBUG] 已识别 {len(learned_words_set)} 个已学单词: {sorted(learned_words_set)}")
+
+    storage.save_pipeline_data(file_id, sentence_translations)
+    storage.save_vocab(file_id, all_vocab)
+
+    if all_vocab:
+        generate_and_save_learning_plan(file_id, all_vocab, sentence_translations)
+
+    _preserve4 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+    processing_status[file_id] = {
+        "status": "completed",
+        "progress": 100,
+        "vocab": all_vocab,
+        "sentence_translations": sentence_translations,
+        **_preserve4
+    }
+    t_total_end = time.time()
+    print(f"[TIMING] ========== 全部处理完成 ==========")
+    print(f"[TIMING] 总耗时: {t_total_end - t_total_start:.3f}s")
+    print(f"[TIMING] 句子数: {total_sentences}, 单词数: {len(all_vocab)}")
+
+    if file_id not in word_gen_state:
+        word_gen_state[file_id] = {
+            "running": False,
+            "vocab": all_vocab,
+            "priority_queue": [],
+            "task": None,
+            "processing_words": set(),
+            "user_id": user_id,
+            "tier": tier,
+        }
+    state = word_gen_state[file_id]
+    state["vocab"] = all_vocab
+    if user_id:
+        state["user_id"] = user_id
+    if tier:
+        state["tier"] = tier
+    if "processing_words" not in state:
+        state["processing_words"] = set()
+    if "plan_position" not in state:
+        state["plan_position"] = 0
+    if not state["running"]:
+        state["running"] = True
+        state["task"] = asyncio.create_task(background_word_gen(file_id))
+        print(f"[DEBUG] 自动启动单词详情生成")
+    return all_vocab
+
+
+async def retry_failed_sentences(file_id: str, user_id: str = None, tier: str = "free"):
+    """重试此前处理失败的句子。
+
+    读取已保存的部分 pipeline_data，找出带 __failed 标记的句子重新处理；
+    成功后合并结果并走 _finalize_pipeline 完成整个任务。仍失败的句子继续保留待重试状态。
+    """
+    language_settings = storage.load_language_settings(file_id)
+    source_lang = language_settings.get("source_lang", "en")
+    target_lang = language_settings.get("target_lang", "zh")
+    original_text = language_settings.get("original_text", "")
+    if not original_text:
+        # 回退到 processing_status 里保存的原文
+        st = processing_status.get(file_id, {})
+        original_text = st.get("original_text", "")
+    if not original_text:
+        raise Exception("无法重试：找不到原文")
+
+    pipeline = storage.load_pipeline_data(file_id) or []
+    sentences = text_processor.split_sentences(original_text)
+    total_sentences = len(sentences)
+
+    failed_indices = [i for i, sd in enumerate(pipeline) if isinstance(sd, dict) and sd.get("__failed")]
+    if not failed_indices:
+        # 没有失败句子，直接完成
+        sentence_translations = [pipeline[i] if i < len(pipeline) else {"sentence": sentences[i], "translation_result": {}} for i in range(total_sentences)]
+    else:
+        # 重试失败句子
+        _preserve = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+        processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": total_sentences, "preprocess": "retrying", **_preserve}
+        results_dict = {}
+        for i in failed_indices:
+            results_dict[i] = pipeline[i]
+
+        async def _retry_one(idx, sentence):
+            before_indices = [i for i in range(max(0, idx - 2), idx)]
+            after_indices = [i for i in range(idx + 1, min(len(sentences), idx + 3))]
+            before_sentences = [sentences[i] for i in before_indices if sentences[i].strip()]
+            after_sentences = [sentences[i] for i in after_indices if sentences[i].strip()]
+            context_sentences = {"before": before_sentences, "after": after_sentences} if (before_sentences or after_sentences) else None
+            llm_shim = _LLMApiShim(user_id, tier)
+            sentence_translation_result = await text_processor.process_translation(
+                sentence, source_lang, target_lang, llm_shim, context_sentences
+            )
+            sentence_translation_result = text_processor.validate_and_complete_translation(
+                sentence, sentence_translation_result, source_lang
+            )
+            return {"sentence": sentence, "translation_result": sentence_translation_result}
+
+        t_total_start = time.time()
+        still_failed = []
+        tasks = []
+        for idx in failed_indices:
+            s = sentences[idx] if idx < len(sentences) else ""
+            if not s.strip():
+                results_dict[idx] = {"sentence": s, "translation_result": {}}
+                continue
+
+            async def _safe(idx=idx, s=s):
+                try:
+                    return idx, await _retry_one(idx, s)
+                except Exception as e:
+                    print(f"[ERROR] 重试句子 {idx+1} 仍失败: {e}")
+                    return idx, None
+
+            tasks.append(asyncio.create_task(_safe()))
+
+        for coro in asyncio.as_completed(tasks):
+            idx, sd = await coro
+            if sd is not None:
+                results_dict[idx] = sd
+            else:
+                still_failed.append(idx)
+
+        if still_failed:
+            partial_pipeline = []
+            for i in range(total_sentences):
+                sd = results_dict.get(i)
+                if sd is None or (isinstance(sd, dict) and sd.get("__failed")):
+                    partial_pipeline.append({"sentence": sentences[i] if i < len(sentences) else "", "translation_result": {}, "__failed": True, "error": "重试仍失败"})
+                else:
+                    partial_pipeline.append(sd)
+            storage.save_pipeline_data(file_id, partial_pipeline)
+            _preserve2 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+            processing_status[file_id] = {
+                "status": "error",
+                "error": f"仍有 {len(still_failed)} 个句子重试失败，可再次重试",
+                "partial": True,
+                "failed_sentences": [{"index": i, "sentence": sentences[i] if i < len(sentences) else "", "error": "重试仍失败"} for i in still_failed],
+                "total_sentences": total_sentences,
+                "current_sentence": total_sentences - len(still_failed),
+                "progress": int((total_sentences - len(still_failed)) / total_sentences * 100),
+                **_preserve2,
+            }
+            return
+
+        # 全部重试成功，合并并完成
+        sentence_translations = []
+        for i in range(total_sentences):
+            if i in results_dict and not (isinstance(results_dict[i], dict) and results_dict[i].get("__failed")):
+                sentence_translations.append(results_dict[i])
+            elif i < len(pipeline) and not (isinstance(pipeline[i], dict) and pipeline[i].get("__failed")):
+                sentence_translations.append(pipeline[i])
+            else:
+                sentence_translations.append({"sentence": sentences[i] if i < len(sentences) else "", "translation_result": {}})
+
+    _finalize_pipeline(
+        file_id, sentence_translations, total_sentences,
+        source_lang, target_lang, user_id, tier, time.time()
+    )
+
+
 async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, user_id: str = None, tier: str = "free"):
     try:
         t_total_start = time.time()
@@ -415,8 +640,18 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         completed_indices = set()
 
         async def process_single_sentence(idx, sentence):
+            """处理单句。失败时返回失败哨兵，不抛异常——单句失败不应拖垮整个任务。"""
             if not sentence.strip():
                 return idx, None
+            try:
+                return await _process_single_sentence_impl(idx, sentence)
+            except Exception as e:
+                import traceback as _tb
+                print(f"[ERROR] 句子 {idx+1} 处理失败，将标记为待重试: {e}")
+                _tb.print_exc()
+                return idx, {"__failed__": True, "sentence": sentence, "error": str(e)}
+
+        async def _process_single_sentence_impl(idx, sentence):
 
             before_indices = [i for i in range(max(0, idx - 2), idx)]
             after_indices = [i for i in range(idx + 1, min(len(sentences), idx + 3))]
@@ -569,111 +804,64 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
 
         sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
 
-        all_vocab = []
-        for i, sentence_data in enumerate(sentence_translations):
-            translation_result = sentence_data.get("translation_result", {})
-            if isinstance(translation_result, dict) and "translation" in translation_result:
-                for ti, token in enumerate(translation_result["translation"]):
-                    if isinstance(token, dict) and "text" in token:
-                        word = token["text"]
-                        if not word or is_punctuation_only(word):
-                            continue
-                        entry = {
-                            "word": word,
-                            "ipa": token.get("phonetic", ""),
-                            "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
-                            "tokens": [word],
-                            "morphology": token.get("morphology", ""),
-                            "sentence_index": i,
-                            "token_index": ti
-                        }
-                        all_vocab.append(entry)
+        # 收集失败的句子：单句失败不拖垮整个任务，标记为待重试并保存部分结果
+        failed_sentences = []
+        for i, sd in enumerate(sentence_translations):
+            if isinstance(sd, dict) and sd.get("__failed__"):
+                failed_sentences.append({
+                    "index": i,
+                    "sentence": sd.get("sentence", sentences[i]),
+                    "error": sd.get("error", "未知错误"),
+                })
 
-        seen = set()
-        unique_vocab = []
-        for entry in all_vocab:
-            word = entry.get("word", "")
-            cleaned = strip_edge_punctuation(word)
-            if cleaned != word:
-                entry["word"] = cleaned
-                tokens = entry.get("tokens", [])
-                if tokens:
-                    entry["tokens"] = [cleaned if t == word else t for t in tokens]
-            word = cleaned.lower()
-            if word not in seen and word:
-                seen.add(word)
-                unique_vocab.append(entry)
-        all_vocab = unique_vocab
-
-        all_words_lower = set(entry.get("word", "").lower() for entry in all_vocab)
-        deduplicated = []
-        for entry in all_vocab:
-            tokens = entry.get("tokens", [])
-            if tokens and len(tokens) >= 2:
-                all_tokens_covered = all(
-                    any(t.lower() == w.lower() for w in all_words_lower if w != entry.get("word", "").lower())
-                    for t in tokens
-                )
-                if all_tokens_covered:
+        if failed_sentences:
+            # 保存部分 pipeline_data（失败句子保留为带 __failed 标记的占位，便于重试时定位）
+            partial_pipeline = []
+            for i in range(total_sentences):
+                sd = sentence_translations[i]
+                if isinstance(sd, dict) and sd.get("__failed__"):
+                    partial_pipeline.append({"sentence": sentences[i], "translation_result": {}, "__failed": True, "error": sd.get("error", "")})
+                else:
+                    partial_pipeline.append(sd)
+            storage.save_pipeline_data(file_id, partial_pipeline)
+            # 保存已成功句子提取的词汇（部分），便于重试后合并
+            partial_vocab = []
+            for i, sd in enumerate(sentence_translations):
+                if isinstance(sd, dict) and sd.get("__failed__"):
                     continue
-            deduplicated.append(entry)
-        all_vocab = deduplicated
-
-        all_vocab.sort(key=vocab_sort_key)
-        print(f"[DEBUG] 从所有句子中提取词典条目，共 {len(all_vocab)} 个单词: {[word['word'] for word in all_vocab]}")
-
-        learned_words_set = set()
-        for entry in all_vocab:
-            word = entry.get("word", "").lower()
-            if word and storage.find_global_word_cache(word, source_lang):
-                learned_words_set.add(word)
-        if learned_words_set:
-            storage.save_learned_words(file_id, sorted(learned_words_set))
-            print(f"[DEBUG] 已识别 {len(learned_words_set)} 个已学单词: {sorted(learned_words_set)}")
-
-        storage.save_pipeline_data(file_id, sentence_translations)
-        storage.save_vocab(file_id, all_vocab)
-
-        if all_vocab:
-            generate_and_save_learning_plan(file_id, all_vocab, sentence_translations)
-
-        _preserve4 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
-        processing_status[file_id] = {
-            "status": "completed",
-            "progress": 100,
-            "vocab": all_vocab,
-            "sentence_translations": sentence_translations,
-            **_preserve4
-        }
-        t_total_end = time.time()
-        print(f"[TIMING] ========== 全部处理完成 ==========")
-        print(f"[TIMING] 总耗时: {t_total_end - t_total_start:.3f}s")
-        print(f"[TIMING] 句子数: {total_sentences}, 单词数: {len(all_vocab)}")
-
-        if file_id not in word_gen_state:
-            word_gen_state[file_id] = {
-                "running": False,
-                "vocab": all_vocab,
-                "priority_queue": [],
-                "task": None,
-                "processing_words": set(),
-                "user_id": user_id,
-                "tier": tier,
+                tr = sd.get("translation_result", {})
+                if isinstance(tr, dict) and "translation" in tr:
+                    for ti, token in enumerate(tr["translation"]):
+                        if isinstance(token, dict) and "text" in token:
+                            partial_vocab.append({
+                                "word": token["text"],
+                                "ipa": token.get("phonetic", ""),
+                                "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
+                                "tokens": [token["text"]],
+                                "morphology": token.get("morphology", ""),
+                                "sentence_index": i,
+                                "token_index": ti,
+                            })
+            if partial_vocab:
+                storage.save_vocab(file_id, partial_vocab)
+            _preserve_f = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+            processing_status[file_id] = {
+                "status": "error",
+                "error": f"{len(failed_sentences)} 个句子处理失败，点击“重试失败句子”重试",
+                "partial": True,
+                "failed_sentences": failed_sentences,
+                "total_sentences": total_sentences,
+                "current_sentence": total_sentences - len(failed_sentences),
+                "progress": int((total_sentences - len(failed_sentences)) / total_sentences * 100),
+                **_preserve_f,
             }
-        state = word_gen_state[file_id]
-        state["vocab"] = all_vocab
-        if user_id:
-            state["user_id"] = user_id
-        if tier:
-            state["tier"] = tier
-        if "processing_words" not in state:
-            state["processing_words"] = set()
-        if "plan_position" not in state:
-            state["plan_position"] = 0
-        if not state["running"]:
-            state["running"] = True
-            state["task"] = asyncio.create_task(background_word_gen(file_id))
-            print(f"[DEBUG] 自动启动单词详情生成")
+            print(f"[ERROR] 文件 {file_id} 有 {len(failed_sentences)} 个句子失败：{[f['index']+1 for f in failed_sentences]}，已保存部分结果，等待重试")
+            return  # 不抛异常、不删历史、不退额度，等待用户重试失败句子
+
+        all_vocab = _finalize_pipeline(
+            file_id, sentence_translations, total_sentences,
+            source_lang, target_lang, user_id, tier, t_total_start
+        )
     except Exception as e:
         print(f"[ERROR] 处理出错: {str(e)}")
         import traceback

@@ -196,6 +196,49 @@ def test_update_tier_keys_matches_masked_after_reorder():
     assert saved[1]["base_url"] == "u1"
 
 
+def test_call_halves_max_tokens_on_400():
+    """provider 返回 max_tokens 非法的 400 时，gateway 应折半重试直到成功或触底。"""
+    gw = _reload_gateway_with([
+        {"api_key": "sk-x", "base_url": "https://x/v1", "model": "m", "max_tokens": 16384},
+    ], tier="free")
+    gw.gateway.pools["free"].interval = 0
+    attempts = []
+
+    class _C(_RecordingClient):
+        async def post(self, url, headers=None, json=None):
+            mt = json["max_tokens"]
+            attempts.append(mt)
+            if mt > 4096:
+                return _FakeResp(400, '{"error":{"message":"max_tokens参数非法：限制数值范围[1,16384]"}}')
+            return _FakeResp(200, '{"choices":[{"message":{"content":"ok"}}],"usage":{}}')
+
+    with patch("httpx.AsyncClient", _C):
+        res = asyncio.run(gw.gateway.call("u", "free", [{"role": "user", "content": "hi"}], max_tokens=16384))
+    assert res["choices"][0]["message"]["content"] == "ok"
+    # 应经历 16384 -> 8192 -> 4096 三次尝试，第三次成功
+    assert attempts == [16384, 8192, 4096], attempts
+
+
+def test_call_does_not_halve_unrelated_400():
+    """非 max_tokens 的 400 应直接抛出，不折半重试。"""
+    gw = _reload_gateway_with([
+        {"api_key": "sk-x", "base_url": "https://x/v1", "model": "m"},
+    ], tier="free")
+    gw.gateway.pools["free"].interval = 0
+    attempts = []
+
+    class _C(_RecordingClient):
+        async def post(self, url, headers=None, json=None):
+            attempts.append(json["max_tokens"])
+            return _FakeResp(400, '{"error":{"message":"invalid model"}}')
+
+    import pytest
+    with patch("httpx.AsyncClient", _C):
+        with pytest.raises(Exception):
+            asyncio.run(gw.gateway.call("u", "free", [{"role": "user", "content": "hi"}], max_tokens=16384))
+    assert len(attempts) == 1, attempts  # 不重试
+
+
 if __name__ == "__main__":
     test_disabled_key_is_skipped()
     test_all_disabled_has_no_usable_key()
@@ -206,4 +249,6 @@ if __name__ == "__main__":
     test_call_caps_max_tokens_to_per_key_value()
     test_call_keeps_smaller_caller_max_tokens()
     test_update_tier_keys_matches_masked_after_reorder()
+    test_call_halves_max_tokens_on_400()
+    test_call_does_not_halve_unrelated_400()
     print("\n全部测试通过 ✅")
