@@ -895,8 +895,12 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
         for attempt in range(max_retries):
             try:
                 existing = storage.load_word_cache(file_id, word_to_gen)
-                if existing and is_word_cache_complete(existing):
-                    return
+                if existing:
+                    # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词重新生成后再写入
+                    if is_word_cache_complete(existing):
+                        return
+                    print(f"[CACHE] 单词缓存不完整，删除后重新生成: {word_to_gen}")
+                    storage.delete_word_cache(file_id, word_to_gen)
                 word_entry = None
                 for v in vocab:
                     if v.get("word", "").lower() == word_to_gen.lower():
@@ -1089,8 +1093,12 @@ async def background_word_gen(file_id: str):
             continue
 
         existing = storage.load_word_cache(file_id, word_to_gen)
-        if existing and is_word_cache_complete(existing):
-            continue
+        if existing:
+            # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词处理
+            if is_word_cache_complete(existing):
+                continue
+            print(f"[CACHE] 轮询单词缓存不完整，删除后重新生成: {word_to_gen}")
+            storage.delete_word_cache(file_id, word_to_gen)
 
         # 词汇缓存查询：user_vocab → global_vocab → 旧 find_global_word_cache
         uid = state.get("user_id")
@@ -1100,7 +1108,8 @@ async def background_word_gen(file_id: str):
         if not vocab_hit:
             vocab_hit = global_vocab.lookup(word_to_gen, source_lang, target_lang)
 
-        if vocab_hit:
+        # ponytail: 命中即立刻检查完整性；不完整则跳过该命中，落到 LLM 重新生成
+        if vocab_hit and is_word_cache_complete(vocab_hit):
             import copy
             cached = copy.deepcopy(vocab_hit)
             # 补充 context_sentences
@@ -1113,7 +1122,8 @@ async def background_word_gen(file_id: str):
             continue
 
         existing_cache = storage.find_global_word_cache(word_to_gen, source_lang)
-        if existing_cache:
+        # ponytail: 命中即立刻检查完整性；不完整则跳过，落到 LLM 重新生成
+        if existing_cache and is_word_cache_complete(existing_cache):
             import copy
             cached = copy.deepcopy(existing_cache)
             context_sents = build_context_sentences(storage.load_pipeline_data(file_id), word_to_gen)
@@ -1447,9 +1457,14 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
         random_word = vocab[vocab_idx]
         word = random_word["word"]
 
-        if storage.load_word_cache(file_id, word):
-            print(f"[DEBUG] 预生成单词已缓存: {word}")
-            return
+        existing = storage.load_word_cache(file_id, word)
+        if existing:
+            # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词重新生成后再写入
+            if is_word_cache_complete(existing):
+                print(f"[DEBUG] 预生成单词已缓存: {word}")
+                return
+            print(f"[CACHE] 预生成单词缓存不完整，删除后重新生成: {word}")
+            storage.delete_word_cache(file_id, word)
 
         sentences = storage.load_pipeline_data(file_id)
         context_sentences = build_context_sentences(sentences, word)
