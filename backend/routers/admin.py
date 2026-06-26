@@ -182,26 +182,93 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
 
 @router.post("/api-keys/{tier}/test")
 async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    """逐个测试该 Tier 池中的所有 Key，并把结果回写到 gateway pool 的状态字段。
+
+    返回 {results: [{index, status, message}, ...]}，status ∈ ok/empty/invalid/rate_limited/error。
+    测试只更新配置上的 is_valid/last_error/last_error_time，不切换 active_index，
+    避免测试行为干扰真实流量轮换。
+    """
     if tier not in ("free", "basic", "pro"):
         raise HTTPException(status_code=400, detail="Invalid tier")
-    from llm_api import get_tier_llm_config
-    config = get_tier_llm_config(tier)
-    if not config or not config.get("api_key"):
-        raise HTTPException(status_code=400, detail="该 Tier 没有配置 API Key")
+    import asyncio
     import httpx
-    base_url = config.get("base_url", "https://api.openai.com/v1")
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
-    payload = {"model": config.get("model", "gpt-4o-mini"), "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, headers=headers, json=payload)
+    from datetime import datetime, timezone
+    from utils.llm_gateway import gateway
+
+    pool = gateway.pools.get(tier)
+    if not pool or not pool.configs:
+        raise HTTPException(status_code=400, detail="该 Tier 没有配置 API Key")
+
+    async def _test_one(idx, cfg):
+        api_key = cfg.get("api_key", "")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if not api_key:
+            # ponytail: 空配置只清状态，不报错
+            cfg["is_valid"] = True
+            cfg["last_error"] = None
+            cfg["last_error_time"] = None
+            pool.last_error.pop(idx, None)
+            pool.last_error_time.pop(idx, None)
+            return {"index": idx, "status": "empty", "message": "未配置 Key"}
+        base_url = cfg.get("base_url", "https://api.openai.com/v1")
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": cfg.get("model", "gpt-4o-mini"),
+                   "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+            body = resp.text[:160]
             if resp.status_code == 200:
-                return {"status": "ok", "message": "API Key 可用"}
-            else:
-                return {"status": "error", "message": f"API 返回 {resp.status_code}: {resp.text[:200]}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+                cfg["is_valid"] = True
+                cfg["last_error"] = None
+                cfg["last_error_time"] = None
+                pool.last_error.pop(idx, None)
+                pool.last_error_time.pop(idx, None)
+                return {"index": idx, "status": "ok", "message": "API Key 可用"}
+            if resp.status_code == 401:
+                cfg["is_valid"] = False
+                cfg["last_error"] = "401 Unauthorized"
+                cfg["last_error_time"] = now_iso
+                pool.last_error[idx] = cfg["last_error"]
+                pool.last_error_time[idx] = now_iso
+                return {"index": idx, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
+            if resp.status_code == 429:
+                cfg["is_valid"] = True
+                cfg["last_error"] = "429 Rate Limited"
+                cfg["last_error_time"] = now_iso
+                pool.last_error[idx] = cfg["last_error"]
+                pool.last_error_time[idx] = now_iso
+                return {"index": idx, "status": "rate_limited", "message": f"限速中: {body}"}
+            # 其它状态码（含 5xx）：标记异常但不永久失效，避免误杀临时性服务端故障
+            cfg["is_valid"] = True
+            cfg["last_error"] = f"{resp.status_code} {body}"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error",
+                    "message": f"API 返回 {resp.status_code}: {body}"}
+        except httpx.TimeoutException:
+            cfg["is_valid"] = True
+            cfg["last_error"] = "network: timeout"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error", "message": "请求超时（30s）"}
+        except Exception as e:
+            msg = str(e)[:160]
+            cfg["is_valid"] = True
+            cfg["last_error"] = f"network: {msg}"
+            cfg["last_error_time"] = now_iso
+            pool.last_error[idx] = cfg["last_error"]
+            pool.last_error_time[idx] = now_iso
+            return {"index": idx, "status": "error", "message": f"请求失败: {msg}"}
+
+    # 并发测试所有 Key
+    results = await asyncio.gather(*[_test_one(i, c) for i, c in enumerate(pool.configs)])
+    results = sorted(results, key=lambda r: r["index"])
+    _log_action("test_api_keys", "tier", tier, {"results": results})
+    return {"results": results}
 
 
 @router.get("/api-keys/{tier}/status")
@@ -232,6 +299,10 @@ async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(requir
         elif cfg.get("last_error") and "429" in str(cfg.get("last_error", "")):
             status_info["status"] = "rate_limited"
             status_info["status_text"] = "限速中"
+        elif cfg.get("last_error"):
+            # 非 429 错误（含 5xx、网络异常等），避免误显示为“正常”
+            status_info["status"] = "error"
+            status_info["status_text"] = "异常"
         else:
             status_info["status"] = "normal"
             status_info["status_text"] = "正常"

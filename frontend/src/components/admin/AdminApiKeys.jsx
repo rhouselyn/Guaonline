@@ -106,9 +106,13 @@ export default function AdminApiKeys() {
     setTestResult(null)
     try {
       const result = await adminApi.testApiKey(tier)
-      setTestResult(result)
+      // 后端返回 {results: [{index, status, message}, ...]}
+      const results = result.results || [result]
+      setTestResult({ tier, results })
+      // 立即刷新状态徽章，让“正常/异常”反映测试结果
+      loadKeyStatuses(tier)
     } catch (e) {
-      setTestResult({ status: 'error', message: e.message })
+      setTestResult({ tier, results: [{ index: 0, status: 'error', message: e.message }] })
     } finally {
       setTesting(null)
     }
@@ -181,9 +185,18 @@ export default function AdminApiKeys() {
           </div>
         </div>
 
-        {testResult && (
-          <div className={`mb-4 p-2 rounded text-sm ${testResult.status === 'ok' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-            {testResult.message}
+        {testResult && testResult.tier === activeTier && (
+          <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
+            <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
+            {testResult.results.map(r => (
+              <div key={r.index} className={
+                r.status === 'ok' ? 'text-green-400' :
+                r.status === 'empty' ? 'text-gray-400' :
+                'text-red-400'
+              }>
+                Key #{r.index + 1}：{r.message}
+              </div>
+            ))}
           </div>
         )}
 
@@ -198,6 +211,7 @@ export default function AdminApiKeys() {
                     status?.status === 'normal' ? 'bg-green-900/30 text-green-400' :
                     status?.status === 'rate_limited' ? 'bg-yellow-900/30 text-yellow-400' :
                     status?.status === 'invalid' ? 'bg-red-900/30 text-red-400' :
+                    status?.status === 'error' ? 'bg-orange-900/30 text-orange-400' :
                     'bg-gray-700/30 text-gray-400'
                   }`}>
                     {status?.status_text || '未知'}
