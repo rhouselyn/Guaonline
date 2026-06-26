@@ -19,6 +19,13 @@ def _save_tier_keys(data: dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _mask_key(key: str) -> str:
+    """脱敏单个 API Key，供 get_tier_keys 展示与 update_tier_keys 反查使用。"""
+    if key and len(key) > 8:
+        return key[:4] + "*" * (len(key) - 8) + key[-4:]
+    return "****" if key else ""
+
+
 def get_tier_keys() -> dict:
     """获取所有 tier 的 API Key 配置（脱敏）。"""
     data = _load_tier_keys()
@@ -27,16 +34,14 @@ def get_tier_keys() -> dict:
         configs = []
         for cfg in pool.get("configs", []):
             key = cfg.get("api_key", "")
-            if key and len(key) > 8:
-                masked_key = key[:4] + "*" * (len(key) - 8) + key[-4:]
-            else:
-                masked_key = "****" if key else ""
+            masked_key = _mask_key(key)
             configs.append({
                 "api_key": masked_key,
                 "base_url": cfg.get("base_url", ""),
                 "model": cfg.get("model", ""),
                 "has_key": bool(key),
                 "disabled": cfg.get("disabled", False),
+                "max_tokens": cfg.get("max_tokens", None),
                 "input_price_per_million": cfg.get("input_price_per_million", 0),
                 "output_price_per_million": cfg.get("output_price_per_million", 0),
             })
@@ -50,16 +55,24 @@ def update_tier_keys(tier: str, configs: list, active_index: int = 0):
     if "tier_keys" not in data:
         data["tier_keys"] = {}
     existing = data["tier_keys"].get(tier, {}).get("configs", [])
+    # 建立 masked -> real 的映射，用于识别未修改的脱敏 key（与位置无关，支持拖拽重排序）
+    masked_to_real = {}
+    for cfg in existing:
+        k = cfg.get("api_key", "")
+        if k:
+            masked_to_real[_mask_key(k)] = k
     new_configs = []
-    for i, cfg in enumerate(configs):
+    for cfg in configs:
         key = cfg.get("api_key", "")
-        if "*" in key and i < len(existing):
-            key = existing[i].get("api_key", key)
+        if "*" in key:
+            # 未修改的脱敏 key：按 masked 形式找回原始 key
+            key = masked_to_real.get(key, key)
         new_configs.append({
             "api_key": key,
             "base_url": cfg.get("base_url", ""),
             "model": cfg.get("model", ""),
             "disabled": cfg.get("disabled", False),
+            "max_tokens": cfg.get("max_tokens", None),
             "input_price_per_million": cfg.get("input_price_per_million", 0),
             "output_price_per_million": cfg.get("output_price_per_million", 0),
         })

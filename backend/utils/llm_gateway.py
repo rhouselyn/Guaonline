@@ -249,6 +249,13 @@ class LLMGateway:
         input_price = config.get("input_price_per_million", 0)
         output_price = config.get("output_price_per_million", 0)
 
+        # per-key 最高输出封顶：free 默认 16384，其它默认 65536；调用方传更小值时取更小
+        key_cap = config.get("max_tokens")
+        if not key_cap:
+            key_cap = 16384 if pool.tier == "free" else 65536
+        if max_tokens is None or max_tokens > key_cap:
+            max_tokens = key_cap
+
         # 发请求
         url = f"{base_url.rstrip('/')}/chat/completions"
         headers = {
