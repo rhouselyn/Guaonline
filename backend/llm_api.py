@@ -36,6 +36,7 @@ def get_tier_keys() -> dict:
                 "base_url": cfg.get("base_url", ""),
                 "model": cfg.get("model", ""),
                 "has_key": bool(key),
+                "disabled": cfg.get("disabled", False),
                 "input_price_per_million": cfg.get("input_price_per_million", 0),
                 "output_price_per_million": cfg.get("output_price_per_million", 0),
             })
@@ -58,6 +59,7 @@ def update_tier_keys(tier: str, configs: list, active_index: int = 0):
             "api_key": key,
             "base_url": cfg.get("base_url", ""),
             "model": cfg.get("model", ""),
+            "disabled": cfg.get("disabled", False),
             "input_price_per_million": cfg.get("input_price_per_million", 0),
             "output_price_per_million": cfg.get("output_price_per_million", 0),
         })

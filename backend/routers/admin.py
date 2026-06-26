@@ -283,14 +283,18 @@ async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(requir
             "index": i,
             "api_key_preview": cfg.get("api_key", "")[:8] + "..." if cfg.get("api_key") else "未配置",
             "model": cfg.get("model", ""),
+            "disabled": cfg.get("disabled", False),
             "is_valid": cfg.get("is_valid", True),
             "last_error": cfg.get("last_error", None),
             "last_error_time": cfg.get("last_error_time", None),
             "active_count": pool.active_count.get(i, 0) if isinstance(pool.active_count, dict) else 0,
             "total_calls": pool.total_calls.get(i, 0) if hasattr(pool, 'total_calls') else 0,
         }
-        # 判断状态
-        if not cfg.get("api_key"):
+        # 判断状态（disabled 优先级最高，已禁用的不参与轮询）
+        if cfg.get("disabled"):
+            status_info["status"] = "disabled"
+            status_info["status_text"] = "已禁用"
+        elif not cfg.get("api_key"):
             status_info["status"] = "empty"
             status_info["status_text"] = "未配置"
         elif not cfg.get("is_valid", True):

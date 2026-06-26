@@ -32,6 +32,9 @@ def _load_global_settings() -> dict:
 class TierKeyPool:
     """单个 Tier 的 Key 池，支持始终轮换 + 批量并发。"""
 
+    # 连续失败多久后判定服务不可用（用户要求：满 10 分钟才放弃）
+    FAIL_DEADLINE = 600
+
     def __init__(self, tier: str, configs: list, batch_size: int = 3, interval: float = 1.0):
         self.tier = tier
         self.configs = configs
@@ -47,18 +50,38 @@ class TierKeyPool:
         self.last_error: Dict[int, str] = {}
         self.last_error_time: Dict[int, str] = {}
 
+    def _mark_fail_start(self):
+        """任何失败类型都要启动“连续失败”计时，保证 10 分钟阈值对 401/429/5xx 都生效。"""
+        if self.consecutive_fail_start is None:
+            self.consecutive_fail_start = time.time()
+
     def get_current(self) -> Optional[tuple]:
-        """获取当前活跃 Key，返回 (config, index) 或 None。"""
+        """获取当前活跃 Key，返回 (config, index) 或 None。
+
+        跳过：被禁用的 Key（disabled=True）和仍在阻塞期（rate_limited_until）的 Key。
+        """
         with self.lock:
             now = time.time()
             for _ in range(len(self.configs)):
                 idx = self.current_index % len(self.configs)
+                cfg = self.configs[idx]
+                if cfg.get("disabled"):
+                    self.current_index += 1
+                    continue
                 if idx in self.rate_limited_until and now < self.rate_limited_until[idx]:
                     self.current_index += 1
                     continue
                 self.active_count += 1
-                return self.configs[idx], idx
+                return cfg, idx
             return None
+
+    def next_available_time(self) -> Optional[float]:
+        """最近一个被阻塞 Key 的恢复时间戳；无阻塞返回 None。"""
+        with self.lock:
+            now = time.time()
+            candidates = [t for idx, t in self.rate_limited_until.items()
+                          if t > now and not self.configs[idx].get("disabled")]
+            return min(candidates) if candidates else None
 
     def mark_rate_limited(self, idx: int, retry_after: float = None):
         """标记 Key 被限速，立即切换。"""
@@ -72,6 +95,7 @@ class TierKeyPool:
             self.configs[idx]["is_valid"] = True
             self.configs[idx]["last_error"] = "429 Rate Limited"
             self.configs[idx]["last_error_time"] = self.last_error_time[idx]
+            self._mark_fail_start()
 
     def mark_invalid(self, idx: int):
         """标记 Key 无效（401），5 分钟后恢复。"""
@@ -84,24 +108,37 @@ class TierKeyPool:
             self.configs[idx]["is_valid"] = False
             self.configs[idx]["last_error"] = "401 Unauthorized"
             self.configs[idx]["last_error_time"] = self.last_error_time[idx]
+            self._mark_fail_start()
 
     def mark_complete(self, idx: int):
-        """单个请求完成。batch 全部完成时切换到下一个 Key。"""
+        """单个请求完成。batch 全部完成时切换到下一个 Key，并清除该 Key 的错误状态。"""
         with self.lock:
             self.active_count -= 1
             self.consecutive_fail_start = None
             self.total_calls[idx] = self.total_calls.get(idx, 0) + 1
+            # 成功即恢复：清掉旧的错误标记，让状态徽章实时变回“正常”
+            self.last_error.pop(idx, None)
+            self.last_error_time.pop(idx, None)
+            self.configs[idx]["is_valid"] = True
+            self.configs[idx]["last_error"] = None
+            self.configs[idx]["last_error_time"] = None
+            self.rate_limited_until.pop(idx, None)
             if self.active_count <= 0:
                 self.active_count = 0
                 self.last_switch_time = time.time()
                 self.current_index += 1
 
     def mark_server_error(self, idx: int):
-        """服务端错误，切换 Key。"""
+        """服务端错误（5xx），切换 Key 并记录错误状态。"""
         with self.lock:
             self.active_count -= 1
-            if self.consecutive_fail_start is None:
-                self.consecutive_fail_start = time.time()
+            now_iso = datetime.now(timezone.utc).isoformat()
+            self.last_error[idx] = "5xx Server Error"
+            self.last_error_time[idx] = now_iso
+            self.configs[idx]["is_valid"] = True
+            self.configs[idx]["last_error"] = "5xx Server Error"
+            self.configs[idx]["last_error_time"] = now_iso
+            self._mark_fail_start()
             if self.active_count <= 0:
                 self.active_count = 0
                 self.last_switch_time = time.time()
@@ -112,7 +149,12 @@ class TierKeyPool:
         with self.lock:
             if self.consecutive_fail_start is None:
                 return False
-            return (time.time() - self.consecutive_fail_start) >= 600
+            return (time.time() - self.consecutive_fail_start) >= self.FAIL_DEADLINE
+
+    def has_any_usable_key(self) -> bool:
+        """是否存在未被禁用的 Key（用于区分“全禁用”和“全阻塞”）。"""
+        with self.lock:
+            return any(not c.get("disabled") for c in self.configs)
 
     async def wait_for_interval(self):
         """等待 interval（batch 切换间隔）。"""
@@ -178,14 +220,27 @@ class LLMGateway:
         # 等待 batch 切换间隔
         await pool.wait_for_interval()
 
-        # 检查是否连续失败太久
+        # 检查是否连续失败太久（满 10 分钟才放弃）
         if pool.is_all_failed_too_long():
-            raise Exception("服务暂时不可用，请稍后重试")
+            raise Exception("服务暂时不可用，连续 10 分钟无有效输出，请检查 API Key 或稍后重试")
 
         # 获取当前 Key
         result = pool.get_current()
         if not result:
-            raise Exception("服务暂时不可用，所有 Key 均不可用")
+            # 所有可用 Key 暂时处于阻塞期：等到最近的恢复再重试，
+            # 而不是立刻报错——这样 10 分钟阈值才真正对 401/429 生效。
+            if not pool.has_any_usable_key():
+                # 没有任何未禁用的 Key（全被用户禁用），无法恢复
+                raise Exception("服务暂时不可用，所有 Key 均已禁用，请在管理面板启用至少一个 Key")
+            wait_until = pool.next_available_time()
+            if wait_until is None:
+                # 理论上不会走到：有可用 Key 但 get_current 返回 None 且无阻塞记录
+                raise Exception("服务暂时不可用，所有 Key 均不可用")
+            # 单次最多等 60s 再回看，避免单次 sleep 过长；总阈值由 is_all_failed_too_long 兜底
+            sleep_s = min(max(wait_until - time.time(), 0.1), 60.0)
+            print(f"[GATEWAY] --- all keys blocked, wait {sleep_s:.1f}s then retry tier={tier} type={request_type}")
+            await asyncio.sleep(sleep_s)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools)
 
         config, idx = result
         api_key = config.get("api_key", "")
