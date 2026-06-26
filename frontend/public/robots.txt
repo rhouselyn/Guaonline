@@ -1,13 +1,29 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /learn
+Disallow: /oauth-callback
+Disallow: /login
 
 Sitemap: https://gualingo.dpdns.org/sitemap.xml
 
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /learn
+Disallow: /oauth-callback
+Disallow: /login
 
 User-agent: Baiduspider
 Allow: /
+Disallow: /admin
+Disallow: /learn
+Disallow: /oauth-callback
+Disallow: /login
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /learn
+Disallow: /oauth-callback
+Disallow: /login

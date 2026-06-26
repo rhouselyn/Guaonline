@@ -851,7 +851,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           <div className="flex items-center gap-2">
             <LangIcon langCode={actualSourceLang} size="md" />
             <span className="text-sm font-bold text-ink-700">
-              {LANGUAGES.find(l => l.value === actualSourceLang)?.en || actualSourceLang?.toUpperCase()}
+              {LANGUAGES.find(l => l.value === actualSourceLang)?.native || actualSourceLang?.toUpperCase()}
             </span>
           </div>
         )}
