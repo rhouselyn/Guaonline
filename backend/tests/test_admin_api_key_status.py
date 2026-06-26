@@ -141,8 +141,72 @@ def test_test_endpoint_rejects_unknown_tier():
     assert resp.status_code == 400, resp.text
 
 
+def test_status_includes_is_busy_reflecting_active_per_key():
+    """状态端点应返回 is_busy 字段，并反映 active_per_key 的实时占用情况。
+
+    get_current 后 is_busy=True；mark_complete 后 is_busy=False。
+    """
+    pool = gw_mod.gateway.pools["free"]
+    # 清空 active_per_key，避免之前测试残留
+    pool.active_per_key.clear()
+    pool.active_count = 0
+    pool.current_index = 0
+    # 清掉所有 rate_limited_until 防止跳过
+    pool.rate_limited_until.clear()
+
+    # get_current 返回第一个未禁用、未阻塞的 Key（此处 index 0，虽然 api_key 为空也会被选）
+    cfg, idx = pool.get_current()
+    assert idx == 0, idx
+    assert pool.is_busy(idx) is True
+
+    resp = client.get("/api/admin/api-keys/free/status")
+    statuses = resp.json()["statuses"]
+    by_idx = {s["index"]: s for s in statuses}
+    assert by_idx[0]["is_busy"] is True, by_idx[0]
+    assert by_idx[1]["is_busy"] is False, by_idx[1]
+
+    # 释放后应回 False
+    pool.mark_complete(idx)
+    assert pool.is_busy(idx) is False
+    resp2 = client.get("/api/admin/api-keys/free/status")
+    s2 = {s["index"]: s for s in resp2.json()["statuses"]}
+    assert s2[0]["is_busy"] is False, s2[0]
+
+
+def test_sse_requires_token():
+    """SSE 端点无 token 时应返回 401，避免未认证的实时状态泄露。"""
+    resp = client.get("/api/admin/api-keys/free/status/stream")
+    assert resp.status_code == 401, resp.status_code
+
+
+def test_sse_rejects_bad_token():
+    """SSE 端点对无效 token 返回 401。"""
+    resp = client.get("/api/admin/api-keys/free/status/stream?token=invalid")
+    assert resp.status_code == 401, resp.status_code
+
+
+def test_sse_dependency_accepts_valid_token():
+    """SSE 鉴权依赖对有效 admin token 应放行（返回 AdminTokenData）。
+
+    SSE 端点本身是 StreamingResponse，generator 永不退出，无法用 TestClient 直接
+    验证响应体。所以单独验证鉴权依赖 + 已有的 _build_key_statuses 单元覆盖即可。
+    """
+    from auth.jwt_utils import create_admin_tokens
+    from routers.admin import _require_admin_for_sse
+    token = create_admin_tokens()["access_token"]
+
+    # 直接调用依赖函数：token 校验通过应返回 AdminTokenData 实例
+    admin_data = _require_admin_for_sse(tier="free", token=token)
+    assert admin_data is not None
+    # 无 token / 无效 token 已由 test_sse_requires_token / test_sse_rejects_bad_token 覆盖
+
+
 if __name__ == "__main__":
     test_status_classifies_500_as_error_not_normal()
     test_test_endpoint_no_500_and_writes_back_per_key()
     test_test_endpoint_rejects_unknown_tier()
+    test_status_includes_is_busy_reflecting_active_per_key()
+    test_sse_requires_token()
+    test_sse_rejects_bad_token()
+    test_sse_dependency_accepts_valid_token()
     print("\n全部测试通过 ✅")

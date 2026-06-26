@@ -2,9 +2,11 @@
 
 import os
 import json
+import asyncio
 import sqlite3
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from auth.deps import require_admin
@@ -271,12 +273,8 @@ async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)
     return {"results": results}
 
 
-@router.get("/api-keys/{tier}/status")
-async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
-    from utils.llm_gateway import gateway
-    pool = gateway.pools.get(tier)
-    if not pool:
-        return {"statuses": []}
+def _build_key_statuses(pool) -> list:
+    """从 pool 构建每个 Key 的状态信息（供 HTTP 接口与 SSE 流复用）。"""
     statuses = []
     for i, cfg in enumerate(pool.configs):
         status_info = {
@@ -285,9 +283,9 @@ async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(requir
             "model": cfg.get("model", ""),
             "disabled": cfg.get("disabled", False),
             "is_valid": cfg.get("is_valid", True),
+            "is_busy": pool.is_busy(i),
             "last_error": cfg.get("last_error", None),
             "last_error_time": cfg.get("last_error_time", None),
-            "active_count": pool.active_count.get(i, 0) if isinstance(pool.active_count, dict) else 0,
             "total_calls": pool.total_calls.get(i, 0) if hasattr(pool, 'total_calls') else 0,
         }
         # 判断状态（disabled 优先级最高，已禁用的不参与轮询）
@@ -311,7 +309,65 @@ async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(requir
             status_info["status"] = "normal"
             status_info["status_text"] = "正常"
         statuses.append(status_info)
-    return {"statuses": statuses}
+    return statuses
+
+
+@router.get("/api-keys/{tier}/status")
+async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
+    from utils.llm_gateway import gateway
+    pool = gateway.pools.get(tier)
+    if not pool:
+        return {"statuses": []}
+    return {"statuses": _build_key_statuses(pool)}
+
+
+def _require_admin_for_sse(tier: str, token: Optional[str] = Query(None)):
+    """SSE 专用认证：EventSource 不能设置自定义 header，所以接受 ?token=xxx 作为 fallback。
+
+    优先校验 query 中的 token；为空时由 FastAPI 在依赖链失败时报 401。
+    """
+    from auth.jwt_utils import decode_admin_token
+    if not token:
+        raise HTTPException(status_code=401, detail="缺少 token")
+    admin_data = decode_admin_token(token)
+    if admin_data is None:
+        raise HTTPException(status_code=401, detail="token 无效或已过期")
+    return admin_data
+
+
+@router.get("/api-keys/{tier}/status/stream")
+async def stream_api_key_statuses(tier: str, admin: AdminTokenData = Depends(_require_admin_for_sse)):
+    """SSE 实时推送 Key 状态。事件驱动：mark_* 改变状态时立刻推送，无变化时每 15s 发心跳保活。
+
+    资源节约：无订阅时不轮询；有订阅时仅在状态变化时推送一次 JSON，未变化时只发心跳。
+    认证：EventSource 无法携带 Authorization header，所以通过 ?token=xxx 传递 admin JWT。
+    """
+    from utils.llm_gateway import gateway
+    pool = gateway.pools.get(tier)
+    if not pool:
+        async def _empty():
+            yield 'event: end\ndata: no pool\n\n'
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
+    async def event_stream():
+        event = pool.get_status_event()
+        last_sig = None
+        while True:
+            # 立即推送当前快照
+            statuses = _build_key_statuses(pool)
+            sig = json.dumps(statuses, ensure_ascii=False, sort_keys=True)
+            if sig != last_sig:
+                last_sig = sig
+                yield f"data: {json.dumps({'statuses': statuses}, ensure_ascii=False)}\n\n"
+            # 等待状态变化或 15s 心跳保活（避免代理/浏览器断开空闲连接）
+            try:
+                event.clear()
+                await asyncio.wait_for(event.wait(), timeout=15)
+            except asyncio.TimeoutError:
+                yield ': heartbeat\n\n'
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+                            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ── 用户管理 ────────────────────────────────────────────────

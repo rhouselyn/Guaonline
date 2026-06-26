@@ -44,11 +44,28 @@ class TierKeyPool:
         self.batch_size = batch_size
         self.interval = interval
         self.active_count = 0
+        self.active_per_key: Dict[int, int] = {}  # 每个 Key 当前在途并发请求数（用于状态显示“占用中”）
         self.last_switch_time = 0
         self.consecutive_fail_start = None
         self.total_calls: Dict[int, int] = {}
         self.last_error: Dict[int, str] = {}
         self.last_error_time: Dict[int, str] = {}
+        # SSE 订阅通知：mark_* 时 set，stream 端点 wait 后推送。懒初始化（需事件循环）。
+        self._status_event = None
+
+    def _notify(self):
+        """通知 SSE 订阅者状态已变化。事件循环线程内调用，安全。"""
+        if self._status_event is not None:
+            try:
+                self._status_event.set()
+            except Exception:
+                pass
+
+    def get_status_event(self):
+        """获取（或懒创建）状态变化事件，供 SSE 端点等待。"""
+        if self._status_event is None:
+            self._status_event = asyncio.Event()
+        return self._status_event
 
     def _mark_fail_start(self):
         """任何失败类型都要启动“连续失败”计时，保证 10 分钟阈值对 401/429/5xx 都生效。"""
@@ -72,8 +89,15 @@ class TierKeyPool:
                     self.current_index += 1
                     continue
                 self.active_count += 1
+                self.active_per_key[idx] = self.active_per_key.get(idx, 0) + 1
+                self._notify()
                 return cfg, idx
             return None
+
+    def is_busy(self, idx: int) -> bool:
+        """该 Key 是否正被至少一个在途并发请求占用。"""
+        with self.lock:
+            return self.active_per_key.get(idx, 0) > 0
 
     def next_available_time(self) -> Optional[float]:
         """最近一个被阻塞 Key 的恢复时间戳；无阻塞返回 None。"""
@@ -90,6 +114,7 @@ class TierKeyPool:
         """
         with self.lock:
             self.active_count = 0
+            self.active_per_key[idx] = 0
             self.current_index += 1
             self.last_error[idx] = "429 Rate Limited"
             self.last_error_time[idx] = datetime.now(timezone.utc).isoformat()
@@ -97,12 +122,14 @@ class TierKeyPool:
             self.configs[idx]["last_error"] = "429 Rate Limited"
             self.configs[idx]["last_error_time"] = self.last_error_time[idx]
             self._mark_fail_start()
+            self._notify()
 
     def mark_invalid(self, idx: int):
         """标记 Key 无效（401），5 分钟后恢复。"""
         with self.lock:
             self.rate_limited_until[idx] = time.time() + 300
             self.active_count = 0
+            self.active_per_key[idx] = 0
             self.current_index += 1
             self.last_error[idx] = "401 Unauthorized"
             self.last_error_time[idx] = datetime.now(timezone.utc).isoformat()
@@ -110,11 +137,13 @@ class TierKeyPool:
             self.configs[idx]["last_error"] = "401 Unauthorized"
             self.configs[idx]["last_error_time"] = self.last_error_time[idx]
             self._mark_fail_start()
+            self._notify()
 
     def mark_complete(self, idx: int):
         """单个请求完成。batch 全部完成时切换到下一个 Key，并清除该 Key 的错误状态。"""
         with self.lock:
             self.active_count -= 1
+            self.active_per_key[idx] = max(0, self.active_per_key.get(idx, 0) - 1)
             self.consecutive_fail_start = None
             self.total_calls[idx] = self.total_calls.get(idx, 0) + 1
             # 成功即恢复：清掉旧的错误标记，让状态徽章实时变回“正常”
@@ -128,12 +157,14 @@ class TierKeyPool:
                 self.active_count = 0
                 self.last_switch_time = time.time()
                 self.current_index += 1
+            self._notify()
 
     def mark_server_error(self, idx: int):
         """服务端错误（5xx）及其它非 429 错误：阻塞 5 分钟后恢复。"""
         with self.lock:
             self.rate_limited_until[idx] = time.time() + 300
             self.active_count = 0
+            self.active_per_key[idx] = 0
             now_iso = datetime.now(timezone.utc).isoformat()
             self.last_error[idx] = "5xx Server Error"
             self.last_error_time[idx] = now_iso
@@ -142,6 +173,7 @@ class TierKeyPool:
             self.configs[idx]["last_error_time"] = now_iso
             self._mark_fail_start()
             self.current_index += 1
+            self._notify()
 
     def is_all_failed_too_long(self) -> bool:
         """检查是否连续 10 分钟无有效输出。"""

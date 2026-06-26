@@ -163,6 +163,13 @@ export const adminApi = {
     return response.data;
   },
 
+  // SSE 端点 URL：EventSource 不支持自定义 header，所以 token 通过 query 传递
+  keyStatusStreamUrl: (tier) => {
+    const tokens = JSON.parse(localStorage.getItem('gualingo_tokens') || 'null');
+    const token = tokens?.access_token || '';
+    return `${baseUrl}/api/admin/api-keys/${tier}/status/stream?token=${encodeURIComponent(token)}`;
+  },
+
   getLogs: async (page = 1) => {
     const response = await axios.get(`${baseUrl}/api/admin/logs`, { params: { page, page_size: 20 } });
     return response.data;

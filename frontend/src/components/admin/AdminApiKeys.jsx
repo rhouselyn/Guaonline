@@ -16,7 +16,7 @@ export default function AdminApiKeys() {
   const [batchSize, setBatchSize] = useState(5)
   const [settingsSaved, setSettingsSaved] = useState(false)
   const [keyStatuses, setKeyStatuses] = useState({})
-  const refreshRef = useRef(null)
+  const esRef = useRef(null)
   // 拖拽排序：当前拖动的源 index
   const [dragIndex, setDragIndex] = useState(null)
 
@@ -56,15 +56,26 @@ export default function AdminApiKeys() {
     })
   }, [])
 
-  // 加载当前 tier 的 key 状态，并每 30 秒刷新
+  // 实时订阅当前 tier 的 Key 状态（SSE 事件驱动，无 30s 轮询）
   useEffect(() => {
-    loadKeyStatuses(activeTier)
-    if (refreshRef.current) clearInterval(refreshRef.current)
-    refreshRef.current = setInterval(() => {
-      loadKeyStatuses(activeTier)
-    }, 30000)
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+    const es = new EventSource(adminApi.keyStatusStreamUrl(activeTier))
+    esRef.current = es
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.statuses) {
+          setKeyStatuses(prev => ({ ...prev, [activeTier]: data.statuses }))
+        }
+      } catch { /* 忽略心跳/坏包 */ }
+    }
+    es.onerror = () => {
+      // EventSource 浏览器内置会自动重连，这里只关闭避免重复创建
+      // 真正的认证失败会由后端返回 401，浏览器收到后 onerror 触发
+    }
     return () => {
-      if (refreshRef.current) clearInterval(refreshRef.current)
+      es.close()
+      if (esRef.current === es) esRef.current = null
     }
   }, [activeTier])
 
@@ -242,7 +253,7 @@ export default function AdminApiKeys() {
               <div className="w-6 flex-shrink-0 flex flex-col items-center justify-end pb-1 cursor-grab text-[#e8d5b7]/30 hover:text-[#c9a96e]" title="拖动排序">⠿</div>
               <div className="w-20 flex-shrink-0">
                 <label className="text-[#e8d5b7]/60 text-xs">状态</label>
-                <div className="py-1">
+                <div className="py-1 flex flex-col gap-1">
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                     status?.status === 'normal' ? 'bg-green-900/30 text-green-400' :
                     status?.status === 'rate_limited' ? 'bg-yellow-900/30 text-yellow-400' :
@@ -253,6 +264,12 @@ export default function AdminApiKeys() {
                   }`}>
                     {status?.status_text || '未知'}
                   </span>
+                  {status?.is_busy && (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-900/30 text-cyan-300 flex items-center gap-1 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                      占用中
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex-1">
