@@ -84,10 +84,11 @@ class TierKeyPool:
             return min(candidates) if candidates else None
 
     def mark_rate_limited(self, idx: int, retry_after: float = None):
-        """标记 Key 被限速，立即切换。"""
+        """429 限速：不阻塞 Key，只切换到下一个 Key，靠 wait_for_interval 按 admin 间隔重试。
+
+        不设 rate_limited_until——429 是瞬时限速，下次轮到这个 Key 时直接重试即可。
+        """
         with self.lock:
-            wait = retry_after or 60
-            self.rate_limited_until[idx] = time.time() + wait
             self.active_count = 0
             self.current_index += 1
             self.last_error[idx] = "429 Rate Limited"
@@ -129,9 +130,10 @@ class TierKeyPool:
                 self.current_index += 1
 
     def mark_server_error(self, idx: int):
-        """服务端错误（5xx），切换 Key 并记录错误状态。"""
+        """服务端错误（5xx）及其它非 429 错误：阻塞 5 分钟后恢复。"""
         with self.lock:
-            self.active_count -= 1
+            self.rate_limited_until[idx] = time.time() + 300
+            self.active_count = 0
             now_iso = datetime.now(timezone.utc).isoformat()
             self.last_error[idx] = "5xx Server Error"
             self.last_error_time[idx] = now_iso
@@ -139,10 +141,7 @@ class TierKeyPool:
             self.configs[idx]["last_error"] = "5xx Server Error"
             self.configs[idx]["last_error_time"] = now_iso
             self._mark_fail_start()
-            if self.active_count <= 0:
-                self.active_count = 0
-                self.last_switch_time = time.time()
-                self.current_index += 1
+            self.current_index += 1
 
     def is_all_failed_too_long(self) -> bool:
         """检查是否连续 10 分钟无有效输出。"""
@@ -237,19 +236,11 @@ class LLMGateway:
         # 获取当前 Key
         result = pool.get_current()
         if not result:
-            # 所有可用 Key 暂时处于阻塞期：等到最近的恢复再重试，
-            # 而不是立刻报错——这样 10 分钟阈值才真正对 401/429 生效。
+            # 所有可用 Key 暂时处于阻塞期：按 admin 配置的间隔重试，满 10 分钟才放弃。
             if not pool.has_any_usable_key():
-                # 没有任何未禁用的 Key（全被用户禁用），无法恢复
                 raise Exception("服务暂时不可用，所有 Key 均已禁用，请在管理面板启用至少一个 Key")
-            wait_until = pool.next_available_time()
-            if wait_until is None:
-                # 理论上不会走到：有可用 Key 但 get_current 返回 None 且无阻塞记录
-                raise Exception("服务暂时不可用，所有 Key 均不可用")
-            # 单次最多等 60s 再回看，避免单次 sleep 过长；总阈值由 is_all_failed_too_long 兜底
-            sleep_s = min(max(wait_until - time.time(), 0.1), 60.0)
-            print(f"[GATEWAY] --- all keys blocked, wait {sleep_s:.1f}s then retry tier={tier} type={request_type}")
-            await asyncio.sleep(sleep_s)
+            print(f"[GATEWAY] --- all keys blocked, wait {pool.interval}s (admin interval) then retry tier={tier} type={request_type}")
+            await asyncio.sleep(pool.interval)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=_max_tokens_eff)
 
         config, idx = result
@@ -311,15 +302,7 @@ class LLMGateway:
                 return result_data
 
             elif resp.status_code == 429:
-                retry_after = None
-                try:
-                    ra = resp.headers.get("retry-after")
-                    if ra:
-                        retry_after = float(ra)
-                except Exception:
-                    pass
-                pool.mark_rate_limited(idx, retry_after)
-                # 重试一次
+                pool.mark_rate_limited(idx)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             elif resp.status_code == 401:
@@ -328,23 +311,21 @@ class LLMGateway:
 
             elif resp.status_code >= 500:
                 pool.mark_server_error(idx)
-                # 退避一下，避免对同一故障 Key 密集重试造成 START 日志洪水
-                await asyncio.sleep(1.0)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             else:
-                # 4xx 非 401/429：max_tokens 非法时折半重试，其它直接抛出（不重试，避免无谓延迟）
+                # 4xx 非 401/429
                 body = resp.text[:300]
                 low = body.lower()
                 if "max_tokens" in low and ("非法" in body or "invalid" in low or "range" in low or "exceed" in low or "maximum" in low):
                     halved = max(eff // 2, 256)
                     if halved < eff:
-                        # ponytail: 折半有下限 256，到达后 halved==eff 自动停止，天然有界
                         print(f"[GATEWAY] max_tokens 非法({eff})，折半为 {halved} 后重试 tier={tier} type={request_type}")
                         pool.mark_complete(idx)
                         return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=halved)
-                pool.mark_complete(idx)
-                raise Exception(f"LLM API error: {resp.status_code} - {body[:200]}")
+                # 其它 4xx（402/403/404/400 等）：阻塞 5min 后重试，由 10min 阈值兜底
+                pool.mark_server_error(idx)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
         except httpx.TimeoutException:
             pool.mark_server_error(idx)

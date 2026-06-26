@@ -365,17 +365,10 @@ function App() {
             clearInterval(pollingInterval)
           }
           const errMsg = status.error || ''
-          // 单句失败：保留部分结果，提供“重试失败句子”
+          // 单句失败（partial）：只提示不退出，下次进入时自动重试
           if (status.partial && status.failed_sentences && status.failed_sentences.length > 0) {
             const failedList = status.failed_sentences.map(f => `#${f.index + 1}`).join(', ')
-            setConfirmDialog({
-              isOpen: true,
-              title: t.partialFailedTitle || '部分句子处理失败',
-              message: `${status.error || ''}\n失败句子：${failedList}\n点击“重试”仅重新处理失败句子，已成功句子无需重做。`,
-              confirmText: t.retry || '重试',
-              cancelText: t.cancel || '取消',
-              onConfirm: () => retryFailedSentences()
-            })
+            showAlert(`${status.error || ''}\n失败句子：${failedList}\n重新进入该条目时会自动重试失败句子。`)
           } else if (errMsg.includes('API Key') || errMsg.includes('Key')) {
             setStep('input')
             showAlert(t.processFailed || '处理失败，请重试')
@@ -528,24 +521,6 @@ function App() {
         showAlert(t.processFailed || '处理失败，请重试')
       }
       setLoading(false)
-    }
-  }
-
-  // 重试此前失败的句子：仅重新处理失败句子，然后恢复轮询
-  const retryFailedSentences = async () => {
-    if (!currentFileId) return
-    setConfirmDialog({ isOpen: false, onConfirm: null })
-    setLoading(true)
-    setProgress(0)
-    setStep('dictionary')
-    try {
-      await api.retryFailedSentences(currentFileId)
-      // 恢复轮询：把 skipPolling 切到 false 触发 useEffect 重新轮询
-      setSkipPolling(false)
-    } catch (error) {
-      console.error('重试失败句子错误:', error)
-      setLoading(false)
-      showAlert(t.processFailed || '重试失败，请稍后再试')
     }
   }
 
@@ -1234,6 +1209,12 @@ function App() {
           if (status.current_sentence !== undefined && status.total_sentences !== undefined) {
             setProcessingInfo({ current: status.current_sentence, total: status.total_sentences })
           }
+        } else if (status.status === 'error' && status.partial) {
+          // 有失败句子：自动重试，恢复轮询
+          api.retryFailedSentences(fileId).catch(() => {})
+          setSkipPolling(false)
+          setProgress(status.progress || 0)
+          setProcessingInfo(null)
         } else {
           setSkipPolling(true)
           setProgress(100)

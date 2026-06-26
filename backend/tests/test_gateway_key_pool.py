@@ -88,9 +88,8 @@ def test_mark_complete_clears_error_state():
     """成功调用后该 Key 的 last_error 应被清除（实时恢复“正常”）。"""
     gw = _reload_gateway_with([{"api_key": "sk-a"}])
     pool = gw.gateway.pools["free"]
-    pool.mark_rate_limited(0)
-    assert pool.configs[0]["last_error"] == "429 Rate Limited"
-    # 阻塞期内手动调用 mark_complete（模拟成功）
+    pool.mark_server_error(0)  # 5xx 会阻塞 5min 并写 last_error
+    assert pool.configs[0]["last_error"] == "5xx Server Error"
     pool.mark_complete(0)
     assert pool.configs[0]["last_error"] is None
     assert pool.configs[0]["is_valid"] is True
@@ -219,12 +218,54 @@ def test_call_halves_max_tokens_on_400():
     assert attempts == [16384, 8192, 4096], attempts
 
 
+def test_429_does_not_block_key():
+    """429 不阻塞 Key——下次轮到该 Key 时直接可用。"""
+    gw = _reload_gateway_with([
+        {"api_key": "sk-a", "base_url": "https://x/v1", "model": "m"},
+        {"api_key": "sk-b", "base_url": "https://x/v1", "model": "m"},
+    ])
+    pool = gw.gateway.pools["free"]
+    # mark_rate_limited 切换 Key 但不阻塞
+    cfg0, idx0 = pool.get_current()
+    pool.mark_rate_limited(idx0)
+    # idx0 不应在 rate_limited_until 中
+    assert idx0 not in pool.rate_limited_until
+    # 仍有可用 Key
+    cfg1, idx1 = pool.get_current()
+    assert idx1 != idx0  # 切换到另一个 Key
+
+
+def test_5xx_blocks_key_5min():
+    """5xx 阻塞 Key 5 分钟。"""
+    gw = _reload_gateway_with([
+        {"api_key": "sk-a", "base_url": "https://x/v1", "model": "m"},
+        {"api_key": "sk-b", "base_url": "https://x/v1", "model": "m"},
+    ])
+    pool = gw.gateway.pools["free"]
+    cfg0, idx0 = pool.get_current()
+    pool.mark_server_error(idx0)
+    # idx0 应在 rate_limited_until 中，约 5 分钟后恢复
+    assert idx0 in pool.rate_limited_until
+    assert pool.rate_limited_until[idx0] > _t_time() + 290  # 约 300s
+    # idx0 不可用，get_current 跳到另一个 Key
+    cfg1, idx1 = pool.get_current()
+    assert idx1 != idx0
+
+
+def _t_time():
+    import time as _t
+    return _t.time()
+
+
 def test_call_does_not_halve_unrelated_400():
-    """非 max_tokens 的 400 应直接抛出，不折半重试。"""
+    """非 max_tokens 的 4xx 不折半 max_tokens，而是阻塞 5min 重试（由 10min 阈值兜底）。"""
     gw = _reload_gateway_with([
         {"api_key": "sk-x", "base_url": "https://x/v1", "model": "m"},
     ], tier="free")
-    gw.gateway.pools["free"].interval = 0
+    pool = gw.gateway.pools["free"]
+    pool.interval = 0
+    # 把失败起点拨到 601s 前，让 10min 阈值立刻触发
+    pool.consecutive_fail_start = _t_time() - 601
     attempts = []
 
     class _C(_RecordingClient):
@@ -234,9 +275,10 @@ def test_call_does_not_halve_unrelated_400():
 
     import pytest
     with patch("httpx.AsyncClient", _C):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="10 分钟"):
             asyncio.run(gw.gateway.call("u", "free", [{"role": "user", "content": "hi"}], max_tokens=16384))
-    assert len(attempts) == 1, attempts  # 不重试
+    # max_tokens 不应被折半（非 max_tokens 错误）
+    assert all(a == 16384 for a in attempts), attempts
 
 
 if __name__ == "__main__":
@@ -245,6 +287,8 @@ if __name__ == "__main__":
     test_all_blocked_not_failed_too_long_before_10min()
     test_failed_too_long_after_10min()
     test_mark_complete_clears_error_state()
+    test_429_does_not_block_key()
+    test_5xx_blocks_key_5min()
     test_call_caps_max_tokens_to_free_default()
     test_call_caps_max_tokens_to_per_key_value()
     test_call_keeps_smaller_caller_max_tokens()
