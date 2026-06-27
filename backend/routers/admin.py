@@ -344,7 +344,7 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
 
 
 def _build_key_statuses(pool, gateway) -> list:
-    """构建 pool 内每个引用的状态：per-pool disabled + key 全局运行时状态。"""
+    """构建 pool 内每个引用的状态：per-pool disabled/weight + key 全局熔断/运行时状态。"""
     statuses = []
     for i, ref in enumerate(pool.refs):
         key_id = ref.get("key_id")
@@ -359,9 +359,12 @@ def _build_key_statuses(pool, gateway) -> list:
             "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
             "model": kdef.get("model", ""),
             "max_tokens": ref.get("max_tokens"),
+            "weight": ref.get("weight", 1),  # per-pool
             "disabled": ref.get("disabled", False),  # per-pool
             "is_valid": is_valid,  # 全局
             "is_busy": gateway.is_key_busy(key_id),  # 全局
+            "circuit_state": rt.get("circuit_state", "closed"),  # 全局熔断状态
+            "fail_count": rt.get("fail_count", 0),  # 全局连续失败次数
             "last_error": last_error,  # 全局
             "last_error_time": rt.get("last_error_time"),
             "total_calls": rt.get("total_calls", 0),  # 全局
@@ -375,6 +378,12 @@ def _build_key_statuses(pool, gateway) -> list:
         elif not is_valid:
             status_info["status"] = "invalid"
             status_info["status_text"] = "无效/欠费"
+        elif rt.get("circuit_state") == "open":
+            status_info["status"] = "circuit_open"
+            status_info["status_text"] = "熔断中"
+        elif rt.get("circuit_state") == "half_open":
+            status_info["status"] = "circuit_half_open"
+            status_info["status_text"] = "探测中"
         elif last_error and "429" in str(last_error):
             status_info["status"] = "rate_limited"
             status_info["status_text"] = "限速中"

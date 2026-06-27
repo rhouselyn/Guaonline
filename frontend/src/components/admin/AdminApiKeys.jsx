@@ -129,7 +129,7 @@ export default function AdminApiKeys() {
     persistRefs(tier, sub, newConfigs, pool.active_index || 0)
   }
 
-  // 复制引用配置到剪贴板（key_id + max_tokens + disabled）
+  // 复制引用配置到剪贴板（key_id + max_tokens + disabled + weight）
   const copyRef = (tier, sub, idx) => {
     const ref = tierKeys[tier][sub].configs[idx]
     if (!ref) return
@@ -144,7 +144,7 @@ export default function AdminApiKeys() {
     if (!_refClipboard) { alert('剪贴板为空，先在某行点"复制"'); return }
     const pool = tierKeys[tier][sub]
     if (!pool) return
-    const newRef = { key_id: _refClipboard.key_id, max_tokens: _refClipboard.max_tokens ?? defaultMaxTokens(tier), disabled: false }
+    const newRef = { key_id: _refClipboard.key_id, max_tokens: _refClipboard.max_tokens ?? defaultMaxTokens(tier), disabled: false, weight: _refClipboard.weight ?? 1 }
     const newConfigs = [...pool.configs, newRef]
     setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }))
     persistRefs(tier, sub, newConfigs, pool.active_index || 0)
@@ -201,7 +201,7 @@ export default function AdminApiKeys() {
   }
   const appendRefToPool = async (keyId) => {
     const pool = tierKeys[activeTier][activeSub]
-    const newRef = { key_id: keyId, max_tokens: defaultMaxTokens(activeTier), disabled: false }
+    const newRef = { key_id: keyId, max_tokens: defaultMaxTokens(activeTier), disabled: false, weight: 1 }
     const newConfigs = [...pool.configs, newRef]
     setTierKeys(prev => ({ ...prev, [activeTier]: { ...prev[activeTier], [activeSub]: { ...prev[activeTier][activeSub], configs: newConfigs } } }))
     await persistRefs(activeTier, activeSub, newConfigs, pool.active_index || 0)
@@ -336,12 +336,19 @@ export default function AdminApiKeys() {
                     status?.status === 'invalid' ? 'bg-red-900/30 text-red-400' :
                     status?.status === 'error' ? 'bg-orange-900/30 text-orange-400' :
                     status?.status === 'disabled' ? 'bg-blue-900/30 text-blue-400' :
+                    status?.status === 'circuit_open' ? 'bg-red-900/40 text-red-300' :
+                    status?.status === 'circuit_half_open' ? 'bg-purple-900/40 text-purple-300 animate-pulse' :
                     'bg-gray-700/30 text-gray-400'}`}>
                     {status?.status_text || '未知'}
                   </span>
                   {status?.is_busy && (
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-900/30 text-cyan-300 flex items-center gap-1 animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>占用中
+                    </span>
+                  )}
+                  {status?.fail_count > 0 && (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-orange-900/20 text-orange-300/80" title="连续失败次数（达 3 次触发熔断）">
+                      失败 ×{status.fail_count}
                     </span>
                   )}
                 </div>
@@ -364,6 +371,14 @@ export default function AdminApiKeys() {
                   onChange={e => updateRefField(activeTier, activeSub, i, 'max_tokens', Number(e.target.value))}
                   onBlur={() => commitRefField(activeTier, activeSub)}
                   className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="w-16">
+                <label className="text-[#e8d5b7]/60 text-xs" title="SWRR 平滑加权轮询的权重，数值越大被选中概率越高">权重</label>
+                <input type="number" step="1" min="1" value={ref.weight ?? 1}
+                  onChange={e => updateRefField(activeTier, activeSub, i, 'weight', Math.max(1, Number(e.target.value) || 1))}
+                  onBlur={() => commitRefField(activeTier, activeSub)}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm"
+                  title="SWRR 权重：数值越大被选中概率越高（默认 1）" />
               </div>
               <button onClick={() => { updateRefField(activeTier, activeSub, i, 'disabled', !ref.disabled); commitRefField(activeTier, activeSub) }}
                 className={`px-2 py-1 rounded text-xs font-bold ${ref.disabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}

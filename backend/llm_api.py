@@ -113,6 +113,7 @@ def _migrate_old(raw: dict) -> dict:
                     "key_id": kid,
                     "max_tokens": cfg.get("max_tokens"),
                     "disabled": cfg.get("disabled", False),
+                    "weight": cfg.get("weight", 1),
                 })
             new_tier_keys[tier][sub] = {"configs": new_refs, "active_index": pool.get("active_index", 0)}
     return {"keys": new_keys, "tier_keys": new_tier_keys}
