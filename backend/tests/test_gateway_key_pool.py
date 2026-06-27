@@ -27,7 +27,11 @@ importlib.reload(config)
 
 
 def _reload_gateway_with(configs, tier="free"):
-    """写入指定 configs 并重载 gateway 模块，返回新单例。"""
+    """写入指定 configs 并重载 gateway 模块，返回新单例。
+
+    用老格式 {tier: {configs, active_index}} 写入，gateway 加载时 _normalize_tier_data
+    会自动迁移到 3 个 sub-pool 各一份副本，所以 pools[tier]["sentence"] 即原 pool。
+    """
     with open(os.path.join(_tmp, "tier_keys.json"), "w", encoding="utf-8") as f:
         json.dump({"tier_keys": {tier: {"configs": configs, "active_index": 0}}}, f)
     import utils.llm_gateway as gw
@@ -40,7 +44,7 @@ def test_disabled_key_is_skipped():
         {"api_key": "sk-disabled", "base_url": "https://x/v1", "model": "m", "disabled": True},
         {"api_key": "sk-good", "base_url": "https://x/v1", "model": "m", "disabled": False},
     ])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     cfg, idx = pool.get_current()
     assert idx == 1, f"应跳过 disabled 的 key0，落到 key1，实际 idx={idx}"
     assert cfg["api_key"] == "sk-good"
@@ -52,7 +56,7 @@ def test_all_disabled_has_no_usable_key():
         {"api_key": "sk-a", "disabled": True},
         {"api_key": "sk-b", "disabled": True},
     ])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     assert pool.get_current() is None
     assert pool.has_any_usable_key() is False
     assert pool.next_available_time() is None
@@ -61,7 +65,7 @@ def test_all_disabled_has_no_usable_key():
 def test_all_blocked_not_failed_too_long_before_10min():
     """所有 Key 401 阻塞后，10 分钟内不应判定为“失败太久”。"""
     gw = _reload_gateway_with([{"api_key": "sk-a"}, {"api_key": "sk-b"}])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     pool.mark_invalid(0)
     pool.mark_invalid(1)
     # get_current 应返回 None（都在阻塞期）
@@ -76,7 +80,7 @@ def test_all_blocked_not_failed_too_long_before_10min():
 
 def test_failed_too_long_after_10min():
     gw = _reload_gateway_with([{"api_key": "sk-a"}])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     pool.mark_invalid(0)
     # 手动把失败起点拨到 601 秒前，模拟满 10 分钟
     import time as _t
@@ -87,7 +91,7 @@ def test_failed_too_long_after_10min():
 def test_mark_complete_clears_error_state():
     """成功调用后该 Key 的 last_error 应被清除（实时恢复“正常”）。"""
     gw = _reload_gateway_with([{"api_key": "sk-a"}])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     pool.mark_server_error(0)  # 5xx 会阻塞 5min 并写 last_error
     assert pool.configs[0]["last_error"] == "5xx Server Error"
     pool.mark_complete(0)
@@ -129,7 +133,7 @@ def test_call_caps_max_tokens_to_free_default():
         {"api_key": "sk-good", "base_url": "https://x/v1", "model": "m"},
     ], tier="free")
     # patch 临时把 batch interval 设 0，避免 wait_for_interval 阻塞
-    gw.gateway.pools["free"].interval = 0
+    gw.gateway.pools["free"]["sentence"].interval = 0
     captured = {}
     class _C(_RecordingClient):
         async def post(self, url, headers=None, json=None):
@@ -145,7 +149,7 @@ def test_call_caps_max_tokens_to_per_key_value():
     gw = _reload_gateway_with([
         {"api_key": "sk-good", "base_url": "https://x/v1", "model": "m", "max_tokens": 8000},
     ], tier="basic")
-    gw.gateway.pools["basic"].interval = 0
+    gw.gateway.pools["basic"]["sentence"].interval = 0
     captured = {}
     class _C(_RecordingClient):
         async def post(self, url, headers=None, json=None):
@@ -161,7 +165,7 @@ def test_call_keeps_smaller_caller_max_tokens():
     gw = _reload_gateway_with([
         {"api_key": "sk-good", "base_url": "https://x/v1", "model": "m", "max_tokens": 16384},
     ], tier="free")
-    gw.gateway.pools["free"].interval = 0
+    gw.gateway.pools["free"]["sentence"].interval = 0
     captured = {}
     class _C(_RecordingClient):
         async def post(self, url, headers=None, json=None):
@@ -176,17 +180,17 @@ def test_update_tier_keys_matches_masked_after_reorder():
     """拖拽重排序后，脱敏 Key 应按 masked 形式正确还原（与位置无关）。"""
     import llm_api
     importlib.reload(llm_api)
-    # 初始：两个真实 key
-    llm_api.update_tier_keys("free", [
+    # 初始：两个真实 key，写入 free:sentence sub-pool
+    llm_api.update_tier_keys("free", "sentence", [
         {"api_key": "sk-AAAA1111BBBB", "base_url": "u1", "model": "m1"},
         {"api_key": "sk-CCCC3333DDDD", "base_url": "u2", "model": "m2"},
     ], 0)
-    masked = llm_api.get_tier_keys()["free"]["configs"]
+    masked = llm_api.get_tier_keys()["free"]["sentence"]["configs"]
     # masked[0] = sk-A****BBBB, masked[1] = sk-C****DDDD
     # 模拟前端拖拽重排序：把第 2 个移到第 1 个前面，且 key 仍是脱敏形式
     reordered = [masked[1], masked[0]]
-    llm_api.update_tier_keys("free", reordered, 0)
-    saved = llm_api._load_tier_keys()["tier_keys"]["free"]["configs"]
+    llm_api.update_tier_keys("free", "sentence", reordered, 0)
+    saved = llm_api._load_tier_keys()["tier_keys"]["free"]["sentence"]["configs"]
     # 重排后第 0 个应是原 key2，第 1 个应是原 key1（按脱敏形式匹配，而非按 index）
     assert saved[0]["api_key"] == "sk-CCCC3333DDDD", saved[0]
     assert saved[1]["api_key"] == "sk-AAAA1111BBBB", saved[1]
@@ -200,7 +204,7 @@ def test_call_halves_max_tokens_on_400():
     gw = _reload_gateway_with([
         {"api_key": "sk-x", "base_url": "https://x/v1", "model": "m", "max_tokens": 16384},
     ], tier="free")
-    gw.gateway.pools["free"].interval = 0
+    gw.gateway.pools["free"]["sentence"].interval = 0
     attempts = []
 
     class _C(_RecordingClient):
@@ -224,7 +228,7 @@ def test_429_does_not_block_key():
         {"api_key": "sk-a", "base_url": "https://x/v1", "model": "m"},
         {"api_key": "sk-b", "base_url": "https://x/v1", "model": "m"},
     ])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     # mark_rate_limited 切换 Key 但不阻塞
     cfg0, idx0 = pool.get_current()
     pool.mark_rate_limited(idx0)
@@ -241,7 +245,7 @@ def test_5xx_blocks_key_5min():
         {"api_key": "sk-a", "base_url": "https://x/v1", "model": "m"},
         {"api_key": "sk-b", "base_url": "https://x/v1", "model": "m"},
     ])
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     cfg0, idx0 = pool.get_current()
     pool.mark_server_error(idx0)
     # idx0 应在 rate_limited_until 中，约 5 分钟后恢复
@@ -262,7 +266,7 @@ def test_call_does_not_halve_unrelated_400():
     gw = _reload_gateway_with([
         {"api_key": "sk-x", "base_url": "https://x/v1", "model": "m"},
     ], tier="free")
-    pool = gw.gateway.pools["free"]
+    pool = gw.gateway.pools["free"]["sentence"]
     pool.interval = 0
     # 把失败起点拨到 601s 前，让 10min 阈值立刻触发
     pool.consecutive_fail_start = _t_time() - 601
@@ -281,6 +285,34 @@ def test_call_does_not_halve_unrelated_400():
     assert all(a == 16384 for a in attempts), attempts
 
 
+def test_sub_pool_routing_by_request_type():
+    """不同 request_type 应路由到不同 sub-pool；sub 为空时回退到 sentence。"""
+    # free:title 配 key A，free:sentence 配 key B，free:word 留空
+    with open(os.path.join(_tmp, "tier_keys.json"), "w", encoding="utf-8") as f:
+        json.dump({"tier_keys": {"free": {
+            "title": {"configs": [{"api_key": "sk-title"}], "active_index": 0},
+            "sentence": {"configs": [{"api_key": "sk-sentence"}], "active_index": 0},
+            "word": {"configs": [], "active_index": 0},
+        }}}, f)
+    import utils.llm_gateway as gw
+    importlib.reload(gw)
+    g = gw.gateway
+    # title 任务路由到 title sub
+    p_title = g._resolve_pool("free", "generate_title")
+    assert p_title is not None
+    cfg, idx = p_title.get_current(); p_title.mark_complete(idx)
+    assert cfg["api_key"] == "sk-title"
+    # word 任务无 key，回退到 sentence sub
+    p_word = g._resolve_pool("free", "generate_multiple_choice")
+    assert p_word is not None
+    cfg, idx = p_word.get_current(); p_word.mark_complete(idx)
+    assert cfg["api_key"] == "sk-sentence"
+    # sentence 任务路由到 sentence sub
+    p_sent = g._resolve_pool("free", "process_text")
+    cfg, idx = p_sent.get_current(); p_sent.mark_complete(idx)
+    assert cfg["api_key"] == "sk-sentence"
+
+
 if __name__ == "__main__":
     test_disabled_key_is_skipped()
     test_all_disabled_has_no_usable_key()
@@ -295,4 +327,5 @@ if __name__ == "__main__":
     test_update_tier_keys_matches_masked_after_reorder()
     test_call_halves_max_tokens_on_400()
     test_call_does_not_halve_unrelated_400()
+    test_sub_pool_routing_by_request_type()
     print("\n全部测试通过 ✅")

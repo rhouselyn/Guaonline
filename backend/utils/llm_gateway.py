@@ -35,8 +35,9 @@ class TierKeyPool:
     # 连续失败多久后判定服务不可用（用户要求：满 10 分钟才放弃）
     FAIL_DEADLINE = 600
 
-    def __init__(self, tier: str, configs: list, batch_size: int = 3, interval: float = 1.0):
+    def __init__(self, tier: str, configs: list, batch_size: int = 3, interval: float = 1.0, sub: str = ""):
         self.tier = tier
+        self.sub = sub  # sub-pool 标识（title/sentence/word），仅供日志/调试，不影响轮换逻辑
         self.configs = configs
         self.current_index = 0
         self.lock = threading.Lock()
@@ -202,6 +203,25 @@ class LLMGateway:
     # max_tokens 非法时折半重试的最大次数（16384→8192→...→512，足够覆盖输入占位）
     MAX_TOKEN_HALVINGS = 5
 
+    # request_type → sub-pool 推断。sub-pool 让管理员能为不同任务配不同 key。
+    # ponytail: 用 dict 一次性映射，新增 request_type 只改这里。
+    _SUB_BY_REQUEST_TYPE = {
+        # title sub: 生成标题 + 语言检测（轻量、低延迟）
+        "generate_title": "title",
+        "detect_language": "title",
+        # word sub: 单词详情生成
+        "generate_multiple_choice": "word",
+        "admin_vocab_refresh": "word",
+        # sentence sub（默认）: 句子处理
+        "process_text": "sentence",
+        "process_remaining_words": "sentence",
+        "translate": "sentence",
+        "generate": "sentence",
+        "ui_translation": "sentence",
+        "llm_call": "sentence",
+    }
+    _DEFAULT_SUB = "sentence"
+
     _instance = None
     _instance_lock = threading.Lock()
 
@@ -216,27 +236,67 @@ class LLMGateway:
         if self._initialized:
             return
         self._initialized = True
-        self.pools: Dict[str, TierKeyPool] = {}
+        # 两级 pool：pools[tier][sub] = TierKeyPool
+        self.pools: Dict[str, Dict[str, TierKeyPool]] = {}
         self._reload_pools()
 
     def _reload_pools(self):
-        """从配置文件重新加载所有 Key 池。"""
+        """从配置文件重新加载所有 Key 池（两级 tier→sub）。"""
         data = _load_tier_keys()
         settings = _load_global_settings()
         batch_size = settings.get("batch_size", 3)
         interval = settings.get("request_interval", 1.0)
 
         new_pools = {}
-        for tier, pool_data in data.get("tier_keys", {}).items():
-            configs = pool_data.get("configs", [])
-            if configs:
-                new_pools[tier] = TierKeyPool(tier, configs, batch_size, interval)
+        # 复用 llm_api 的归一化逻辑，避免重复实现
+        from llm_api import _normalize_tier_data, SUB_POOLS
+        for tier, raw in data.get("tier_keys", {}).items():
+            norm = _normalize_tier_data(raw)
+            tier_pools = {}
+            for sub in SUB_POOLS:
+                sub_data = norm.get(sub) or {}
+                configs = sub_data.get("configs", [])
+                # ponytail: 保留空 pool 也创建 TierKeyPool，让 admin 能看到该 sub 存在；call 时 has_any_usable_key 会兜底
+                tier_pools[sub] = TierKeyPool(tier, configs, batch_size, interval, sub=sub)
+            new_pools[tier] = tier_pools
 
         self.pools = new_pools
 
     def reload(self):
         """手动刷新配置。"""
         self._reload_pools()
+
+    def _resolve_pool(self, tier: str, request_type: str) -> Optional[TierKeyPool]:
+        """根据 tier + request_type 解析到具体 sub-pool。
+
+        回退链：tier:sub → tier:sentence（默认） → free:sub → free:sentence → None
+        """
+        sub = self._SUB_BY_REQUEST_TYPE.get(request_type, self._DEFAULT_SUB)
+        tier_pools = self.pools.get(tier)
+        if tier_pools:
+            pool = tier_pools.get(sub)
+            if pool and pool.has_any_usable_key():
+                return pool
+            # 该 sub 没可用 key，回退到该 tier 的 sentence sub
+            fallback = tier_pools.get(self._DEFAULT_SUB)
+            if fallback and fallback.has_any_usable_key() and fallback is not pool:
+                return fallback
+        # 该 tier 整体没 key，回退到 free tier
+        if tier != "free":
+            free_pools = self.pools.get("free")
+            if free_pools:
+                pool = free_pools.get(sub)
+                if pool and pool.has_any_usable_key():
+                    return pool
+                fallback = free_pools.get(self._DEFAULT_SUB)
+                if fallback and fallback.has_any_usable_key():
+                    return fallback
+        # 最后兜底：返回首个有 key 的 pool（任何 tier/sub），避免直接抛错
+        for t, subs in self.pools.items():
+            for s, p in subs.items():
+                if p.has_any_usable_key():
+                    return p
+        return None
 
     async def call(self, user_id: str, tier: str, messages: List[Dict],
                    temperature: float = 0.0, max_tokens: int = 65536,
@@ -251,12 +311,10 @@ class LLMGateway:
         # 首次进入时，由调用方传入的 max_tokens 决定有效值
         if _max_tokens_eff is None:
             _max_tokens_eff = max_tokens
-        # 查找对应 tier 的 Key 池，无则回退到 free
-        pool = self.pools.get(tier)
-        if not pool and tier != "free":
-            pool = self.pools.get("free")
+        # 根据 request_type 解析 sub-pool，回退链见 _resolve_pool
+        pool = self._resolve_pool(tier, request_type)
         if not pool:
-            raise Exception(f"No API Key configured for tier: {tier}")
+            raise Exception(f"No API Key configured for tier: {tier} (request_type={request_type})")
 
         # 等待 batch 切换间隔
         await pool.wait_for_interval()

@@ -1,9 +1,32 @@
-"""LLM API Key 池管理（Tier-based）。"""
+"""LLM API Key 池管理（Tier-based + sub-pool）。
+
+每个 tier 下分 3 个 sub-pool，允许不同任务用不同 key：
+- title:   生成标题 + 语言检测（轻量、低延迟任务）
+- sentence: 句子处理（翻译/生成/分词/语法解释）
+- word:    单词详情生成（多选/例句/记忆辅助）
+
+数据格式（tier_keys.json）：
+{
+  "tier_keys": {
+    "free": {
+      "title":    {"configs": [...], "active_index": 0},
+      "sentence": {"configs": [...], "active_index": 0},
+      "word":     {"configs": [...], "active_index": 0}
+    },
+    ...
+  }
+}
+
+向后兼容：老格式（tier 直接是 {configs, active_index}）会被自动迁移到 3 个 sub-pool 各一份副本。
+"""
 
 import json
 from config import DATA_DIR
 
 TIER_KEYS_FILE = str(DATA_DIR / "tier_keys.json")
+
+# sub-pool 标识。暴露给 gateway / admin 共用。
+SUB_POOLS = ("title", "sentence", "word")
 
 
 def _load_tier_keys() -> dict:
@@ -26,38 +49,73 @@ def _mask_key(key: str) -> str:
     return "****" if key else ""
 
 
+def _normalize_tier_data(raw: dict) -> dict:
+    """把单 tier 的数据归一化为 {sub: {configs, active_index}} 结构。
+
+    老格式（tier 直接是 {configs, active_index}）→ 复制到 3 个 sub-pool。
+    新格式（tier 是 {title/sentence/word: {...}}）→ 缺失的 sub 用空 configs 补齐。
+    """
+    # 新格式：tier 下有 sub-pool 字段
+    if any(sub in raw for sub in SUB_POOLS):
+        result = {}
+        for sub in SUB_POOLS:
+            sub_data = raw.get(sub) or {}
+            result[sub] = {
+                "configs": sub_data.get("configs", []),
+                "active_index": sub_data.get("active_index", 0),
+            }
+        return result
+    # 老格式：tier 直接是 {configs, active_index}，迁移到 3 个 sub 各一份副本
+    configs = raw.get("configs", [])
+    active_index = raw.get("active_index", 0)
+    return {sub: {"configs": list(configs), "active_index": active_index} for sub in SUB_POOLS}
+
+
 def get_tier_keys() -> dict:
-    """获取所有 tier 的 API Key 配置（脱敏）。"""
+    """获取所有 tier 的 API Key 配置（脱敏）。
+
+    返回结构：{tier: {sub: {configs: [...], active_index: int}}}
+    """
     data = _load_tier_keys()
     masked = {}
-    for tier, pool in data.get("tier_keys", {}).items():
-        configs = []
-        for cfg in pool.get("configs", []):
-            key = cfg.get("api_key", "")
-            masked_key = _mask_key(key)
-            configs.append({
-                "api_key": masked_key,
-                "base_url": cfg.get("base_url", ""),
-                "model": cfg.get("model", ""),
-                "has_key": bool(key),
-                "disabled": cfg.get("disabled", False),
-                "max_tokens": cfg.get("max_tokens", None),
-                "input_price_per_million": cfg.get("input_price_per_million", 0),
-                "output_price_per_million": cfg.get("output_price_per_million", 0),
-            })
-        masked[tier] = {"configs": configs, "active_index": pool.get("active_index", 0)}
+    for tier, raw in data.get("tier_keys", {}).items():
+        norm = _normalize_tier_data(raw)
+        masked[tier] = {}
+        for sub, pool in norm.items():
+            configs = []
+            for cfg in pool.get("configs", []):
+                key = cfg.get("api_key", "")
+                masked_key = _mask_key(key)
+                configs.append({
+                    "api_key": masked_key,
+                    "base_url": cfg.get("base_url", ""),
+                    "model": cfg.get("model", ""),
+                    "has_key": bool(key),
+                    "disabled": cfg.get("disabled", False),
+                    "max_tokens": cfg.get("max_tokens", None),
+                    "input_price_per_million": cfg.get("input_price_per_million", 0),
+                    "output_price_per_million": cfg.get("output_price_per_million", 0),
+                })
+            masked[tier][sub] = {"configs": configs, "active_index": pool.get("active_index", 0)}
     return masked
 
 
-def update_tier_keys(tier: str, configs: list, active_index: int = 0):
-    """更新指定 tier 的 API Key 配置。"""
+def update_tier_keys(tier: str, sub: str, configs: list, active_index: int = 0):
+    """更新指定 tier 的某个 sub-pool 的 API Key 配置。
+
+    sub ∈ title/sentence/word。其它 sub-pool 保持不变。
+    """
+    if sub not in SUB_POOLS:
+        raise ValueError(f"Invalid sub: {sub}, expected one of {SUB_POOLS}")
     data = _load_tier_keys()
     if "tier_keys" not in data:
         data["tier_keys"] = {}
-    existing = data["tier_keys"].get(tier, {}).get("configs", [])
-    # 建立 masked -> real 的映射，用于识别未修改的脱敏 key（与位置无关，支持拖拽重排序）
+    # 归一化现有 tier 数据为 sub 结构（兼容老格式）
+    existing_norm = _normalize_tier_data(data["tier_keys"].get(tier, {}))
+    # 建立 masked -> real 映射，用于识别未修改的脱敏 key（与位置无关，支持拖拽重排序）
+    existing_pool = existing_norm.get(sub, {})
     masked_to_real = {}
-    for cfg in existing:
+    for cfg in existing_pool.get("configs", []):
         k = cfg.get("api_key", "")
         if k:
             masked_to_real[_mask_key(k)] = k
@@ -76,7 +134,8 @@ def update_tier_keys(tier: str, configs: list, active_index: int = 0):
             "input_price_per_million": cfg.get("input_price_per_million", 0),
             "output_price_per_million": cfg.get("output_price_per_million", 0),
         })
-    data["tier_keys"][tier] = {"configs": new_configs, "active_index": active_index}
+    existing_norm[sub] = {"configs": new_configs, "active_index": active_index}
+    data["tier_keys"][tier] = existing_norm
     _save_tier_keys(data)
     # 通知 gateway 刷新
     try:

@@ -2,6 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { adminApi } from '../../utils/adminApi'
 
 const TIERS = ['free', 'basic', 'pro']
+// 每个 tier 下分 3 个 sub-pool，允许不同任务用不同 key。
+// label：管理员可见的中文名；hint：用途说明
+const SUB_POOLS = [
+  { key: 'title', label: '标题+语言', hint: '生成标题 + 语言检测（轻量、低延迟）' },
+  { key: 'sentence', label: '句子处理', hint: '翻译/生成/分词/语法解释（默认）' },
+  { key: 'word', label: '单词详情', hint: '单词多选/例句/记忆辅助' },
+]
 
 // per-key 最高输出默认值：free 16384，其它 65536
 const defaultMaxTokens = (tier) => tier === 'free' ? 16384 : 65536
@@ -15,24 +22,33 @@ const stripUid = (cfg) => {
   return rest
 }
 
+// 复制/粘贴缓冲区：模块级变量，跨 tier/sub 共享，刷新页面后清空（符合"复制粘贴"语义）
+let _clipboard = null
+
 export default function AdminApiKeys() {
   const [keys, setKeys] = useState({})
   const [activeTier, setActiveTier] = useState('free')
+  const [activeSub, setActiveSub] = useState('sentence')
   const [editing, setEditing] = useState({})
-  const [testing, setTesting] = useState(null)
+  const [testing, setTesting] = useState(null)  // `${tier}:${sub}` 标识正在测试的池
   const [testResult, setTestResult] = useState(null)
   const [interval, setInterval_] = useState(0.1)
   const [batchSize, setBatchSize] = useState(5)
   const [settingsSaved, setSettingsSaved] = useState(false)
+  // keyStatuses 用 `${tier}:${sub}` 作为 key，避免不同 sub 状态串扰
   const [keyStatuses, setKeyStatuses] = useState({})
   const esRef = useRef(null)
   // 拖拽排序：当前拖动的源 index
   const [dragIndex, setDragIndex] = useState(null)
+  // 复制提示：触发短暂"已复制"反馈
+  const [copiedSig, setCopiedSig] = useState(null)
 
-  const loadKeyStatuses = async (tier) => {
+  const poolSig = (tier, sub) => `${tier}:${sub}`
+
+  const loadKeyStatuses = async (tier, sub) => {
     try {
-      const data = await adminApi.getKeyStatuses(tier)
-      setKeyStatuses(prev => ({ ...prev, [tier]: data.statuses || [] }))
+      const data = await adminApi.getKeyStatuses(tier, sub)
+      setKeyStatuses(prev => ({ ...prev, [poolSig(tier, sub)]: data.statuses || [] }))
     } catch (e) {
       // ignore
     }
@@ -43,20 +59,24 @@ export default function AdminApiKeys() {
       setKeys(data)
       const ed = {}
       for (const tier of TIERS) {
-        const pool = data[tier] || { configs: [], active_index: 0 }
-        const cap = defaultMaxTokens(tier)
-        const configs = (pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }])
-          .map(c => ({
-            _uid: genUid(),
-            api_key: c.api_key || '',
-            base_url: c.base_url || '',
-            model: c.model || '',
-            disabled: c.disabled ?? false,
-            max_tokens: c.max_tokens ?? cap,
-            input_price_per_million: c.input_price_per_million ?? 0,
-            output_price_per_million: c.output_price_per_million ?? 0,
-          }))
-        ed[tier] = { configs, active_index: pool.active_index || 0 }
+        const tierData = data[tier] || {}
+        ed[tier] = {}
+        for (const sub of SUB_POOLS) {
+          const pool = tierData[sub.key] || { configs: [], active_index: 0 }
+          const cap = defaultMaxTokens(tier)
+          const configs = (pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }])
+            .map(c => ({
+              _uid: genUid(),
+              api_key: c.api_key || '',
+              base_url: c.base_url || '',
+              model: c.model || '',
+              disabled: c.disabled ?? false,
+              max_tokens: c.max_tokens ?? cap,
+              input_price_per_million: c.input_price_per_million ?? 0,
+              output_price_per_million: c.output_price_per_million ?? 0,
+            }))
+          ed[tier][sub.key] = { configs, active_index: pool.active_index || 0 }
+        }
       }
       setEditing(ed)
     })
@@ -66,28 +86,28 @@ export default function AdminApiKeys() {
     })
   }, [])
 
-  // 实时订阅当前 tier 的 Key 状态（SSE 事件驱动，无 30s 轮询）
+  // 实时订阅当前 tier:sub 的 Key 状态（SSE 事件驱动，无 30s 轮询）
   useEffect(() => {
     if (esRef.current) { esRef.current.close(); esRef.current = null }
-    const es = new EventSource(adminApi.keyStatusStreamUrl(activeTier))
+    const es = new EventSource(adminApi.keyStatusStreamUrl(activeTier, activeSub))
     esRef.current = es
+    const sig = poolSig(activeTier, activeSub)
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
         if (data.statuses) {
-          setKeyStatuses(prev => ({ ...prev, [activeTier]: data.statuses }))
+          setKeyStatuses(prev => ({ ...prev, [sig]: data.statuses }))
         }
       } catch { /* 忽略心跳/坏包 */ }
     }
     es.onerror = () => {
       // EventSource 浏览器内置会自动重连，这里只关闭避免重复创建
-      // 真正的认证失败会由后端返回 401，浏览器收到后 onerror 触发
     }
     return () => {
       es.close()
       if (esRef.current === es) esRef.current = null
     }
-  }, [activeTier])
+  }, [activeTier, activeSub])
 
   const saveSettings = async () => {
     await adminApi.updateGlobalSettings({ request_interval: interval, batch_size: batchSize })
@@ -95,76 +115,111 @@ export default function AdminApiKeys() {
     setTimeout(() => setSettingsSaved(false), 2000)
   }
 
-  const addConfig = (tier) => {
+  const addConfig = (tier, sub) => {
     setEditing(prev => ({
       ...prev,
       [tier]: {
         ...prev[tier],
-        configs: [...prev[tier].configs, {
-          _uid: genUid(),
-          api_key: '', base_url: '', model: '',
-          disabled: false, max_tokens: defaultMaxTokens(tier),
-          input_price_per_million: 0, output_price_per_million: 0,
-        }],
+        [sub]: {
+          ...prev[tier][sub],
+          configs: [...prev[tier][sub].configs, {
+            _uid: genUid(),
+            api_key: '', base_url: '', model: '',
+            disabled: false, max_tokens: defaultMaxTokens(tier),
+            input_price_per_million: 0, output_price_per_million: 0,
+          }],
+        }
       }
     }))
   }
 
-  const removeConfig = (tier, index) => {
+  const removeConfig = (tier, sub, index) => {
     setEditing(prev => ({
       ...prev,
       [tier]: {
         ...prev[tier],
-        configs: prev[tier].configs.filter((_, i) => i !== index),
+        [sub]: {
+          ...prev[tier][sub],
+          configs: prev[tier][sub].configs.filter((_, i) => i !== index),
+        }
       }
     }))
   }
 
-  const updateConfig = (tier, index, field, value) => {
+  const updateConfig = (tier, sub, index, field, value) => {
     setEditing(prev => {
-      const newConfigs = [...prev[tier].configs]
+      const newConfigs = [...prev[tier][sub].configs]
       newConfigs[index] = { ...newConfigs[index], [field]: value }
-      return { ...prev, [tier]: { ...prev[tier], configs: newConfigs } }
+      return { ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }
     })
   }
 
   // 拖拽重排序：把 from 移到 to 的位置
-  const moveConfig = (tier, from, to) => {
+  const moveConfig = (tier, sub, from, to) => {
     if (from === to) return
     setEditing(prev => {
-      const configs = [...prev[tier].configs]
+      const configs = [...prev[tier][sub].configs]
       const [moved] = configs.splice(from, 1)
       configs.splice(to, 0, moved)
-      return { ...prev, [tier]: { ...prev[tier], configs } }
+      return { ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } } }
     })
   }
 
-  const saveTier = async (tier) => {
+  // 复制单个 config 到剪贴板（跨 tier/sub 通用）
+  const copyConfig = (tier, sub, index) => {
+    const cfg = editing[tier][sub].configs[index]
+    if (!cfg) return
+    // ponytail: 浅拷贝即可，剥离 _uid 让粘贴时生成新 uid
+    const { _uid, ...rest } = cfg
+    _clipboard = { ...rest }
+    const sig = poolSig(tier, sub)
+    setCopiedSig(`${sig}#${index}`)
+    setTimeout(() => setCopiedSig(null), 1500)
+  }
+
+  // 把剪贴板里的 config 粘贴到当前 tier:sub（追加到末尾）
+  const pasteConfig = (tier, sub) => {
+    if (!_clipboard) {
+      alert('剪贴板为空，先在某行点"复制"')
+      return
+    }
+    setEditing(prev => ({
+      ...prev,
+      [tier]: {
+        ...prev[tier],
+        [sub]: {
+          ...prev[tier][sub],
+          configs: [...prev[tier][sub].configs, { ..._clipboard, _uid: genUid() }],
+        }
+      }
+    }))
+  }
+
+  const saveTier = async (tier, sub) => {
     try {
       // 保存前剥离前端-only 的 _uid 字段
-      const cleanConfigs = editing[tier].configs.map(stripUid)
-      await adminApi.updateApiKeys(tier, cleanConfigs, editing[tier].active_index)
+      const cleanConfigs = editing[tier][sub].configs.map(stripUid)
+      await adminApi.updateApiKeys(tier, sub, cleanConfigs, editing[tier][sub].active_index)
       const data = await adminApi.getApiKeys()
       setKeys(data)
-      alert(`${tier} Key 已保存`)
-      loadKeyStatuses(tier)
+      alert(`${tier} / ${sub} Key 已保存`)
+      loadKeyStatuses(tier, sub)
     } catch (e) {
       alert('保存失败: ' + (e.response?.data?.detail || e.message))
     }
   }
 
-  const testTier = async (tier) => {
-    setTesting(tier)
+  const testTier = async (tier, sub) => {
+    const sig = poolSig(tier, sub)
+    setTesting(sig)
     setTestResult(null)
     try {
-      const result = await adminApi.testApiKey(tier)
-      // 后端返回 {results: [{index, status, message}, ...]}
+      const result = await adminApi.testApiKey(tier, sub)
       const results = result.results || [result]
-      setTestResult({ tier, results })
-      // 立即刷新状态徽章，让“正常/异常”反映测试结果
-      loadKeyStatuses(tier)
+      setTestResult({ sig, results })
+      loadKeyStatuses(tier, sub)
     } catch (e) {
-      setTestResult({ tier, results: [{ index: 0, status: 'error', message: e.message }] })
+      setTestResult({ sig, results: [{ index: 0, status: 'error', message: e.message }] })
     } finally {
       setTesting(null)
     }
@@ -172,7 +227,9 @@ export default function AdminApiKeys() {
 
   if (!editing.free) return <div className="text-[#e8d5b7]">加载中...</div>
 
-  const currentStatuses = keyStatuses[activeTier] || []
+  const currentSig = poolSig(activeTier, activeSub)
+  const currentStatuses = keyStatuses[currentSig] || []
+  const activeSubMeta = SUB_POOLS.find(s => s.key === activeSub)
 
   return (
     <div>
@@ -210,7 +267,8 @@ export default function AdminApiKeys() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6">
+      {/* 一级 tab：tier */}
+      <div className="flex gap-2 mb-3">
         {TIERS.map(tier => (
           <button
             key={tier}
@@ -224,20 +282,46 @@ export default function AdminApiKeys() {
         ))}
       </div>
 
+      {/* 二级 tab：sub-pool（标题/句子/单词） */}
+      <div className="flex gap-2 mb-4">
+        {SUB_POOLS.map(sp => (
+          <button
+            key={sp.key}
+            onClick={() => setActiveSub(sp.key)}
+            className={`px-3 py-1.5 rounded text-sm ${
+              activeSub === sp.key ? 'bg-[#c9a96e]/30 text-[#c9a96e] border border-[#c9a96e]/50' : 'bg-[#16213e] text-[#e8d5b7]/60 border border-[#c9a96e]/10'
+            }`}
+            title={sp.hint}
+          >
+            {sp.label}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-[#c9a96e] font-bold">{activeTier.toUpperCase()} Key 池</h3>
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <h3 className="text-[#c9a96e] font-bold">{activeTier.toUpperCase()} / {activeSubMeta.label}</h3>
+            <p className="text-[#e8d5b7]/40 text-xs mt-0.5">{activeSubMeta.hint}</p>
+          </div>
           <div className="flex gap-2">
-            <button onClick={() => testTier(activeTier)} disabled={testing === activeTier}
-              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50">
-              {testing === activeTier ? '测试中...' : '测试'}
+            {/* 粘贴：把剪贴板里的 config 追加到当前 sub-pool，跨 tier/sub 都可粘贴 */}
+            <button onClick={() => pasteConfig(activeTier, activeSub)}
+              className="px-3 py-1 bg-[#16213e] text-[#e8d5b7] border border-[#c9a96e]/40 rounded text-sm hover:bg-[#1a1a2e] disabled:opacity-40"
+              disabled={!_clipboard}
+              title={_clipboard ? `剪贴板有内容：${_clipboard.model || '(无 model)'}` : '剪贴板为空'}>
+              粘贴
             </button>
-            <button onClick={() => addConfig(activeTier)}
+            <button onClick={() => testTier(activeTier, activeSub)} disabled={testing === currentSig}
+              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50">
+              {testing === currentSig ? '测试中...' : '测试'}
+            </button>
+            <button onClick={() => addConfig(activeTier, activeSub)}
               className="px-3 py-1 bg-[#c9a96e] text-[#1a1a2e] rounded text-sm font-bold">+ 添加</button>
           </div>
         </div>
 
-        {testResult && testResult.tier === activeTier && (
+        {testResult && testResult.sig === currentSig && (
           <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
             <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
             {testResult.results.map(r => (
@@ -252,15 +336,16 @@ export default function AdminApiKeys() {
           </div>
         )}
 
-        {editing[activeTier]?.configs.map((cfg, i) => {
+        {editing[activeTier]?.[activeSub]?.configs.map((cfg, i) => {
           const status = currentStatuses[i]
           const isDisabled = cfg.disabled
+          const copiedKey = `${currentSig}#${i}`
           return (
             <div key={cfg._uid}
               draggable
               onDragStart={() => setDragIndex(i)}
               onDragOver={e => e.preventDefault()}
-              onDrop={() => { moveConfig(activeTier, dragIndex, i); setDragIndex(null) }}
+              onDrop={() => { moveConfig(activeTier, activeSub, dragIndex, i); setDragIndex(null) }}
               className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${isDisabled ? 'opacity-60' : ''}`}
             >
               <div className="w-6 flex-shrink-0 flex flex-col items-center justify-end pb-1 cursor-grab text-[#e8d5b7]/30 hover:text-[#c9a96e]" title="拖动排序">⠿</div>
@@ -287,46 +372,52 @@ export default function AdminApiKeys() {
               </div>
               <div className="flex-1">
                 <label className="text-[#e8d5b7]/60 text-xs">API Key</label>
-                <input type="password" value={cfg.api_key || ''} onChange={e => updateConfig(activeTier, i, 'api_key', e.target.value)}
+                <input type="password" value={cfg.api_key || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'api_key', e.target.value)}
                   placeholder="sk-..." className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="flex-1">
                 <label className="text-[#e8d5b7]/60 text-xs">Base URL</label>
-                <input value={cfg.base_url || ''} onChange={e => updateConfig(activeTier, i, 'base_url', e.target.value)}
+                <input value={cfg.base_url || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'base_url', e.target.value)}
                   placeholder="https://api.openai.com/v1" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="flex-1">
                 <label className="text-[#e8d5b7]/60 text-xs">Model</label>
-                <input value={cfg.model || ''} onChange={e => updateConfig(activeTier, i, 'model', e.target.value)}
+                <input value={cfg.model || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'model', e.target.value)}
                   placeholder="gpt-4o-mini" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">最大输出</label>
-                <input type="number" step="1" value={cfg.max_tokens ?? defaultMaxTokens(activeTier)} onChange={e => updateConfig(activeTier, i, 'max_tokens', Number(e.target.value))}
+                <input type="number" step="1" value={cfg.max_tokens ?? defaultMaxTokens(activeTier)} onChange={e => updateConfig(activeTier, activeSub, i, 'max_tokens', Number(e.target.value))}
                   placeholder={String(defaultMaxTokens(activeTier))} className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">输入价格/$1M</label>
-                <input type="number" step="0.01" value={cfg.input_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'input_price_per_million', Number(e.target.value))}
+                <input type="number" step="0.01" value={cfg.input_price_per_million || 0} onChange={e => updateConfig(activeTier, activeSub, i, 'input_price_per_million', Number(e.target.value))}
                   placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
               <div className="w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">输出价格/$1M</label>
-                <input type="number" step="0.01" value={cfg.output_price_per_million || 0} onChange={e => updateConfig(activeTier, i, 'output_price_per_million', Number(e.target.value))}
+                <input type="number" step="0.01" value={cfg.output_price_per_million || 0} onChange={e => updateConfig(activeTier, activeSub, i, 'output_price_per_million', Number(e.target.value))}
                   placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
-              <button onClick={() => updateConfig(activeTier, i, 'disabled', !cfg.disabled)}
+              <button onClick={() => updateConfig(activeTier, activeSub, i, 'disabled', !cfg.disabled)}
                 className={`px-2 py-1 rounded text-xs font-bold ${isDisabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
                 title={isDisabled ? '点击启用' : '点击禁用（不参与轮询）'}>
                 {isDisabled ? '已禁用' : '启用中'}
               </button>
-              <button onClick={() => removeConfig(activeTier, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
+              {/* 复制：把该行 config 写入剪贴板，可在任意 tier/sub 粘贴 */}
+              <button onClick={() => copyConfig(activeTier, activeSub, i)}
+                className={`px-2 py-1 rounded text-xs font-bold ${copiedSig === copiedKey ? 'bg-green-900/40 text-green-400' : 'bg-[#c9a96e]/20 text-[#c9a96e] hover:bg-[#c9a96e]/30'}`}
+                title="复制此 Key 到剪贴板（可粘贴到任意 tier/sub）">
+                {copiedSig === copiedKey ? '已复制' : '复制'}
+              </button>
+              <button onClick={() => removeConfig(activeTier, activeSub, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
             </div>
           )
         })}
 
         <div className="flex justify-end mt-4">
-          <button onClick={() => saveTier(activeTier)}
+          <button onClick={() => saveTier(activeTier, activeSub)}
             className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">保存</button>
         </div>
       </div>

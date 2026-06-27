@@ -18,13 +18,13 @@ export const adminApi = {
     return response.data;
   },
 
-  updateApiKeys: async (tier, configs, activeIndex = 0) => {
-    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs, active_index: activeIndex });
+  updateApiKeys: async (tier, sub, configs, activeIndex = 0) => {
+    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs, active_index: activeIndex, sub });
     return response.data;
   },
 
-  testApiKey: async (tier) => {
-    const response = await axios.post(`${baseUrl}/api/admin/api-keys/${tier}/test`);
+  testApiKey: async (tier, sub) => {
+    const response = await axios.post(`${baseUrl}/api/admin/api-keys/${tier}/test`, null, { params: { sub } });
     return response.data;
   },
 
@@ -158,16 +158,16 @@ export const adminApi = {
     return response.data;
   },
 
-  getKeyStatuses: async (tier) => {
-    const response = await axios.get(`${baseUrl}/api/admin/api-keys/${tier}/status`);
+  getKeyStatuses: async (tier, sub) => {
+    const response = await axios.get(`${baseUrl}/api/admin/api-keys/${tier}/status`, { params: { sub } });
     return response.data;
   },
 
   // SSE 端点 URL：EventSource 不支持自定义 header，所以 token 通过 query 传递
-  keyStatusStreamUrl: (tier) => {
+  keyStatusStreamUrl: (tier, sub) => {
     const tokens = JSON.parse(localStorage.getItem('gualingo_tokens') || 'null');
     const token = tokens?.access_token || '';
-    return `${baseUrl}/api/admin/api-keys/${tier}/status/stream?token=${encodeURIComponent(token)}`;
+    return `${baseUrl}/api/admin/api-keys/${tier}/status/stream?sub=${encodeURIComponent(sub)}&token=${encodeURIComponent(token)}`;
   },
 
   getLogs: async (page = 1) => {

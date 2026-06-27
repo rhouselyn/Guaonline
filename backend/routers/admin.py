@@ -171,19 +171,22 @@ async def get_api_keys(admin: AdminTokenData = Depends(require_admin)):
 class TierKeyUpdate(BaseModel):
     configs: List[dict]
     active_index: int = 0
+    sub: str = "sentence"  # title/sentence/word，默认 sentence 兼容老前端
 
 
 @router.put("/api-keys/{tier}")
 async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData = Depends(require_admin)):
     if tier not in ("free", "basic", "pro"):
         raise HTTPException(status_code=400, detail="Invalid tier")
-    update_tier_keys(tier, req.configs, req.active_index)
-    _log_action("update_api_keys", "tier", tier, {"active_index": req.active_index, "config_count": len(req.configs)})
+    if req.sub not in ("title", "sentence", "word"):
+        raise HTTPException(status_code=400, detail="Invalid sub")
+    update_tier_keys(tier, req.sub, req.configs, req.active_index)
+    _log_action("update_api_keys", "tier", tier, {"sub": req.sub, "active_index": req.active_index, "config_count": len(req.configs)})
     return {"status": "ok"}
 
 
 @router.post("/api-keys/{tier}/test")
-async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)):
+async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(require_admin)):
     """逐个测试该 Tier 池中的所有 Key，并把结果回写到 gateway pool 的状态字段。
 
     返回 {results: [{index, status, message}, ...]}，status ∈ ok/empty/invalid/rate_limited/error。
@@ -192,14 +195,17 @@ async def test_api_key(tier: str, admin: AdminTokenData = Depends(require_admin)
     """
     if tier not in ("free", "basic", "pro"):
         raise HTTPException(status_code=400, detail="Invalid tier")
+    if sub not in ("title", "sentence", "word"):
+        raise HTTPException(status_code=400, detail="Invalid sub")
     import asyncio
     import httpx
     from datetime import datetime, timezone
     from utils.llm_gateway import gateway
 
-    pool = gateway.pools.get(tier)
+    tier_pools = gateway.pools.get(tier)
+    pool = tier_pools.get(sub) if tier_pools else None
     if not pool or not pool.configs:
-        raise HTTPException(status_code=400, detail="该 Tier 没有配置 API Key")
+        raise HTTPException(status_code=400, detail="该 Tier/Sub 没有配置 API Key")
 
     async def _test_one(idx, cfg):
         api_key = cfg.get("api_key", "")
@@ -313,9 +319,10 @@ def _build_key_statuses(pool) -> list:
 
 
 @router.get("/api-keys/{tier}/status")
-async def get_api_key_statuses(tier: str, admin: AdminTokenData = Depends(require_admin)):
+async def get_api_key_statuses(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(require_admin)):
     from utils.llm_gateway import gateway
-    pool = gateway.pools.get(tier)
+    tier_pools = gateway.pools.get(tier)
+    pool = tier_pools.get(sub) if tier_pools else None
     if not pool:
         return {"statuses": []}
     return {"statuses": _build_key_statuses(pool)}
@@ -336,14 +343,15 @@ def _require_admin_for_sse(tier: str, token: Optional[str] = Query(None)):
 
 
 @router.get("/api-keys/{tier}/status/stream")
-async def stream_api_key_statuses(tier: str, admin: AdminTokenData = Depends(_require_admin_for_sse)):
+async def stream_api_key_statuses(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(_require_admin_for_sse)):
     """SSE 实时推送 Key 状态。事件驱动：mark_* 改变状态时立刻推送，无变化时每 15s 发心跳保活。
 
     资源节约：无订阅时不轮询；有订阅时仅在状态变化时推送一次 JSON，未变化时只发心跳。
     认证：EventSource 无法携带 Authorization header，所以通过 ?token=xxx 传递 admin JWT。
     """
     from utils.llm_gateway import gateway
-    pool = gateway.pools.get(tier)
+    tier_pools = gateway.pools.get(tier)
+    pool = tier_pools.get(sub) if tier_pools else None
     if not pool:
         async def _empty():
             yield 'event: end\ndata: no pool\n\n'
