@@ -167,7 +167,8 @@ _MC_PLACEHOLDER = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$'
 
 def extract_mc_options(cached, filter_placeholders=True):
     """从 cached['multiple_choice'] 提取 (options 文本列表, correct_index)。
-    filter_placeholders=True 时过滤 LLM 占位符选项。"""
+    filter_placeholders=True 时过滤 LLM 占位符选项。
+    每次读取都重新打乱顺序，避免缓存中固定顺序导致正确答案总在首位。"""
     mc = cached.get("multiple_choice") if isinstance(cached, dict) else None
     if not isinstance(mc, dict):
         return [], 0
@@ -186,6 +187,13 @@ def extract_mc_options(cached, filter_placeholders=True):
         options.append(text)
         if opt.get("is_correct"):
             correct_index = len(options) - 1
+
+    # 每次读取都重新打乱，避免缓存中固定顺序（如正确答案总在首位）被用户记住位置
+    if len(options) > 1:
+        correct_text = options[correct_index]
+        import random as _r
+        _r.shuffle(options)
+        correct_index = options.index(correct_text) if correct_text in options else 0
     return options, correct_index
 
 

@@ -121,7 +121,7 @@ def test_test_endpoint_no_500_and_writes_back_per_key():
     assert by_idx[3]["status"] == "error", by_idx[3]
 
     # pool config 已被回写
-    pool = gw_mod.gateway.pools["free"]
+    pool = gw_mod.gateway.pools["free"]["sentence"]
     assert pool.configs[1]["last_error"] is None, pool.configs[1]
     assert pool.configs[1]["is_valid"] is True, pool.configs[1]
     assert pool.configs[2]["is_valid"] is False, pool.configs[2]
@@ -146,7 +146,7 @@ def test_status_includes_is_busy_reflecting_active_per_key():
 
     get_current 后 is_busy=True；mark_complete 后 is_busy=False。
     """
-    pool = gw_mod.gateway.pools["free"]
+    pool = gw_mod.gateway.pools["free"]["sentence"]
     # 清空 active_per_key，避免之前测试残留
     pool.active_per_key.clear()
     pool.active_count = 0

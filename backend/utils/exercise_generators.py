@@ -215,16 +215,16 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
-                            "correct_option": {"type": "string", "description": "单词的正确释义（必须是该单词真实存在的意思）"},
                             "distractors": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "minItems": 3,
                                 "maxItems": 3,
-                                "description": "3 个错误释义（该单词所没有的意思，用作干扰项）。不要标记哪个是对错，系统会自动把 correct_option 设为正确答案",
+                                "description": "3 个错误释义（该单词所没有的意思，用作干扰项）。先于 correct_option 生成，作为正确选项的格式模板。不要标记哪个是对错，系统会自动把 correct_option 设为正确答案",
                             },
+                            "correct_option": {"type": "string", "description": "1 个正确释义（单词的真实释义）。格式必须与 distractors 中的每一项完全一致：同样的长度、同样的结构（都只含 1 个释义，或都含 N 个释义）、同样的词性范围"},
                         },
-                        "required": ["correct_option", "distractors"],
+                        "required": ["distractors", "correct_option"],
                     },
                 },
                 "required": ["word", "enriched_meaning", "variants_detail", "examples", "memory_hint", "multiple_choice"],
@@ -249,10 +249,7 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 2. variants_detail: {source_lang_name} 词形变化列表，带类型说明。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
 3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户的母语）。绝不能反过来用母语写例句再用学习语言翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
 4. memory_hint: 记忆辅助（与用户母语的联想或对比）
-5. multiple_choice: 选择题，包含：
-   - correct_option: 1 个正确释义（单词的真实释义）
-   - distractors: 3 个错误释义（单词所没有的意思，用作干扰项）
-   【极其重要】只需分别给出 1 个正确释义和 3 个错误释义，不要自行标记哪个是对错，系统会自动把 correct_option 设为正确答案
+5. multiple_choice: 选择题。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。correct_option 的格式必须严格匹配 distractors 中各项的格式。
 
 要求：
 - 所有输出必须使用 {target_lang_name}
@@ -265,7 +262,12 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 - 【重要】选项必须是纯单词或短语，不能是完整句子
 - 【重要】选项必须与单词本身的意思无关，不能包含单词的任何含义
 - 【重要】词形变化必须是 {source_lang_name} 中确实存在的，不要硬加不存在的词形
-- 【重要】四个选项的格式和词性必须保持一致：如果正确答案包含两个释义，错误选项也必须各包含两个释义；如果正确答案只有一个释义，错误选项也各只有一个释义。所有选项的词性范围应尽量一致
+- 【极其重要·四个选项格式必须完全一致】四个选项（3 个 distractors + 1 个 correct_option）必须采用完全相同的格式：
+  · 每个选项都只包含「1 个释义」，不要在 correct_option 里堆砌多个释义而 distractors 各只有 1 个
+  · 每个选项的长度、结构、词性范围必须一致
+  · 正确做法示例：distractors=["猫"、"狗"、"鸟"]，correct_option="鱼"（都是单个名词）
+  · 错误做法示例：distractors=["猫"、"狗"、"鸟"]，correct_option="鱼；水中游的动物"（正确选项多塞了释义）
+  · 如果某个释义需要两个词才能表达（如"开始；启动"），那么所有四个选项都必须各含两个释义
 - 【极其重要】enriched_meaning 中不能包含占位符文本（如"释义1"、"含义1"、"meaning 1"等），必须全部是具体的、有意义的翻译内容
 - 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可。"""
 

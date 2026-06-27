@@ -155,16 +155,27 @@ function speakWithWebSpeech(text, lang, slow) {
   // 停止当前播放
   window.speechSynthesis.cancel()
 
+  // ponytail: 先检查是否有匹配该语种的 voice。Web Speech 传入不支持的 lang 会触发 error 事件，
+  // 且部分浏览器会播放默认语种（发音错乱）。无匹配 voice 时直接静默返回，不生成语音。
+  const voices = window.speechSynthesis.getVoices()
+  const langPrefix = lang.split('-')[0].toLowerCase()
+  const matchedVoice = voices.find(v => v.lang === lang)
+    || voices.find(v => v.lang && v.lang.toLowerCase() === lang.toLowerCase())
+    || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix))
+  if (!matchedVoice) {
+    console.warn(`[webspeech] 无匹配 voice for lang=${lang}，跳过语音生成（避免传入不支持的 lang 触发 error）`)
+    return
+  }
+
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = lang
+  utterance.voice = matchedVoice
   utterance.rate = slow ? 0.6 : 1.0
 
-  // 尝试匹配最佳语音
-  const voices = window.speechSynthesis.getVoices()
-  const matchedVoice = voices.find(v => v.lang === lang)
-    || voices.find(v => v.lang.startsWith(lang.split('-')[0]))
-  if (matchedVoice) {
-    utterance.voice = matchedVoice
+  // 兜底：即使 voice 匹配，运行时仍可能因语种不支持触发 error（如 voices 异步加载未完成）。
+  // 监听 error 静默处理，避免未捕获异常污染控制台。
+  utterance.onerror = (e) => {
+    console.warn(`[webspeech] utterance error: ${e.error || 'unknown'}, lang=${lang}`)
   }
 
   window.speechSynthesis.speak(utterance)
