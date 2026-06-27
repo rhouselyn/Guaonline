@@ -1,49 +1,32 @@
-"""验证 admin API Key 测试/状态端点的关键回归点：
+"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + weight）：
 
-1. 测试端点不再因 ImportError（旧版 import 了不存在的 get_tier_llm_config）报 500。
-2. 测试端点会把每个 Key 的状态回写到 gateway pool。
-3. 状态端点对非 429 错误（如 5xx）分类为 'error'，不再误显示为 '正常'。
-4. 多个 Key 时分别返回各自结果。
+1. test 端点按 key_id 测试，结果回写到 gateway 全局 key_runtime。
+2. status 端点暴露 circuit_state（open/half_open）。
+3. status 端点暴露 per-pool weight。
+4. is_busy 反映全局 active_in_flight。
+5. 运行时状态跨 pool 一致。
+6. SSE 鉴权（无 token 401 / 无效 token 401 / 有效 token 放行）。
+7. 未知 tier 400。
 """
 
 import os
 import sys
 import json
+import time
 import tempfile
+import importlib
 from unittest.mock import patch
 
-# 覆盖 DATA_DIR 到临时目录，避免污染真实数据
 _tmp = tempfile.mkdtemp()
 os.environ["DATA_DIR"] = _tmp
 os.environ["BASE_DIR"] = _tmp
+os.environ.pop("HEALTH_CHECK_ENABLED", None)  # 关闭健康检查
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import importlib
 import config
 importlib.reload(config)
-
-# 写入测试用 tier_keys.json：4 个配置，分别对应
-# empty / normal / invalid(401) / error(500, is_valid=True)
-_tier_keys = {
-    "tier_keys": {
-        "free": {
-            "configs": [
-                {"api_key": "", "base_url": "https://example.com/v1", "model": "m"},
-                {"api_key": "sk-good", "base_url": "https://example.com/v1", "model": "m"},
-                {"api_key": "sk-bad", "base_url": "https://example.com/v1", "model": "m",
-                 "is_valid": False, "last_error": "401 Unauthorized",
-                 "last_error_time": "2026-01-01T00:00:00+00:00"},
-                {"api_key": "sk-500", "base_url": "https://example.com/v1", "model": "m",
-                 "is_valid": True, "last_error": "500 Internal Server Error",
-                 "last_error_time": "2026-01-01T00:00:00+00:00"},
-            ],
-            "active_index": 0,
-        }
-    }
-}
-with open(os.path.join(_tmp, "tier_keys.json"), "w", encoding="utf-8") as f:
-    json.dump(_tier_keys, f)
-
+import llm_api
+importlib.reload(llm_api)
 import utils.llm_gateway as gw_mod
 importlib.reload(gw_mod)
 import routers.admin as admin_mod
@@ -66,14 +49,53 @@ app.dependency_overrides[require_admin] = _fake_admin
 client = TestClient(app)
 
 
-# ── httpx 替身：按 Authorization 中的 key 后缀返回不同状态码 ──
+# ── 数据构造辅助 ────────────────────────────────────────────
+
+def _kdef(kid, api_key="sk-x", base_url="https://example.com/v1", model="m"):
+    return {"id": kid, "api_key": api_key, "base_url": base_url, "model": model,
+            "input_price_per_million": 0, "output_price_per_million": 0}
+
+
+def _ref(kid, max_tokens=None, disabled=False, weight=1):
+    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled, "weight": weight}
+
+
+def _build(keys, sentence_refs, title_refs=None):
+    """构造新格式数据。title_refs 默认空。"""
+    return {"keys": keys, "tier_keys": {"free": {
+        "title": {"configs": title_refs or [], "active_index": 0},
+        "sentence": {"configs": sentence_refs, "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
+    }}}
+
+
+def _setup(data):
+    """写入新格式数据并重载 gateway（重建单例 + 清空 key_runtime）。返回 gateway 实例。
+
+    不重载 admin_mod（避免 router 引用失效）；admin 端点在调用时 import gateway，能拿到最新单例。
+    """
+    os.environ["DATA_DIR"] = _tmp
+    importlib.reload(config)
+    importlib.reload(llm_api)
+    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    importlib.reload(gw_mod)
+    gw_mod.gateway.key_runtime.clear()
+    gw_mod.gateway._reload_all()
+    return gw_mod.gateway
+
+
 class _FakeResp:
     def __init__(self, status_code, text=""):
         self.status_code = status_code
         self.text = text
 
+    def json(self):
+        return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
 
 class _FakeAsyncClient:
+    """按 Authorization 中的 key 后缀返回不同状态码。"""
     def __init__(self, *a, **kw):
         pass
 
@@ -94,87 +116,113 @@ class _FakeAsyncClient:
         return _FakeResp(200, "")
 
 
-def test_status_classifies_500_as_error_not_normal():
-    """状态端点应把 500 错误分类为 'error'，不再误显示为 '正常'。"""
-    resp = client.get("/api/admin/api-keys/free/status")
-    assert resp.status_code == 200, resp.text
-    statuses = resp.json()["statuses"]
-    assert statuses[0]["status"] == "empty", statuses[0]
-    assert statuses[1]["status"] == "normal", statuses[1]
-    assert statuses[2]["status"] == "invalid", statuses[2]
-    assert statuses[3]["status"] == "error", statuses[3]      # ← 关键回归点
-    assert statuses[3]["status_text"] == "异常", statuses[3]
+# ── 1. test 端点按 key_id 测试，回写 key_runtime ───────────
 
-
-def test_test_endpoint_no_500_and_writes_back_per_key():
-    """测试端点不再 ImportError 报 500，并发返回每个 Key 的结果并回写 pool。"""
+def test_test_endpoint_writes_back_per_key_runtime():
+    keys = {
+        "k_empty": _kdef("k_empty", ""),
+        "k_good": _kdef("k_good", "sk-good"),
+        "k_bad": _kdef("k_bad", "sk-bad"),
+        "k_500": _kdef("k_500", "sk-500"),
+    }
+    data = _build(keys, [_ref("k_empty"), _ref("k_good"), _ref("k_bad"), _ref("k_500")])
+    g = _setup(data)
     with patch("httpx.AsyncClient", _FakeAsyncClient):
-        resp = client.post("/api/admin/api-keys/free/test")
+        resp = client.post("/api/admin/api-keys/free/test?sub=sentence")
     assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert "results" in data, data
-    by_idx = {r["index"]: r for r in data["results"]}
-    # 多个 Key 分别返回各自结果
+    by_idx = {r["index"]: r for r in resp.json()["results"]}
     assert by_idx[0]["status"] == "empty", by_idx[0]
     assert by_idx[1]["status"] == "ok", by_idx[1]
     assert by_idx[2]["status"] == "invalid", by_idx[2]
     assert by_idx[3]["status"] == "error", by_idx[3]
 
-    # pool config 已被回写
-    pool = gw_mod.gateway.pools["free"]["sentence"]
-    assert pool.configs[1]["last_error"] is None, pool.configs[1]
-    assert pool.configs[1]["is_valid"] is True, pool.configs[1]
-    assert pool.configs[2]["is_valid"] is False, pool.configs[2]
-    assert "500" in pool.configs[3]["last_error"], pool.configs[3]
-
-    # 再次查询状态，应反映测试结果（不再卡在“正常”）
-    resp2 = client.get("/api/admin/api-keys/free/status")
-    s = resp2.json()["statuses"]
-    assert s[1]["status"] == "normal", s[1]
-    assert s[2]["status"] == "invalid", s[2]
-    assert s[3]["status"] == "error", s[3]
+    # 回写到全局 key_runtime（按 key_id）
+    assert g.key_runtime["k_good"]["last_error"] is None
+    assert g.key_runtime["k_good"]["is_valid"] is True
+    assert g.key_runtime["k_bad"]["is_valid"] is False
+    assert "500" in g.key_runtime["k_500"]["last_error"], g.key_runtime["k_500"]
 
 
-def test_test_endpoint_rejects_unknown_tier():
-    """未知 tier 返回 400，不报 500。"""
-    resp = client.post("/api/admin/api-keys/unknown/test")
-    assert resp.status_code == 400, resp.text
+# ── 2. status 端点暴露 circuit_state ─────────────────────────
+
+def test_status_exposes_circuit_state():
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    data = _build(keys, [_ref("k1"), _ref("k2")])
+    g = _setup(data)
+    # k1 设为 open，k2 设为 half_open
+    g._ensure_runtime("k1")["circuit_state"] = "open"
+    g.key_runtime["k1"]["rate_limited_until"] = time.time() + 60
+    rt2 = g._ensure_runtime("k2")
+    rt2["circuit_state"] = "half_open"
+    rt2["half_open_probed"] = False
+
+    resp = client.get("/api/admin/api-keys/free/status?sub=sentence")
+    statuses = {s["key_id"]: s for s in resp.json()["statuses"]}
+    assert statuses["k1"]["circuit_state"] == "open"
+    assert statuses["k1"]["status"] == "circuit_open"
+    assert statuses["k1"]["status_text"] == "熔断中"
+    assert statuses["k2"]["circuit_state"] == "half_open"
+    assert statuses["k2"]["status"] == "circuit_half_open"
+    assert statuses["k2"]["status_text"] == "探测中"
 
 
-def test_status_includes_is_busy_reflecting_active_per_key():
-    """状态端点应返回 is_busy 字段，并反映 active_per_key 的实时占用情况。
+# ── 3. status 端点暴露 per-pool weight ──────────────────────
 
-    get_current 后 is_busy=True；mark_complete 后 is_busy=False。
-    """
-    pool = gw_mod.gateway.pools["free"]["sentence"]
-    # 清空 active_per_key，避免之前测试残留
-    pool.active_per_key.clear()
-    pool.active_count = 0
-    pool.current_index = 0
-    # 清掉所有 rate_limited_until 防止跳过
-    pool.rate_limited_until.clear()
+def test_status_exposes_weight():
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    data = _build(keys, [_ref("k1", weight=3), _ref("k2", weight=1)])
+    _setup(data)
+    resp = client.get("/api/admin/api-keys/free/status?sub=sentence")
+    statuses = {s["key_id"]: s for s in resp.json()["statuses"]}
+    assert statuses["k1"]["weight"] == 3
+    assert statuses["k2"]["weight"] == 1
 
-    # get_current 返回第一个未禁用、未阻塞的 Key（此处 index 0，虽然 api_key 为空也会被选）
-    cfg, idx = pool.get_current()
-    assert idx == 0, idx
-    assert pool.is_busy(idx) is True
 
-    resp = client.get("/api/admin/api-keys/free/status")
-    statuses = resp.json()["statuses"]
-    by_idx = {s["index"]: s for s in statuses}
-    assert by_idx[0]["is_busy"] is True, by_idx[0]
-    assert by_idx[1]["is_busy"] is False, by_idx[1]
+# ── 4. is_busy 反映全局 active_in_flight ────────────────────
 
-    # 释放后应回 False
-    pool.mark_complete(idx)
-    assert pool.is_busy(idx) is False
-    resp2 = client.get("/api/admin/api-keys/free/status")
-    s2 = {s["index"]: s for s in resp2.json()["statuses"]}
-    assert s2[0]["is_busy"] is False, s2[0]
+def test_status_is_busy_reflects_global_active():
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    data = _build(keys, [_ref("k1"), _ref("k2")])
+    g = _setup(data)
+    pool = g.pools["free"]["sentence"]
+    cfg, idx = pool.get_current(g)
+    busy_id = pool.refs[idx]["key_id"]
+    assert g.is_key_busy(busy_id) is True
 
+    resp = client.get("/api/admin/api-keys/free/status?sub=sentence")
+    statuses = {s["key_id"]: s for s in resp.json()["statuses"]}
+    assert statuses[busy_id]["is_busy"] is True
+    other = "k2" if busy_id == "k1" else "k1"
+    assert statuses[other]["is_busy"] is False
+
+    # 释放后回 False
+    pool.mark_complete(g, idx)
+    resp2 = client.get("/api/admin/api-keys/free/status?sub=sentence")
+    s2 = {s["key_id"]: s for s in resp2.json()["statuses"]}
+    assert s2[busy_id]["is_busy"] is False
+
+
+# ── 5. 运行时状态跨 pool 一致 ───────────────────────────────
+
+def test_runtime_state_cross_pool_consistent():
+    keys = {"k_good": _kdef("k_good", "sk-good")}
+    data = _build(keys, [_ref("k_good")], title_refs=[_ref("k_good")])
+    g = _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        client.post("/api/admin/api-keys/free/test?sub=title")
+
+    s_sent = {s["key_id"]: s for s in client.get("/api/admin/api-keys/free/status?sub=sentence").json()["statuses"]}
+    s_title = {s["key_id"]: s for s in client.get("/api/admin/api-keys/free/status?sub=title").json()["statuses"]}
+    assert s_sent["k_good"]["status"] == "normal"
+    assert s_title["k_good"]["status"] == "normal"
+    assert s_sent["k_good"]["is_valid"] is True
+    assert s_title["k_good"]["is_valid"] is True
+
+
+# ── 6. SSE 鉴权 ─────────────────────────────────────────────
 
 def test_sse_requires_token():
-    """SSE 端点无 token 时应返回 401，避免未认证的实时状态泄露。"""
+    """SSE 端点无 token 返回 401。"""
     resp = client.get("/api/admin/api-keys/free/status/stream")
     assert resp.status_code == 401, resp.status_code
 
@@ -185,28 +233,28 @@ def test_sse_rejects_bad_token():
     assert resp.status_code == 401, resp.status_code
 
 
-def test_sse_dependency_accepts_valid_token():
-    """SSE 鉴权依赖对有效 admin token 应放行（返回 AdminTokenData）。
-
-    SSE 端点本身是 StreamingResponse，generator 永不退出，无法用 TestClient 直接
-    验证响应体。所以单独验证鉴权依赖 + 已有的 _build_key_statuses 单元覆盖即可。
-    """
+def test_sse_accepts_valid_token():
+    """SSE 鉴权依赖对有效 admin token 应放行。"""
     from auth.jwt_utils import create_admin_tokens
     from routers.admin import _require_admin_for_sse
     token = create_admin_tokens()["access_token"]
-
-    # 直接调用依赖函数：token 校验通过应返回 AdminTokenData 实例
     admin_data = _require_admin_for_sse(tier="free", token=token)
     assert admin_data is not None
-    # 无 token / 无效 token 已由 test_sse_requires_token / test_sse_rejects_bad_token 覆盖
+
+
+# ── 7. 未知 tier 400 ────────────────────────────────────────
+
+def test_test_endpoint_rejects_unknown_tier():
+    """test 端点对未知 tier 返回 400。"""
+    resp = client.post("/api/admin/api-keys/unknown/test")
+    assert resp.status_code == 400, resp.text
 
 
 if __name__ == "__main__":
-    test_status_classifies_500_as_error_not_normal()
-    test_test_endpoint_no_500_and_writes_back_per_key()
-    test_test_endpoint_rejects_unknown_tier()
-    test_status_includes_is_busy_reflecting_active_per_key()
-    test_sse_requires_token()
-    test_sse_rejects_bad_token()
-    test_sse_dependency_accepts_valid_token()
+    import inspect, sys
+    _self = sys.modules[__name__]
+    for _name, _fn in sorted(vars(_self).items()):
+        if _name.startswith("test_") and inspect.isfunction(_fn):
+            _fn()
+            print(f"  ok: {_name}")
     print("\n全部测试通过 ✅")
