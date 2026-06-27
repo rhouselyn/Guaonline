@@ -2,94 +2,58 @@ import { useState, useEffect, useRef } from 'react'
 import { adminApi } from '../../utils/adminApi'
 
 const TIERS = ['free', 'basic', 'pro']
-// 每个 tier 下分 3 个 sub-pool，允许不同任务用不同 key。
-// label：管理员可见的中文名；hint：用途说明
 const SUB_POOLS = [
   { key: 'title', label: '标题+语言', hint: '生成标题 + 语言检测（轻量、低延迟）' },
   { key: 'sentence', label: '句子处理', hint: '翻译/生成/分词/语法解释（默认）' },
   { key: 'word', label: '单词详情', hint: '单词多选/例句/记忆辅助' },
 ]
-
-// per-key 最高输出默认值：free 16384，其它 65536
 const defaultMaxTokens = (tier) => tier === 'free' ? 16384 : 65536
 
-// 生成稳定的唯一 id，作为 React key，避免用数组 index 导致拖拽时字段错位
-let _uidCounter = 0
-const genUid = () => `cfg_${Date.now().toString(36)}_${(_uidCounter++).toString(36)}`
-// 清理用于后端保存：剥离前端-only 的 uid 字段
-const stripUid = (cfg) => {
-  const { _uid, ...rest } = cfg
-  return rest
-}
-
-// 复制/粘贴缓冲区：模块级变量，跨 tier/sub 共享，刷新页面后清空（符合"复制粘贴"语义）
-let _clipboard = null
+// 模块级引用配置剪贴板（复制 = 复制 {key_id, max_tokens, disabled}，粘贴 = 在目标 pool 追加引用）
+let _refClipboard = null
 
 export default function AdminApiKeys() {
-  const [keys, setKeys] = useState({})
+  const [keys, setKeys] = useState({})          // 全局 key 仓库（脱敏）：{id: {id, api_key, has_key, base_url, model, prices}}
+  const [tierKeys, setTierKeys] = useState({})  // 引用表：{tier: {sub: {configs:[{key_id,max_tokens,disabled}], active_index}}}
   const [activeTier, setActiveTier] = useState('free')
   const [activeSub, setActiveSub] = useState('sentence')
-  const [editing, setEditing] = useState({})
-  const [testing, setTesting] = useState(null)  // `${tier}:${sub}` 标识正在测试的池
+  const [keyStatuses, setKeyStatuses] = useState({})  // {sig: [{index, key_id, status, ...}]}
+  const [testing, setTesting] = useState(null)
   const [testResult, setTestResult] = useState(null)
   const [interval, setInterval_] = useState(0.1)
   const [batchSize, setBatchSize] = useState(5)
   const [settingsSaved, setSettingsSaved] = useState(false)
-  // keyStatuses 用 `${tier}:${sub}` 作为 key，避免不同 sub 状态串扰
-  const [keyStatuses, setKeyStatuses] = useState({})
   const esRef = useRef(null)
-  // 拖拽排序：当前拖动的源 index
   const [dragIndex, setDragIndex] = useState(null)
-  // 复制提示：触发短暂"已复制"反馈
   const [copiedSig, setCopiedSig] = useState(null)
-  // 跟踪有未保存字段改动的条目（按 _uid）。只有这些条目会渲染"保存"按钮。
-  // 结构性操作（删除/交换/粘贴）会立即持久化，不进这个集合。
-  const [dirtyUids, setDirtyUids] = useState(() => new Set())
+  // 编辑 key 全局属性的弹窗
+  const [editModal, setEditModal] = useState({ open: false, keyId: null, form: null, refCount: 0, saving: false })
+  // 添加 key 的弹窗（mode: 'choose' | 'new' | 'existing'）
+  const [addModal, setAddModal] = useState({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
 
   const poolSig = (tier, sub) => `${tier}:${sub}`
+
+  const reloadAll = async () => {
+    const data = await adminApi.getApiKeys()
+    setKeys(data.keys || {})
+    setTierKeys(data.tier_keys || {})
+  }
 
   const loadKeyStatuses = async (tier, sub) => {
     try {
       const data = await adminApi.getKeyStatuses(tier, sub)
       setKeyStatuses(prev => ({ ...prev, [poolSig(tier, sub)]: data.statuses || [] }))
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) { /* ignore */ }
   }
 
   useEffect(() => {
-    adminApi.getApiKeys().then(data => {
-      setKeys(data)
-      const ed = {}
-      for (const tier of TIERS) {
-        const tierData = data[tier] || {}
-        ed[tier] = {}
-        for (const sub of SUB_POOLS) {
-          const pool = tierData[sub.key] || { configs: [], active_index: 0 }
-          const cap = defaultMaxTokens(tier)
-          const configs = (pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }])
-            .map(c => ({
-              _uid: genUid(),
-              api_key: c.api_key || '',
-              base_url: c.base_url || '',
-              model: c.model || '',
-              disabled: c.disabled ?? false,
-              max_tokens: c.max_tokens ?? cap,
-              input_price_per_million: c.input_price_per_million ?? 0,
-              output_price_per_million: c.output_price_per_million ?? 0,
-            }))
-          ed[tier][sub.key] = { configs, active_index: pool.active_index || 0 }
-        }
-      }
-      setEditing(ed)
-    })
+    reloadAll()
     adminApi.getGlobalSettings().then(data => {
       setInterval_(data.request_interval ?? 0.1)
       setBatchSize(data.batch_size ?? 5)
     })
   }, [])
 
-  // 实时订阅当前 tier:sub 的 Key 状态（SSE 事件驱动，无 30s 轮询）
   useEffect(() => {
     if (esRef.current) { esRef.current.close(); esRef.current = null }
     const es = new EventSource(adminApi.keyStatusStreamUrl(activeTier, activeSub))
@@ -98,18 +62,10 @@ export default function AdminApiKeys() {
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (data.statuses) {
-          setKeyStatuses(prev => ({ ...prev, [sig]: data.statuses }))
-        }
-      } catch { /* 忽略心跳/坏包 */ }
+        if (data.statuses) setKeyStatuses(prev => ({ ...prev, [sig]: data.statuses }))
+      } catch { /* ignore */ }
     }
-    es.onerror = () => {
-      // EventSource 浏览器内置会自动重连，这里只关闭避免重复创建
-    }
-    return () => {
-      es.close()
-      if (esRef.current === es) esRef.current = null
-    }
+    return () => { es.close(); if (esRef.current === es) esRef.current = null }
   }, [activeTier, activeSub])
 
   const saveSettings = async () => {
@@ -118,156 +74,149 @@ export default function AdminApiKeys() {
     setTimeout(() => setSettingsSaved(false), 2000)
   }
 
-  // 内部：把指定 configs 持久化到后端，并刷新 keys/statuses。
-  // 结构性操作（删除/交换/粘贴）和单条目保存都走这里。
-  const persistConfigs = async (tier, sub, configs, activeIndex) => {
+  // 计算某 key 被多少 pool 引用（供"共享 N 处"标记）
+  const countKeyRefs = (keyId) => {
+    let n = 0
+    for (const tier in tierKeys) for (const sub in tierKeys[tier]) {
+      n += (tierKeys[tier][sub].configs || []).filter(r => r.key_id === keyId).length
+    }
+    return n
+  }
+
+  // 持久化某 pool 的引用列表（结构性操作：增删/排序/粘贴/字段改动都走这里）
+  const persistRefs = async (tier, sub, refs, activeIndex = 0) => {
     try {
-      const cleanConfigs = configs.map(stripUid)
-      await adminApi.updateApiKeys(tier, sub, cleanConfigs, activeIndex)
-      const data = await adminApi.getApiKeys()
-      setKeys(data)
+      await adminApi.updateApiKeys(tier, sub, refs, activeIndex)
+      await reloadAll()
       loadKeyStatuses(tier, sub)
     } catch (e) {
       alert('保存失败: ' + (e.response?.data?.detail || e.message))
     }
   }
 
-  const addConfig = (tier, sub) => {
-    const newUid = genUid()
-    setEditing(prev => ({
-      ...prev,
-      [tier]: {
-        ...prev[tier],
-        [sub]: {
-          ...prev[tier][sub],
-          configs: [...prev[tier][sub].configs, {
-            _uid: newUid,
-            api_key: '', base_url: '', model: '',
-            disabled: false, max_tokens: defaultMaxTokens(tier),
-            input_price_per_million: 0, output_price_per_million: 0,
-          }],
-        }
-      }
-    }))
-    // 新增的空条目需要用户填写后点保存，所以标记为 dirty
-    setDirtyUids(prev => new Set(prev).add(newUid))
-  }
-
-  const removeConfig = (tier, sub, index) => {
-    const pool = editing[tier][sub]
+  // 行内改 per-pool 配置（max_tokens/disabled）
+  const updateRefField = (tier, sub, idx, field, value) => {
+    const pool = tierKeys[tier]?.[sub]
     if (!pool) return
-    const removedUid = pool.configs[index]?._uid
-    const newConfigs = pool.configs.filter((_, i) => i !== index)
-    setEditing(prev => ({
+    const newConfigs = pool.configs.map((r, i) => i === idx ? { ...r, [field]: value } : r)
+    setTierKeys(prev => ({
       ...prev,
-      [tier]: {
-        ...prev[tier],
-        [sub]: { ...prev[tier][sub], configs: newConfigs }
-      }
+      [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } }
     }))
-    // 删除是结构性操作：立即持久化，不需要保存按钮
-    persistConfigs(tier, sub, newConfigs, pool.active_index)
-    // 清掉该条目的 dirty 标记（已不存在）
-    if (removedUid) {
-      setDirtyUids(prev => {
-        const next = new Set(prev)
-        next.delete(removedUid)
-        return next
-      })
-    }
+  }
+  // max_tokens 失焦时持久化（避免输入过程中频繁请求）
+  const commitRefField = (tier, sub) => {
+    const pool = tierKeys[tier]?.[sub]
+    if (pool) persistRefs(tier, sub, pool.configs, pool.active_index || 0)
   }
 
-  const updateConfig = (tier, sub, index, field, value) => {
-    const cfg = editing[tier]?.[sub]?.configs[index]
-    setEditing(prev => {
-      const newConfigs = [...prev[tier][sub].configs]
-      newConfigs[index] = { ...newConfigs[index], [field]: value }
-      return { ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }
-    })
-    // 字段被修改：标记为 dirty，显示保存按钮
-    if (cfg) {
-      setDirtyUids(prev => new Set(prev).add(cfg._uid))
-    }
-  }
-
-  // 拖拽重排序：把 from 移到 to 的位置
-  const moveConfig = (tier, sub, from, to) => {
+  // 拖拽重排序
+  const moveRef = (tier, sub, from, to) => {
     if (from === to) return
-    const pool = editing[tier][sub]
-    if (!pool) return
+    const pool = tierKeys[tier][sub]
     const configs = [...pool.configs]
     const [moved] = configs.splice(from, 1)
     configs.splice(to, 0, moved)
-    setEditing(prev => ({
-      ...prev,
-      [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } }
-    }))
-    // 交换是结构性操作：立即持久化，不需要保存按钮
-    persistConfigs(tier, sub, configs, pool.active_index)
+    setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } } }))
+    persistRefs(tier, sub, configs, pool.active_index || 0)
   }
 
-  // 复制单个 config 到剪贴板（跨 tier/sub 通用）
-  const copyConfig = (tier, sub, index) => {
-    const cfg = editing[tier][sub].configs[index]
-    if (!cfg) return
-    // ponytail: 浅拷贝即可，剥离 _uid 让粘贴时生成新 uid
-    // 所有字段都是基本类型，浅拷贝等价于深拷贝，源条目不会被后续修改影响
-    const { _uid, ...rest } = cfg
-    _clipboard = { ...rest }
-    const sig = poolSig(tier, sub)
-    setCopiedSig(`${sig}#${index}`)
+  // 删除引用（不删全局 key）
+  const removeRef = (tier, sub, idx) => {
+    const pool = tierKeys[tier][sub]
+    const newConfigs = pool.configs.filter((_, i) => i !== idx)
+    setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }))
+    persistRefs(tier, sub, newConfigs, pool.active_index || 0)
+  }
+
+  // 复制引用配置到剪贴板（key_id + max_tokens + disabled）
+  const copyRef = (tier, sub, idx) => {
+    const ref = tierKeys[tier][sub].configs[idx]
+    if (!ref) return
+    _refClipboard = { ...ref }
+    const sig = `${poolSig(tier, sub)}#${idx}`
+    setCopiedSig(sig)
     setTimeout(() => setCopiedSig(null), 1500)
   }
 
-  // 把剪贴板里的 config 粘贴到当前 tier:sub（追加到末尾）
-  const pasteConfig = (tier, sub) => {
-    if (!_clipboard) {
-      alert('剪贴板为空，先在某行点"复制"')
-      return
-    }
-    const newUid = genUid()
-    const pool = editing[tier][sub]
+  // 粘贴引用配置到当前 pool（追加引用同一个 key_id）
+  const pasteRef = (tier, sub) => {
+    if (!_refClipboard) { alert('剪贴板为空，先在某行点"复制"'); return }
+    const pool = tierKeys[tier][sub]
     if (!pool) return
-    // 新对象 + 新 _uid，源 _clipboard 不被修改
-    const newConfigs = [...pool.configs, { ..._clipboard, _uid: newUid }]
-    setEditing(prev => ({
-      ...prev,
-      [tier]: {
-        ...prev[tier],
-        [sub]: { ...prev[tier][sub], configs: newConfigs }
-      }
-    }))
-    // 粘贴是结构性操作：立即持久化，不需要保存按钮
-    // 后端会自动把脱敏 key 还原成真实 key（跨 tier/sub 也支持）
-    persistConfigs(tier, sub, newConfigs, pool.active_index)
+    const newRef = { key_id: _refClipboard.key_id, max_tokens: _refClipboard.max_tokens ?? defaultMaxTokens(tier), disabled: false }
+    const newConfigs = [...pool.configs, newRef]
+    setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }))
+    persistRefs(tier, sub, newConfigs, pool.active_index || 0)
   }
 
-  // 单条目保存：后端按 tier:sub 整体更新，但只清除该条目的 dirty 标记
-  const saveEntry = async (tier, sub, uid) => {
-    const pool = editing[tier][sub]
-    if (!pool) return
-    await persistConfigs(tier, sub, pool.configs, pool.active_index)
-    setDirtyUids(prev => {
-      const next = new Set(prev)
-      next.delete(uid)
-      return next
+  // ── 编辑 key 全局属性弹窗 ──
+  const openEditModal = (keyId) => {
+    const k = keys[keyId]
+    if (!k) return
+    setEditModal({
+      open: true, keyId, refCount: countKeyRefs(keyId), saving: false,
+      form: {
+        api_key: k.api_key || '',          // 脱敏值；用户改写才提交新值
+        base_url: k.base_url || '',
+        model: k.model || '',
+        input_price_per_million: k.input_price_per_million ?? 0,
+        output_price_per_million: k.output_price_per_million ?? 0,
+      }
     })
   }
+  const saveEditModal = async () => {
+    const { keyId, form } = editModal
+    setEditModal(m => ({ ...m, saving: true }))
+    try {
+      // 带 * 的 api_key 视为未修改（后端会忽略）
+      const payload = { ...form }
+      if (form.api_key && form.api_key.includes('*')) delete payload.api_key
+      await adminApi.updateKeyDef(keyId, payload)
+      await reloadAll()
+      setEditModal(m => ({ ...m, open: false }))
+    } catch (e) {
+      alert('保存失败: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setEditModal(m => ({ ...m, saving: false }))
+    }
+  }
 
+  // ── 添加 key 弹窗 ──
+  const openAddModal = () => setAddModal({ open: true, mode: 'choose', newForm: { api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }, selectedKeyId: null })
+  const createNewKeyAndAdd = async () => {
+    const f = addModal.newForm
+    if (!f.api_key || !f.model) { alert('api_key 和 model 不能为空'); return }
+    try {
+      const res = await adminApi.createKeyDef(f.api_key, f.base_url, f.model, f.input_price_per_million, f.output_price_per_million)
+      await appendRefToPool(res.id)
+      setAddModal({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
+    } catch (e) {
+      alert('创建失败: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+  const addExistingKey = async (keyId) => {
+    await appendRefToPool(keyId)
+    setAddModal({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
+  }
+  const appendRefToPool = async (keyId) => {
+    const pool = tierKeys[activeTier][activeSub]
+    const newRef = { key_id: keyId, max_tokens: defaultMaxTokens(activeTier), disabled: false }
+    const newConfigs = [...pool.configs, newRef]
+    setTierKeys(prev => ({ ...prev, [activeTier]: { ...prev[activeTier], [activeSub]: { ...prev[activeTier][activeSub], configs: newConfigs } } }))
+    await persistRefs(activeTier, activeSub, newConfigs, pool.active_index || 0)
+  }
+
+  // 测试：先持久化当前引用，再调测试
   const testTier = async (tier, sub) => {
     const sig = poolSig(tier, sub)
-    // 测试前先持久化当前编辑器内容，确保测试针对的是用户看到的内容
-    // 而不是后端可能过时的旧状态
-    const pool = editing[tier][sub]
-    if (pool) {
-      await persistConfigs(tier, sub, pool.configs, pool.active_index)
-    }
+    const pool = tierKeys[tier]?.[sub]
+    if (pool) await persistRefs(tier, sub, pool.configs, pool.active_index || 0)
     setTesting(sig)
     setTestResult(null)
     try {
       const result = await adminApi.testApiKey(tier, sub)
-      const results = result.results || [result]
-      setTestResult({ sig, results })
+      setTestResult({ sig, results: result.results || [result] })
       loadKeyStatuses(tier, sub)
     } catch (e) {
       setTestResult({ sig, results: [{ index: 0, status: 'error', message: e.message }] })
@@ -276,11 +225,13 @@ export default function AdminApiKeys() {
     }
   }
 
-  if (!editing.free) return <div className="text-[#e8d5b7]">加载中...</div>
+  if (!tierKeys.free) return <div className="text-[#e8d5b7]">加载中...</div>
 
   const currentSig = poolSig(activeTier, activeSub)
   const currentStatuses = keyStatuses[currentSig] || []
+  const currentPool = tierKeys[activeTier]?.[activeSub] || { configs: [], active_index: 0 }
   const activeSubMeta = SUB_POOLS.find(s => s.key === activeSub)
+  const unusedKeyIds = Object.keys(keys).filter(kid => !currentPool.configs.some(r => r.key_id === kid))
 
   return (
     <div>
@@ -293,23 +244,15 @@ export default function AdminApiKeys() {
           <div className="flex-1">
             <label className="text-[#e8d5b7]/60 text-sm block mb-1">请求间隔（秒）</label>
             <div className="flex items-center gap-3">
-              <input type="range" min={0.01} max={10} step={0.01} value={interval}
-                onChange={e => setInterval_(Number(e.target.value))} className="flex-1" />
+              <input type="range" min={0.01} max={10} step={0.01} value={interval} onChange={e => setInterval_(Number(e.target.value))} className="flex-1" />
               <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{interval.toFixed(2)}s</span>
-            </div>
-            <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
-              <span>0.01s</span><span>10s</span>
             </div>
           </div>
           <div className="flex-1">
             <label className="text-[#e8d5b7]/60 text-sm block mb-1">并发批大小</label>
             <div className="flex items-center gap-3">
-              <input type="range" min={1} max={100} step={1} value={batchSize}
-                onChange={e => setBatchSize(Number(e.target.value))} className="flex-1" />
+              <input type="range" min={1} max={100} step={1} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))} className="flex-1" />
               <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{batchSize}</span>
-            </div>
-            <div className="flex justify-between text-[#e8d5b7]/30 text-xs mt-1">
-              <span>1</span><span>100</span>
             </div>
           </div>
           <button onClick={saveSettings} className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">
@@ -318,32 +261,21 @@ export default function AdminApiKeys() {
         </div>
       </div>
 
-      {/* 一级 tab：tier */}
+      {/* tier tab */}
       <div className="flex gap-2 mb-3">
         {TIERS.map(tier => (
-          <button
-            key={tier}
-            onClick={() => setActiveTier(tier)}
-            className={`px-4 py-2 rounded font-bold text-sm ${
-              activeTier === tier ? 'bg-[#c9a96e] text-[#1a1a2e]' : 'bg-[#16213e] text-[#e8d5b7] border border-[#c9a96e]/30'
-            }`}
-          >
+          <button key={tier} onClick={() => setActiveTier(tier)}
+            className={`px-4 py-2 rounded font-bold text-sm ${activeTier === tier ? 'bg-[#c9a96e] text-[#1a1a2e]' : 'bg-[#16213e] text-[#e8d5b7] border border-[#c9a96e]/30'}`}>
             {tier.toUpperCase()}
           </button>
         ))}
       </div>
 
-      {/* 二级 tab：sub-pool（标题/句子/单词） */}
+      {/* sub tab */}
       <div className="flex gap-2 mb-4">
         {SUB_POOLS.map(sp => (
-          <button
-            key={sp.key}
-            onClick={() => setActiveSub(sp.key)}
-            className={`px-3 py-1.5 rounded text-sm ${
-              activeSub === sp.key ? 'bg-[#c9a96e]/30 text-[#c9a96e] border border-[#c9a96e]/50' : 'bg-[#16213e] text-[#e8d5b7]/60 border border-[#c9a96e]/10'
-            }`}
-            title={sp.hint}
-          >
+          <button key={sp.key} onClick={() => setActiveSub(sp.key)} title={sp.hint}
+            className={`px-3 py-1.5 rounded text-sm ${activeSub === sp.key ? 'bg-[#c9a96e]/30 text-[#c9a96e] border border-[#c9a96e]/50' : 'bg-[#16213e] text-[#e8d5b7]/60 border border-[#c9a96e]/10'}`}>
             {sp.label}
           </button>
         ))}
@@ -356,19 +288,16 @@ export default function AdminApiKeys() {
             <p className="text-[#e8d5b7]/40 text-xs mt-0.5">{activeSubMeta.hint}</p>
           </div>
           <div className="flex gap-2">
-            {/* 粘贴：把剪贴板里的 config 追加到当前 sub-pool，跨 tier/sub 都可粘贴 */}
-            <button onClick={() => pasteConfig(activeTier, activeSub)}
+            <button onClick={pasteRef.bind(null, activeTier, activeSub)} disabled={!_refClipboard}
               className="px-3 py-1 bg-[#16213e] text-[#e8d5b7] border border-[#c9a96e]/40 rounded text-sm hover:bg-[#1a1a2e] disabled:opacity-40"
-              disabled={!_clipboard}
-              title={_clipboard ? `剪贴板有内容：${_clipboard.model || '(无 model)'}` : '剪贴板为空'}>
-              粘贴
+              title={_refClipboard ? `剪贴板有引用配置` : '剪贴板为空'}>
+              粘贴引用
             </button>
             <button onClick={() => testTier(activeTier, activeSub)} disabled={testing === currentSig}
               className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50">
               {testing === currentSig ? '测试中...' : '测试'}
             </button>
-            <button onClick={() => addConfig(activeTier, activeSub)}
-              className="px-3 py-1 bg-[#c9a96e] text-[#1a1a2e] rounded text-sm font-bold">+ 添加</button>
+            <button onClick={openAddModal} className="px-3 py-1 bg-[#c9a96e] text-[#1a1a2e] rounded text-sm font-bold">+ 添加</button>
           </div>
         </div>
 
@@ -376,30 +305,27 @@ export default function AdminApiKeys() {
           <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
             <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
             {testResult.results.map(r => (
-              <div key={r.index} className={
-                r.status === 'ok' ? 'text-green-400' :
-                r.status === 'empty' ? 'text-gray-400' :
-                'text-red-400'
-              }>
+              <div key={r.index} className={r.status === 'ok' ? 'text-green-400' : r.status === 'empty' ? 'text-gray-400' : 'text-red-400'}>
                 Key #{r.index + 1}：{r.message}
               </div>
             ))}
           </div>
         )}
 
-        {editing[activeTier]?.[activeSub]?.configs.map((cfg, i) => {
+        {currentPool.configs.length === 0 && (
+          <div className="text-[#e8d5b7]/40 text-sm py-8 text-center">该池暂无 Key 引用，点"+ 添加"新建或引用一个</div>
+        )}
+
+        {currentPool.configs.map((ref, i) => {
+          const kdef = keys[ref.key_id] || {}
           const status = currentStatuses[i]
-          const isDisabled = cfg.disabled
+          const refCount = countKeyRefs(ref.key_id)
           const copiedKey = `${currentSig}#${i}`
-          const isDirty = dirtyUids.has(cfg._uid)
           return (
-            <div key={cfg._uid}
-              draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={e => e.preventDefault()}
-              onDrop={() => { moveConfig(activeTier, activeSub, dragIndex, i); setDragIndex(null) }}
-              className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${isDisabled ? 'opacity-60' : ''} ${isDirty ? 'ring-1 ring-[#c9a96e]/40 bg-[#c9a96e]/5' : ''}`}
-            >
+            <div key={`${ref.key_id}_${i}`}
+              draggable onDragStart={() => setDragIndex(i)} onDragOver={e => e.preventDefault()}
+              onDrop={() => { moveRef(activeTier, activeSub, dragIndex, i); setDragIndex(null) }}
+              className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${ref.disabled ? 'opacity-60' : ''}`}>
               <div className="w-6 flex-shrink-0 flex flex-col items-center justify-end pb-1 cursor-grab text-[#e8d5b7]/30 hover:text-[#c9a96e]" title="拖动排序">⠿</div>
               <div className="w-20 flex-shrink-0">
                 <label className="text-[#e8d5b7]/60 text-xs">状态</label>
@@ -410,73 +336,183 @@ export default function AdminApiKeys() {
                     status?.status === 'invalid' ? 'bg-red-900/30 text-red-400' :
                     status?.status === 'error' ? 'bg-orange-900/30 text-orange-400' :
                     status?.status === 'disabled' ? 'bg-blue-900/30 text-blue-400' :
-                    'bg-gray-700/30 text-gray-400'
-                  }`}>
+                    'bg-gray-700/30 text-gray-400'}`}>
                     {status?.status_text || '未知'}
                   </span>
                   {status?.is_busy && (
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-900/30 text-cyan-300 flex items-center gap-1 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-                      占用中
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>占用中
                     </span>
                   )}
                 </div>
               </div>
-              <div className="flex-1">
-                <label className="text-[#e8d5b7]/60 text-xs">API Key</label>
-                <input type="password" value={cfg.api_key || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'api_key', e.target.value)}
-                  placeholder="sk-..." className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              {/* key 核心属性：只读预览（点"编辑"改全局属性） */}
+              <div className="flex-1 min-w-0">
+                <label className="text-[#e8d5b7]/60 text-xs">API Key（只读预览 · 改属性点"编辑"）</label>
+                <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">
+                  {kdef.api_key || '(未配置)'} {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
+                </div>
               </div>
-              <div className="flex-1">
-                <label className="text-[#e8d5b7]/60 text-xs">Base URL</label>
-                <input value={cfg.base_url || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'base_url', e.target.value)}
-                  placeholder="https://api.openai.com/v1" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <label className="text-[#e8d5b7]/60 text-xs">Model</label>
-                <input value={cfg.model || ''} onChange={e => updateConfig(activeTier, activeSub, i, 'model', e.target.value)}
-                  placeholder="gpt-4o-mini" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">{kdef.model || '-'}</div>
               </div>
+              {/* per-pool 配置：行内可改 */}
               <div className="w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">最大输出</label>
-                <input type="number" step="1" value={cfg.max_tokens ?? defaultMaxTokens(activeTier)} onChange={e => updateConfig(activeTier, activeSub, i, 'max_tokens', Number(e.target.value))}
-                  placeholder={String(defaultMaxTokens(activeTier))} className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                <input type="number" step="1" value={ref.max_tokens ?? defaultMaxTokens(activeTier)}
+                  onChange={e => updateRefField(activeTier, activeSub, i, 'max_tokens', Number(e.target.value))}
+                  onBlur={() => commitRefField(activeTier, activeSub)}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
-              <div className="w-24">
-                <label className="text-[#e8d5b7]/60 text-xs">输入价格/$1M</label>
-                <input type="number" step="0.01" value={cfg.input_price_per_million || 0} onChange={e => updateConfig(activeTier, activeSub, i, 'input_price_per_million', Number(e.target.value))}
-                  placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
-              </div>
-              <div className="w-24">
-                <label className="text-[#e8d5b7]/60 text-xs">输出价格/$1M</label>
-                <input type="number" step="0.01" value={cfg.output_price_per_million || 0} onChange={e => updateConfig(activeTier, activeSub, i, 'output_price_per_million', Number(e.target.value))}
-                  placeholder="0.00" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
-              </div>
-              <button onClick={() => updateConfig(activeTier, activeSub, i, 'disabled', !cfg.disabled)}
-                className={`px-2 py-1 rounded text-xs font-bold ${isDisabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
-                title={isDisabled ? '点击启用' : '点击禁用（不参与轮询）'}>
-                {isDisabled ? '已禁用' : '启用中'}
+              <button onClick={() => { updateRefField(activeTier, activeSub, i, 'disabled', !ref.disabled); commitRefField(activeTier, activeSub) }}
+                className={`px-2 py-1 rounded text-xs font-bold ${ref.disabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
+                title={ref.disabled ? '点击启用' : '点击禁用（仅此池，不影响其它池）'}>
+                {ref.disabled ? '已禁用' : '启用中'}
               </button>
-              {/* 复制：把该行 config 写入剪贴板，可在任意 tier/sub 粘贴 */}
-              <button onClick={() => copyConfig(activeTier, activeSub, i)}
+              {/* 复制引用配置（key_id+max_tokens+disabled）到剪贴板，可粘贴到任意 pool */}
+              <button onClick={() => copyRef(activeTier, activeSub, i)}
                 className={`px-2 py-1 rounded text-xs font-bold ${copiedSig === copiedKey ? 'bg-green-900/40 text-green-400' : 'bg-[#c9a96e]/20 text-[#c9a96e] hover:bg-[#c9a96e]/30'}`}
-                title="复制此 Key 到剪贴板（可粘贴到任意 tier/sub）">
+                title="复制引用配置（key+max_tokens），可粘贴到任意 tier/sub">
                 {copiedSig === copiedKey ? '已复制' : '复制'}
               </button>
-              {/* 单条目保存：仅在该条目有未保存改动时显示。
-                  结构性操作（删除/交换/粘贴）已自动持久化，不需要这个按钮。 */}
-              {isDirty && (
-                <button onClick={() => saveEntry(activeTier, activeSub, cfg._uid)}
-                  className="px-3 py-1 rounded text-xs font-bold bg-green-700/50 text-green-300 hover:bg-green-700/70"
-                  title="保存该条目的改动">
-                  保存
-                </button>
-              )}
-              <button onClick={() => removeConfig(activeTier, activeSub, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
+              {/* 编辑全局 key 属性（改一处全处生效） */}
+              <button onClick={() => openEditModal(ref.key_id)}
+                className="px-2 py-1 rounded text-xs font-bold bg-[#c9a96e]/20 text-[#c9a96e] hover:bg-[#c9a96e]/30"
+                title="编辑此 Key 的全局属性（api_key/base_url/model/价格），改动会同步到所有引用处">
+                编辑
+              </button>
+              <button onClick={() => removeRef(activeTier, activeSub, i)} className="text-red-400 text-sm px-2 py-1" title="移除此池对该 key 的引用（不删除全局 key）">删除引用</button>
             </div>
           )
         })}
       </div>
+
+      {/* 编辑 key 全局属性弹窗 */}
+      {editModal.open && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditModal(m => ({ ...m, open: false }))}>
+          <div className="bg-[#16213e] rounded-lg p-6 border border-[#c9a96e]/30 w-[480px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[#c9a96e] font-bold mb-1">编辑 Key 全局属性</h3>
+            <p className="text-[#e8d5b7]/60 text-xs mb-4">
+              改动将同步到所有引用此 Key 的池（当前共享 {editModal.refCount} 处）。
+              API Key 字段显示为脱敏值，仅在输入新值时才更新。
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
+                <input value={editModal.form.api_key} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, api_key: e.target.value } }))}
+                  placeholder="留空或保持脱敏值则不修改" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="text-[#e8d5b7]/60 text-xs block mb-1">Base URL</label>
+                <input value={editModal.form.base_url} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, base_url: e.target.value } }))}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
+                <label className="text-[#e8d5b7]/60 text-xs block mb-1">Model</label>
+                <input value={editModal.form.model} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, model: e.target.value } }))}
+                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">输入价格/$1M</label>
+                  <input type="number" step="0.01" value={editModal.form.input_price_per_million}
+                    onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, input_price_per_million: Number(e.target.value) } }))}
+                    className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">输出价格/$1M</label>
+                  <input type="number" step="0.01" value={editModal.form.output_price_per_million}
+                    onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, output_price_per_million: Number(e.target.value) } }))}
+                    className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setEditModal(m => ({ ...m, open: false }))} className="px-4 py-2 text-[#e8d5b7]/60 text-sm">取消</button>
+              <button onClick={saveEditModal} disabled={editModal.saving}
+                className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm disabled:opacity-50">
+                {editModal.saving ? '保存中...' : '保存（同步到所有引用处）'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 添加 key 弹窗 */}
+      {addModal.open && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setAddModal(m => ({ ...m, open: false }))}>
+          <div className="bg-[#16213e] rounded-lg p-6 border border-[#c9a96e]/30 w-[480px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[#c9a96e] font-bold mb-4">添加 Key 到 {activeTier}/{activeSub}</h3>
+            {addModal.mode === 'choose' && (
+              <div className="space-y-2">
+                <button onClick={() => setAddModal(m => ({ ...m, mode: 'new' }))}
+                  className="w-full text-left px-4 py-3 bg-[#1a1a2e] border border-[#c9a96e]/20 rounded hover:border-[#c9a96e]/50">
+                  <div className="text-[#c9a96e] font-bold text-sm">新建 Key</div>
+                  <div className="text-[#e8d5b7]/50 text-xs">创建一个全局新 Key 并引用到此池</div>
+                </button>
+                <button onClick={() => setAddModal(m => ({ ...m, mode: 'existing' }))} disabled={unusedKeyIds.length === 0}
+                  className="w-full text-left px-4 py-3 bg-[#1a1a2e] border border-[#c9a96e]/20 rounded hover:border-[#c9a96e]/50 disabled:opacity-40">
+                  <div className="text-[#c9a96e] font-bold text-sm">引用已有 Key</div>
+                  <div className="text-[#e8d5b7]/50 text-xs">{unusedKeyIds.length > 0 ? `从 ${unusedKeyIds.length} 个未引用的 Key 中选择` : '所有 Key 已被此池引用'}</div>
+                </button>
+              </div>
+            )}
+            {addModal.mode === 'new' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
+                  <input value={addModal.newForm.api_key} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, api_key: e.target.value } }))}
+                    placeholder="sk-..." className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">Base URL</label>
+                  <input value={addModal.newForm.base_url} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, base_url: e.target.value } }))}
+                    placeholder="https://api.openai.com/v1" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">Model</label>
+                  <input value={addModal.newForm.model} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, model: e.target.value } }))}
+                    placeholder="gpt-4o-mini" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-[#e8d5b7]/60 text-xs block mb-1">输入价格/$1M</label>
+                    <input type="number" step="0.01" value={addModal.newForm.input_price_per_million}
+                      onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, input_price_per_million: Number(e.target.value) } }))}
+                      className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[#e8d5b7]/60 text-xs block mb-1">输出价格/$1M</label>
+                    <input type="number" step="0.01" value={addModal.newForm.output_price_per_million}
+                      onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, output_price_per_million: Number(e.target.value) } }))}
+                      className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={() => setAddModal(m => ({ ...m, mode: 'choose' }))} className="px-4 py-2 text-[#e8d5b7]/60 text-sm">返回</button>
+                  <button onClick={createNewKeyAndAdd} className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">创建并添加</button>
+                </div>
+              </div>
+            )}
+            {addModal.mode === 'existing' && (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {unusedKeyIds.map(kid => {
+                  const k = keys[kid]
+                  return (
+                    <button key={kid} onClick={() => addExistingKey(kid)}
+                      className="w-full text-left px-3 py-2 bg-[#1a1a2e] border border-[#c9a96e]/20 rounded hover:border-[#c9a96e]/50">
+                      <div className="text-[#e8d5b7] text-sm font-mono">{k.api_key}</div>
+                      <div className="text-[#e8d5b7]/50 text-xs">{k.model} · {k.base_url || '(默认 base_url)'}</div>
+                    </button>
+                  )
+                })}
+                <button onClick={() => setAddModal(m => ({ ...m, mode: 'choose' }))} className="px-4 py-2 text-[#e8d5b7]/60 text-sm">返回</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

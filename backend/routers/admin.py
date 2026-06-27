@@ -16,7 +16,10 @@ from auth.router import _get_conn as get_user_conn, USER_DB_PATH
 from auth.quota import check_and_refill_quota
 from config import DATA_DIR
 from utils.token_tracker import get_cost_summary
-from llm_api import get_tier_keys, update_tier_keys
+from llm_api import (
+    get_tier_keys, update_tier_keys,
+    list_key_defs, create_key_def, update_key_def, delete_key_def, count_key_refs,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -161,17 +164,83 @@ async def get_user_growth(days: int = Query(30, ge=1, le=3650), admin: AdminToke
     return {"growth": result}
 
 
-# ── API Key 管理 ────────────────────────────────────────────
+# ── API Key 管理（引用语义模型） ────────────────────────────
 
 @router.get("/api-keys")
 async def get_api_keys(admin: AdminTokenData = Depends(require_admin)):
+    """返回全局 key 仓库（脱敏）+ tier_keys 引用表。"""
     return get_tier_keys()
 
 
+# ── 全局 key 定义 CRUD ──────────────────────────────────────
+
+@router.get("/api-keys/defs")
+async def list_key_defs_endpoint(admin: AdminTokenData = Depends(require_admin)):
+    """列出所有全局 key 定义（脱敏）。"""
+    return {"keys": list_key_defs()}
+
+
+class KeyDefCreate(BaseModel):
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
+    input_price_per_million: float = 0
+    output_price_per_million: float = 0
+
+
+@router.post("/api-keys/defs")
+async def create_key_def_endpoint(req: KeyDefCreate, admin: AdminTokenData = Depends(require_admin)):
+    """新建全局 key。返回 id，可被任意 tier/sub 引用。"""
+    kid = create_key_def(req.api_key, req.base_url, req.model,
+                         req.input_price_per_million, req.output_price_per_million)
+    _log_action("create_key_def", "key", kid, {"model": req.model})
+    return {"status": "ok", "id": kid}
+
+
+class KeyDefUpdate(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    input_price_per_million: Optional[float] = None
+    output_price_per_million: Optional[float] = None
+
+
+@router.put("/api-keys/defs/{key_id}")
+async def update_key_def_endpoint(key_id: str, req: KeyDefUpdate, admin: AdminTokenData = Depends(require_admin)):
+    """修改全局 key 属性。改一处，所有引用处同步生效。"""
+    try:
+        update_key_def(key_id, **req.dict(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    _log_action("update_key_def", "key", key_id)
+    return {"status": "ok"}
+
+
+@router.delete("/api-keys/defs/{key_id}")
+async def delete_key_def_endpoint(key_id: str, admin: AdminTokenData = Depends(require_admin)):
+    """删除全局 key。若被任何 pool 引用则拒绝。"""
+    try:
+        ok = delete_key_def(key_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if not ok:
+        raise HTTPException(status_code=404, detail="key 不存在")
+    _log_action("delete_key_def", "key", key_id)
+    return {"status": "ok"}
+
+
+@router.get("/api-keys/defs/{key_id}/refs")
+async def get_key_refs_endpoint(key_id: str, admin: AdminTokenData = Depends(require_admin)):
+    """返回该 key 被哪些 pool 引用（供前端显示"共享到 N 处"）。"""
+    return {"refs": count_key_refs(key_id)}
+
+
+# ── pool 引用管理 ───────────────────────────────────────────
+
 class TierKeyUpdate(BaseModel):
-    configs: List[dict]
+    configs: List[dict]  # refs: [{key_id, max_tokens, disabled}]
     active_index: int = 0
-    sub: str = "sentence"  # title/sentence/word，默认 sentence 兼容老前端
+    sub: str = "sentence"
 
 
 @router.put("/api-keys/{tier}")
@@ -180,18 +249,19 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
         raise HTTPException(status_code=400, detail="Invalid tier")
     if req.sub not in ("title", "sentence", "word"):
         raise HTTPException(status_code=400, detail="Invalid sub")
-    update_tier_keys(tier, req.sub, req.configs, req.active_index)
-    _log_action("update_api_keys", "tier", tier, {"sub": req.sub, "active_index": req.active_index, "config_count": len(req.configs)})
+    try:
+        update_tier_keys(tier, req.sub, req.configs, req.active_index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _log_action("update_api_keys", "tier", tier, {"sub": req.sub, "ref_count": len(req.configs)})
     return {"status": "ok"}
 
 
 @router.post("/api-keys/{tier}/test")
 async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(require_admin)):
-    """逐个测试该 Tier 池中的所有 Key，并把结果回写到 gateway pool 的状态字段。
+    """逐个测试该 pool 引用的所有 key，结果回写到 gateway 全局运行时状态（按 key_id）。
 
-    返回 {results: [{index, status, message}, ...]}，status ∈ ok/empty/invalid/rate_limited/error。
-    测试只更新配置上的 is_valid/last_error/last_error_time，不切换 active_index，
-    避免测试行为干扰真实流量轮换。
+    测试只更新 key 的 is_valid/last_error，不切换 active_index，避免干扰真实流量。
     """
     if tier not in ("free", "basic", "pro"):
         raise HTTPException(status_code=400, detail="Invalid tier")
@@ -204,111 +274,111 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
 
     tier_pools = gateway.pools.get(tier)
     pool = tier_pools.get(sub) if tier_pools else None
-    if not pool or not pool.configs:
+    if not pool or not pool.refs:
         raise HTTPException(status_code=400, detail="该 Tier/Sub 没有配置 API Key")
 
-    async def _test_one(idx, cfg):
-        api_key = cfg.get("api_key", "")
+    async def _test_one(idx, ref):
+        key_id = ref.get("key_id")
+        kdef = gateway.key_defs.get(key_id, {})
+        api_key = kdef.get("api_key", "")
         now_iso = datetime.now(timezone.utc).isoformat()
+        rt = gateway._ensure_runtime(key_id)
         if not api_key:
-            # ponytail: 空配置只清状态，不报错
-            cfg["is_valid"] = True
-            cfg["last_error"] = None
-            cfg["last_error_time"] = None
-            pool.last_error.pop(idx, None)
-            pool.last_error_time.pop(idx, None)
-            return {"index": idx, "status": "empty", "message": "未配置 Key"}
-        base_url = cfg.get("base_url", "https://api.openai.com/v1")
+            rt["is_valid"] = True
+            rt["last_error"] = None
+            rt["last_error_time"] = None
+            rt["rate_limited_until"] = None
+            return {"index": idx, "key_id": key_id, "status": "empty", "message": "未配置 Key"}
+        base_url = kdef.get("base_url", "https://api.openai.com/v1")
         url = f"{base_url.rstrip('/')}/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"model": cfg.get("model", "gpt-4o-mini"),
+        payload = {"model": kdef.get("model", "gpt-4o-mini"),
                    "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, headers=headers, json=payload)
             body = resp.text[:160]
             if resp.status_code == 200:
-                cfg["is_valid"] = True
-                cfg["last_error"] = None
-                cfg["last_error_time"] = None
-                pool.last_error.pop(idx, None)
-                pool.last_error_time.pop(idx, None)
-                return {"index": idx, "status": "ok", "message": "API Key 可用"}
+                rt["is_valid"] = True
+                rt["last_error"] = None
+                rt["last_error_time"] = None
+                rt["rate_limited_until"] = None
+                return {"index": idx, "key_id": key_id, "status": "ok", "message": "API Key 可用"}
             if resp.status_code == 401:
-                cfg["is_valid"] = False
-                cfg["last_error"] = "401 Unauthorized"
-                cfg["last_error_time"] = now_iso
-                pool.last_error[idx] = cfg["last_error"]
-                pool.last_error_time[idx] = now_iso
-                return {"index": idx, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
+                rt["is_valid"] = False
+                rt["last_error"] = "401 Unauthorized"
+                rt["last_error_time"] = now_iso
+                rt["rate_limited_until"] = None
+                return {"index": idx, "key_id": key_id, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
             if resp.status_code == 429:
-                cfg["is_valid"] = True
-                cfg["last_error"] = "429 Rate Limited"
-                cfg["last_error_time"] = now_iso
-                pool.last_error[idx] = cfg["last_error"]
-                pool.last_error_time[idx] = now_iso
-                return {"index": idx, "status": "rate_limited", "message": f"限速中: {body}"}
-            # 其它状态码（含 5xx）：标记异常但不永久失效，避免误杀临时性服务端故障
-            cfg["is_valid"] = True
-            cfg["last_error"] = f"{resp.status_code} {body}"
-            cfg["last_error_time"] = now_iso
-            pool.last_error[idx] = cfg["last_error"]
-            pool.last_error_time[idx] = now_iso
-            return {"index": idx, "status": "error",
+                rt["is_valid"] = True
+                rt["last_error"] = "429 Rate Limited"
+                rt["last_error_time"] = now_iso
+                rt["rate_limited_until"] = None
+                return {"index": idx, "key_id": key_id, "status": "rate_limited", "message": f"限速中: {body}"}
+            rt["is_valid"] = True
+            rt["last_error"] = f"{resp.status_code} {body}"
+            rt["last_error_time"] = now_iso
+            rt["rate_limited_until"] = None
+            return {"index": idx, "key_id": key_id, "status": "error",
                     "message": f"API 返回 {resp.status_code}: {body}"}
         except httpx.TimeoutException:
-            cfg["is_valid"] = True
-            cfg["last_error"] = "network: timeout"
-            cfg["last_error_time"] = now_iso
-            pool.last_error[idx] = cfg["last_error"]
-            pool.last_error_time[idx] = now_iso
-            return {"index": idx, "status": "error", "message": "请求超时（30s）"}
+            rt["is_valid"] = True
+            rt["last_error"] = "network: timeout"
+            rt["last_error_time"] = now_iso
+            rt["rate_limited_until"] = None
+            return {"index": idx, "key_id": key_id, "status": "error", "message": "请求超时（30s）"}
         except Exception as e:
             msg = str(e)[:160]
-            cfg["is_valid"] = True
-            cfg["last_error"] = f"network: {msg}"
-            cfg["last_error_time"] = now_iso
-            pool.last_error[idx] = cfg["last_error"]
-            pool.last_error_time[idx] = now_iso
-            return {"index": idx, "status": "error", "message": f"请求失败: {msg}"}
+            rt["is_valid"] = True
+            rt["last_error"] = f"network: {msg}"
+            rt["last_error_time"] = now_iso
+            rt["rate_limited_until"] = None
+            return {"index": idx, "key_id": key_id, "status": "error", "message": f"请求失败: {msg}"}
 
-    # 并发测试所有 Key
-    results = await asyncio.gather(*[_test_one(i, c) for i, c in enumerate(pool.configs)])
+    results = await asyncio.gather(*[_test_one(i, r) for i, r in enumerate(pool.refs)])
     results = sorted(results, key=lambda r: r["index"])
+    gateway._notify()
     _log_action("test_api_keys", "tier", tier, {"results": results})
     return {"results": results}
 
 
-def _build_key_statuses(pool) -> list:
-    """从 pool 构建每个 Key 的状态信息（供 HTTP 接口与 SSE 流复用）。"""
+def _build_key_statuses(pool, gateway) -> list:
+    """构建 pool 内每个引用的状态：per-pool disabled + key 全局运行时状态。"""
     statuses = []
-    for i, cfg in enumerate(pool.configs):
+    for i, ref in enumerate(pool.refs):
+        key_id = ref.get("key_id")
+        kdef = gateway.key_defs.get(key_id, {})
+        rt = gateway.key_runtime.get(key_id) or {}
+        api_key = kdef.get("api_key", "")
+        is_valid = rt.get("is_valid", True)
+        last_error = rt.get("last_error")
         status_info = {
             "index": i,
-            "api_key_preview": cfg.get("api_key", "")[:8] + "..." if cfg.get("api_key") else "未配置",
-            "model": cfg.get("model", ""),
-            "disabled": cfg.get("disabled", False),
-            "is_valid": cfg.get("is_valid", True),
-            "is_busy": pool.is_busy(i),
-            "last_error": cfg.get("last_error", None),
-            "last_error_time": cfg.get("last_error_time", None),
-            "total_calls": pool.total_calls.get(i, 0) if hasattr(pool, 'total_calls') else 0,
+            "key_id": key_id,
+            "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
+            "model": kdef.get("model", ""),
+            "max_tokens": ref.get("max_tokens"),
+            "disabled": ref.get("disabled", False),  # per-pool
+            "is_valid": is_valid,  # 全局
+            "is_busy": gateway.is_key_busy(key_id),  # 全局
+            "last_error": last_error,  # 全局
+            "last_error_time": rt.get("last_error_time"),
+            "total_calls": rt.get("total_calls", 0),  # 全局
         }
-        # 判断状态（disabled 优先级最高，已禁用的不参与轮询）
-        if cfg.get("disabled"):
+        if ref.get("disabled"):
             status_info["status"] = "disabled"
             status_info["status_text"] = "已禁用"
-        elif not cfg.get("api_key"):
+        elif not api_key:
             status_info["status"] = "empty"
             status_info["status_text"] = "未配置"
-        elif not cfg.get("is_valid", True):
+        elif not is_valid:
             status_info["status"] = "invalid"
             status_info["status_text"] = "无效/欠费"
-        elif cfg.get("last_error") and "429" in str(cfg.get("last_error", "")):
+        elif last_error and "429" in str(last_error):
             status_info["status"] = "rate_limited"
             status_info["status_text"] = "限速中"
-        elif cfg.get("last_error"):
-            # 非 429 错误（含 5xx、网络异常等），避免误显示为“正常”
+        elif last_error:
             status_info["status"] = "error"
             status_info["status_text"] = "异常"
         else:
@@ -325,14 +395,11 @@ async def get_api_key_statuses(tier: str, sub: str = "sentence", admin: AdminTok
     pool = tier_pools.get(sub) if tier_pools else None
     if not pool:
         return {"statuses": []}
-    return {"statuses": _build_key_statuses(pool)}
+    return {"statuses": _build_key_statuses(pool, gateway)}
 
 
 def _require_admin_for_sse(tier: str, token: Optional[str] = Query(None)):
-    """SSE 专用认证：EventSource 不能设置自定义 header，所以接受 ?token=xxx 作为 fallback。
-
-    优先校验 query 中的 token；为空时由 FastAPI 在依赖链失败时报 401。
-    """
+    """SSE 专用认证：EventSource 不能设置自定义 header，所以接受 ?token=xxx。"""
     from auth.jwt_utils import decode_admin_token
     if not token:
         raise HTTPException(status_code=401, detail="缺少 token")
@@ -344,11 +411,7 @@ def _require_admin_for_sse(tier: str, token: Optional[str] = Query(None)):
 
 @router.get("/api-keys/{tier}/status/stream")
 async def stream_api_key_statuses(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(_require_admin_for_sse)):
-    """SSE 实时推送 Key 状态。事件驱动：mark_* 改变状态时立刻推送，无变化时每 15s 发心跳保活。
-
-    资源节约：无订阅时不轮询；有订阅时仅在状态变化时推送一次 JSON，未变化时只发心跳。
-    认证：EventSource 无法携带 Authorization header，所以通过 ?token=xxx 传递 admin JWT。
-    """
+    """SSE 实时推送 Key 状态。订阅 gateway 全局状态事件（key 状态变化时所有相关 pool 都会收到通知）。"""
     from utils.llm_gateway import gateway
     tier_pools = gateway.pools.get(tier)
     pool = tier_pools.get(sub) if tier_pools else None
@@ -358,16 +421,14 @@ async def stream_api_key_statuses(tier: str, sub: str = "sentence", admin: Admin
         return StreamingResponse(_empty(), media_type="text/event-stream")
 
     async def event_stream():
-        event = pool.get_status_event()
+        event = gateway.get_status_event()
         last_sig = None
         while True:
-            # 立即推送当前快照
-            statuses = _build_key_statuses(pool)
+            statuses = _build_key_statuses(pool, gateway)
             sig = json.dumps(statuses, ensure_ascii=False, sort_keys=True)
             if sig != last_sig:
                 last_sig = sig
                 yield f"data: {json.dumps({'statuses': statuses}, ensure_ascii=False)}\n\n"
-            # 等待状态变化或 15s 心跳保活（避免代理/浏览器断开空闲连接）
             try:
                 event.clear()
                 await asyncio.wait_for(event.wait(), timeout=15)

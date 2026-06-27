@@ -18,13 +18,36 @@ export const adminApi = {
     return response.data;
   },
 
-  updateApiKeys: async (tier, sub, configs, activeIndex = 0) => {
-    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs, active_index: activeIndex, sub });
+  // pool 引用管理：refs = [{key_id, max_tokens, disabled}]
+  updateApiKeys: async (tier, sub, refs, activeIndex = 0) => {
+    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs: refs, active_index: activeIndex, sub });
     return response.data;
   },
 
   testApiKey: async (tier, sub) => {
     const response = await axios.post(`${baseUrl}/api/admin/api-keys/${tier}/test`, null, { params: { sub } });
+    return response.data;
+  },
+
+  // 全局 key 定义 CRUD（引用语义模型：改一处全处生效）
+  listKeyDefs: async () => {
+    const response = await axios.get(`${baseUrl}/api/admin/api-keys/defs`);
+    return response.data;
+  },
+  createKeyDef: async (api_key, base_url, model, input_price_per_million = 0, output_price_per_million = 0) => {
+    const response = await axios.post(`${baseUrl}/api/admin/api-keys/defs`, { api_key, base_url, model, input_price_per_million, output_price_per_million });
+    return response.data;
+  },
+  updateKeyDef: async (keyId, fields) => {
+    const response = await axios.put(`${baseUrl}/api/admin/api-keys/defs/${keyId}`, fields);
+    return response.data;
+  },
+  deleteKeyDef: async (keyId) => {
+    const response = await axios.delete(`${baseUrl}/api/admin/api-keys/defs/${keyId}`);
+    return response.data;
+  },
+  getKeyRefs: async (keyId) => {
+    const response = await axios.get(`${baseUrl}/api/admin/api-keys/defs/${keyId}/refs`);
     return response.data;
   },
 
