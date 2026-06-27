@@ -74,6 +74,26 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 processing_status[file_id]["original_text"] = text
                 processing_status[file_id]["preprocess"] = None
 
+        # 额度按实际处理句子数补扣：translate/generate 模式下，输入文本不等于最终处理文本，
+        # 需要按生成/翻译后的实际句子数计算并补扣差额。
+        if mode in ("translate", "generate") and user_id:
+            try:
+                actual_sentences = text_processor.split_sentences(text.strip())
+                actual_count = max(1, min(len(actual_sentences), 50))
+                # consumed_quota 是 process-text 阶段按输入预估已扣的额度（translate/generate 模式下为最小预扣值）
+                extra = actual_count - consumed_quota
+                if extra > 0:
+                    from auth.quota import consume_quota, check_and_refill_quota
+                    qi = check_and_refill_quota(user_id)
+                    if qi.get("max") != -1 and qi.get("available", 0) < extra:
+                        # 额度不足以补扣，按可用额度扣减即可（不阻断已完成的处理）
+                        extra = max(0, qi.get("available", 0))
+                    if extra > 0:
+                        consume_quota(user_id, extra)
+                        consumed_quota += extra
+            except Exception as e:
+                print(f"[WARN] 额度补扣失败: {e}")
+
         # 2. 语言检测
         if source_lang == "auto":
             _preserve_lang = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
@@ -196,10 +216,16 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         from auth.quota import check_and_refill_quota
         quota_info = check_and_refill_quota(current_user.user_id)
         if quota_info["max"] != -1:  # 非无限额度
-            # 使用与实际处理相同的分句逻辑估算句子数
-            estimated_sentences = text_processor.split_sentences(text.strip())
-            sentence_count = max(1, len(estimated_sentences))
-            sentence_count = min(sentence_count, 50)
+            if mode == "direct":
+                # 直接输入模式：按输入文本的句子数预估
+                estimated_sentences = text_processor.split_sentences(text.strip())
+                sentence_count = max(1, len(estimated_sentences))
+                sentence_count = min(sentence_count, 50)
+            else:
+                # translate/generate 模式：输入只是提示词，实际处理句子数未知
+                # 先按最小预扣值检查（保证至少有额度），实际差额在生成完成后补扣
+                sentence_count = 1
+
             if quota_info["available"] < sentence_count:
                 # 获取用户界面语言对应的翻译
                 from db_storage import DatabaseStorage
@@ -221,7 +247,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
                 detail = template.replace("{0}", str(sentence_count)).replace("{1}", str(quota_info["available"]))
                 raise HTTPException(status_code=402, detail=detail)
 
-            # 额度足够，立即扣减
+            # 额度足够，立即扣减（translate/generate 模式只预扣最小值，差额稍后补扣）
             from auth.quota import consume_quota
             consume_quota(current_user.user_id, sentence_count)
             consumed_quota = sentence_count

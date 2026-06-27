@@ -6,6 +6,15 @@ const TIERS = ['free', 'basic', 'pro']
 // per-key 最高输出默认值：free 16384，其它 65536
 const defaultMaxTokens = (tier) => tier === 'free' ? 16384 : 65536
 
+// 生成稳定的唯一 id，作为 React key，避免用数组 index 导致拖拽时字段错位
+let _uidCounter = 0
+const genUid = () => `cfg_${Date.now().toString(36)}_${(_uidCounter++).toString(36)}`
+// 清理用于后端保存：剥离前端-only 的 uid 字段
+const stripUid = (cfg) => {
+  const { _uid, ...rest } = cfg
+  return rest
+}
+
 export default function AdminApiKeys() {
   const [keys, setKeys] = useState({})
   const [activeTier, setActiveTier] = useState('free')
@@ -38,6 +47,7 @@ export default function AdminApiKeys() {
         const cap = defaultMaxTokens(tier)
         const configs = (pool.configs.length > 0 ? pool.configs : [{ api_key: '', base_url: '', model: '' }])
           .map(c => ({
+            _uid: genUid(),
             api_key: c.api_key || '',
             base_url: c.base_url || '',
             model: c.model || '',
@@ -91,6 +101,7 @@ export default function AdminApiKeys() {
       [tier]: {
         ...prev[tier],
         configs: [...prev[tier].configs, {
+          _uid: genUid(),
           api_key: '', base_url: '', model: '',
           disabled: false, max_tokens: defaultMaxTokens(tier),
           input_price_per_million: 0, output_price_per_million: 0,
@@ -130,7 +141,9 @@ export default function AdminApiKeys() {
 
   const saveTier = async (tier) => {
     try {
-      await adminApi.updateApiKeys(tier, editing[tier].configs, editing[tier].active_index)
+      // 保存前剥离前端-only 的 _uid 字段
+      const cleanConfigs = editing[tier].configs.map(stripUid)
+      await adminApi.updateApiKeys(tier, cleanConfigs, editing[tier].active_index)
       const data = await adminApi.getApiKeys()
       setKeys(data)
       alert(`${tier} Key 已保存`)
@@ -243,7 +256,7 @@ export default function AdminApiKeys() {
           const status = currentStatuses[i]
           const isDisabled = cfg.disabled
           return (
-            <div key={i}
+            <div key={cfg._uid}
               draggable
               onDragStart={() => setDragIndex(i)}
               onDragOver={e => e.preventDefault()}
