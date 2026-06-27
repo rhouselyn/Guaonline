@@ -112,13 +112,17 @@ def update_tier_keys(tier: str, sub: str, configs: list, active_index: int = 0):
         data["tier_keys"] = {}
     # 归一化现有 tier 数据为 sub 结构（兼容老格式）
     existing_norm = _normalize_tier_data(data["tier_keys"].get(tier, {}))
-    # 建立 masked -> real 映射，用于识别未修改的脱敏 key（与位置无关，支持拖拽重排序）
-    existing_pool = existing_norm.get(sub, {})
+    # 建立 masked -> real 映射，用于识别未修改的脱敏 key（与位置无关，支持拖拽重排序）。
+    # 跨 tier/sub 复制粘贴时，目标 sub 可能没有该 key，所以从所有 tier/sub 建立映射，
+    # 这样把 free:sentence 的 key 粘贴到 pro:word 也能还原成真实 key。
     masked_to_real = {}
-    for cfg in existing_pool.get("configs", []):
-        k = cfg.get("api_key", "")
-        if k:
-            masked_to_real[_mask_key(k)] = k
+    for t, raw in data["tier_keys"].items():
+        norm = _normalize_tier_data(raw)
+        for s, pool in norm.items():
+            for cfg in pool.get("configs", []):
+                k = cfg.get("api_key", "")
+                if k:
+                    masked_to_real[_mask_key(k)] = k
     new_configs = []
     for cfg in configs:
         key = cfg.get("api_key", "")

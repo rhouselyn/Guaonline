@@ -42,6 +42,9 @@ export default function AdminApiKeys() {
   const [dragIndex, setDragIndex] = useState(null)
   // 复制提示：触发短暂"已复制"反馈
   const [copiedSig, setCopiedSig] = useState(null)
+  // 跟踪有未保存字段改动的条目（按 _uid）。只有这些条目会渲染"保存"按钮。
+  // 结构性操作（删除/交换/粘贴）会立即持久化，不进这个集合。
+  const [dirtyUids, setDirtyUids] = useState(() => new Set())
 
   const poolSig = (tier, sub) => `${tier}:${sub}`
 
@@ -115,7 +118,22 @@ export default function AdminApiKeys() {
     setTimeout(() => setSettingsSaved(false), 2000)
   }
 
+  // 内部：把指定 configs 持久化到后端，并刷新 keys/statuses。
+  // 结构性操作（删除/交换/粘贴）和单条目保存都走这里。
+  const persistConfigs = async (tier, sub, configs, activeIndex) => {
+    try {
+      const cleanConfigs = configs.map(stripUid)
+      await adminApi.updateApiKeys(tier, sub, cleanConfigs, activeIndex)
+      const data = await adminApi.getApiKeys()
+      setKeys(data)
+      loadKeyStatuses(tier, sub)
+    } catch (e) {
+      alert('保存失败: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+
   const addConfig = (tier, sub) => {
+    const newUid = genUid()
     setEditing(prev => ({
       ...prev,
       [tier]: {
@@ -123,7 +141,7 @@ export default function AdminApiKeys() {
         [sub]: {
           ...prev[tier][sub],
           configs: [...prev[tier][sub].configs, {
-            _uid: genUid(),
+            _uid: newUid,
             api_key: '', base_url: '', model: '',
             disabled: false, max_tokens: defaultMaxTokens(tier),
             input_price_per_million: 0, output_price_per_million: 0,
@@ -131,38 +149,61 @@ export default function AdminApiKeys() {
         }
       }
     }))
+    // 新增的空条目需要用户填写后点保存，所以标记为 dirty
+    setDirtyUids(prev => new Set(prev).add(newUid))
   }
 
   const removeConfig = (tier, sub, index) => {
+    const pool = editing[tier][sub]
+    if (!pool) return
+    const removedUid = pool.configs[index]?._uid
+    const newConfigs = pool.configs.filter((_, i) => i !== index)
     setEditing(prev => ({
       ...prev,
       [tier]: {
         ...prev[tier],
-        [sub]: {
-          ...prev[tier][sub],
-          configs: prev[tier][sub].configs.filter((_, i) => i !== index),
-        }
+        [sub]: { ...prev[tier][sub], configs: newConfigs }
       }
     }))
+    // 删除是结构性操作：立即持久化，不需要保存按钮
+    persistConfigs(tier, sub, newConfigs, pool.active_index)
+    // 清掉该条目的 dirty 标记（已不存在）
+    if (removedUid) {
+      setDirtyUids(prev => {
+        const next = new Set(prev)
+        next.delete(removedUid)
+        return next
+      })
+    }
   }
 
   const updateConfig = (tier, sub, index, field, value) => {
+    const cfg = editing[tier]?.[sub]?.configs[index]
     setEditing(prev => {
       const newConfigs = [...prev[tier][sub].configs]
       newConfigs[index] = { ...newConfigs[index], [field]: value }
       return { ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }
     })
+    // 字段被修改：标记为 dirty，显示保存按钮
+    if (cfg) {
+      setDirtyUids(prev => new Set(prev).add(cfg._uid))
+    }
   }
 
   // 拖拽重排序：把 from 移到 to 的位置
   const moveConfig = (tier, sub, from, to) => {
     if (from === to) return
-    setEditing(prev => {
-      const configs = [...prev[tier][sub].configs]
-      const [moved] = configs.splice(from, 1)
-      configs.splice(to, 0, moved)
-      return { ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } } }
-    })
+    const pool = editing[tier][sub]
+    if (!pool) return
+    const configs = [...pool.configs]
+    const [moved] = configs.splice(from, 1)
+    configs.splice(to, 0, moved)
+    setEditing(prev => ({
+      ...prev,
+      [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } }
+    }))
+    // 交换是结构性操作：立即持久化，不需要保存按钮
+    persistConfigs(tier, sub, configs, pool.active_index)
   }
 
   // 复制单个 config 到剪贴板（跨 tier/sub 通用）
@@ -170,6 +211,7 @@ export default function AdminApiKeys() {
     const cfg = editing[tier][sub].configs[index]
     if (!cfg) return
     // ponytail: 浅拷贝即可，剥离 _uid 让粘贴时生成新 uid
+    // 所有字段都是基本类型，浅拷贝等价于深拷贝，源条目不会被后续修改影响
     const { _uid, ...rest } = cfg
     _clipboard = { ...rest }
     const sig = poolSig(tier, sub)
@@ -183,34 +225,43 @@ export default function AdminApiKeys() {
       alert('剪贴板为空，先在某行点"复制"')
       return
     }
+    const newUid = genUid()
+    const pool = editing[tier][sub]
+    if (!pool) return
+    // 新对象 + 新 _uid，源 _clipboard 不被修改
+    const newConfigs = [...pool.configs, { ..._clipboard, _uid: newUid }]
     setEditing(prev => ({
       ...prev,
       [tier]: {
         ...prev[tier],
-        [sub]: {
-          ...prev[tier][sub],
-          configs: [...prev[tier][sub].configs, { ..._clipboard, _uid: genUid() }],
-        }
+        [sub]: { ...prev[tier][sub], configs: newConfigs }
       }
     }))
+    // 粘贴是结构性操作：立即持久化，不需要保存按钮
+    // 后端会自动把脱敏 key 还原成真实 key（跨 tier/sub 也支持）
+    persistConfigs(tier, sub, newConfigs, pool.active_index)
   }
 
-  const saveTier = async (tier, sub) => {
-    try {
-      // 保存前剥离前端-only 的 _uid 字段
-      const cleanConfigs = editing[tier][sub].configs.map(stripUid)
-      await adminApi.updateApiKeys(tier, sub, cleanConfigs, editing[tier][sub].active_index)
-      const data = await adminApi.getApiKeys()
-      setKeys(data)
-      alert(`${tier} / ${sub} Key 已保存`)
-      loadKeyStatuses(tier, sub)
-    } catch (e) {
-      alert('保存失败: ' + (e.response?.data?.detail || e.message))
-    }
+  // 单条目保存：后端按 tier:sub 整体更新，但只清除该条目的 dirty 标记
+  const saveEntry = async (tier, sub, uid) => {
+    const pool = editing[tier][sub]
+    if (!pool) return
+    await persistConfigs(tier, sub, pool.configs, pool.active_index)
+    setDirtyUids(prev => {
+      const next = new Set(prev)
+      next.delete(uid)
+      return next
+    })
   }
 
   const testTier = async (tier, sub) => {
     const sig = poolSig(tier, sub)
+    // 测试前先持久化当前编辑器内容，确保测试针对的是用户看到的内容
+    // 而不是后端可能过时的旧状态
+    const pool = editing[tier][sub]
+    if (pool) {
+      await persistConfigs(tier, sub, pool.configs, pool.active_index)
+    }
     setTesting(sig)
     setTestResult(null)
     try {
@@ -340,13 +391,14 @@ export default function AdminApiKeys() {
           const status = currentStatuses[i]
           const isDisabled = cfg.disabled
           const copiedKey = `${currentSig}#${i}`
+          const isDirty = dirtyUids.has(cfg._uid)
           return (
             <div key={cfg._uid}
               draggable
               onDragStart={() => setDragIndex(i)}
               onDragOver={e => e.preventDefault()}
               onDrop={() => { moveConfig(activeTier, activeSub, dragIndex, i); setDragIndex(null) }}
-              className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${isDisabled ? 'opacity-60' : ''}`}
+              className={`flex gap-2 mb-2 items-end p-1 rounded ${dragIndex === i ? 'opacity-50' : ''} ${isDisabled ? 'opacity-60' : ''} ${isDirty ? 'ring-1 ring-[#c9a96e]/40 bg-[#c9a96e]/5' : ''}`}
             >
               <div className="w-6 flex-shrink-0 flex flex-col items-center justify-end pb-1 cursor-grab text-[#e8d5b7]/30 hover:text-[#c9a96e]" title="拖动排序">⠿</div>
               <div className="w-20 flex-shrink-0">
@@ -411,15 +463,19 @@ export default function AdminApiKeys() {
                 title="复制此 Key 到剪贴板（可粘贴到任意 tier/sub）">
                 {copiedSig === copiedKey ? '已复制' : '复制'}
               </button>
+              {/* 单条目保存：仅在该条目有未保存改动时显示。
+                  结构性操作（删除/交换/粘贴）已自动持久化，不需要这个按钮。 */}
+              {isDirty && (
+                <button onClick={() => saveEntry(activeTier, activeSub, cfg._uid)}
+                  className="px-3 py-1 rounded text-xs font-bold bg-green-700/50 text-green-300 hover:bg-green-700/70"
+                  title="保存该条目的改动">
+                  保存
+                </button>
+              )}
               <button onClick={() => removeConfig(activeTier, activeSub, i)} className="text-red-400 text-sm px-2 py-1">删除</button>
             </div>
           )
         })}
-
-        <div className="flex justify-end mt-4">
-          <button onClick={() => saveTier(activeTier, activeSub)}
-            className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">保存</button>
-        </div>
       </div>
     </div>
   )
