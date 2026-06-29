@@ -250,6 +250,48 @@ def test_test_endpoint_rejects_unknown_tier():
     assert resp.status_code == 400, resp.text
 
 
+# ── 8. test-all 端点：所有 key 各测一次 ─────────────────────
+
+def test_test_all_endpoint_tests_each_key_once():
+    """test-all 端点测试所有 pool 出现过的 key，每个 key_id 只测一次。
+
+    构造 2 个 key（k_good/k_bad），k_good 被 free:sentence 和 free:title 两个 pool
+    共同引用，k_bad 只在 free:sentence。test-all 应只测 2 次（不是 3 次）。
+    """
+    keys = {
+        "k_good": _kdef("k_good", "sk-good"),
+        "k_bad": _kdef("k_bad", "sk-bad"),
+    }
+    data = {"keys": keys, "tier_keys": {"free": {
+        "title": {"configs": [_ref("k_good")], "active_index": 0},
+        "sentence": {"configs": [_ref("k_good"), _ref("k_bad")], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
+    }}}
+    _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        resp = client.post("/api/admin/api-keys/test-all")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["count"] == 2, body  # k_good + k_bad，去重后只 2 个
+    by_id = {r["key_id"]: r for r in body["results"]}
+    assert set(by_id.keys()) == {"k_good", "k_bad"}, by_id
+    assert by_id["k_good"]["status"] == "ok", by_id["k_good"]
+    assert by_id["k_bad"]["status"] == "invalid", by_id["k_bad"]
+
+
+def test_test_all_endpoint_route_not_swallowed_by_tier_param():
+    """POST /api-keys/test-all 不能被 /api-keys/{tier}/test 拦截成 tier=test-all。
+
+    若路由顺序错，会返回 400 (Invalid tier)。这里应返回 200。
+    """
+    keys = {"k_good": _kdef("k_good", "sk-good")}
+    data = _build(keys, [_ref("k_good")])
+    _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        resp = client.post("/api/admin/api-keys/test-all")
+    assert resp.status_code == 200, resp.text
+
+
 if __name__ == "__main__":
     import inspect, sys
     _self = sys.modules[__name__]

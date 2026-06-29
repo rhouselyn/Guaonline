@@ -18,7 +18,7 @@ export default function AdminApiKeys() {
   const [activeTier, setActiveTier] = useState('free')
   const [activeSub, setActiveSub] = useState('sentence')
   const [keyStatuses, setKeyStatuses] = useState({})  // {sig: [{index, key_id, status, ...}]}
-  const [testing, setTesting] = useState(null)
+  const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [interval, setInterval_] = useState(0.1)
   const [batchSize, setBatchSize] = useState(5)
@@ -162,6 +162,7 @@ export default function AdminApiKeys() {
     setEditModal({
       open: true, keyId, refCount: countKeyRefs(keyId), saving: false,
       form: {
+        title: k.title || '',
         api_key: k.api_key || '',          // 脱敏值；用户改写才提交新值
         base_url: k.base_url || '',
         model: k.model || '',
@@ -188,12 +189,12 @@ export default function AdminApiKeys() {
   }
 
   // ── 添加 key 弹窗 ──
-  const openAddModal = () => setAddModal({ open: true, mode: 'choose', newForm: { api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }, selectedKeyId: null })
+  const openAddModal = () => setAddModal({ open: true, mode: 'choose', newForm: { title: '', api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }, selectedKeyId: null })
   const createNewKeyAndAdd = async () => {
     const f = addModal.newForm
     if (!f.api_key || !f.model) { alert('api_key 和 model 不能为空'); return }
     try {
-      const res = await adminApi.createKeyDef(f.api_key, f.base_url, f.model, f.input_price_per_million, f.output_price_per_million)
+      const res = await adminApi.createKeyDef(f.api_key, f.base_url, f.model, f.input_price_per_million, f.output_price_per_million, f.title)
       await appendRefToPool(res.id)
       setAddModal({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
     } catch (e) {
@@ -212,21 +213,30 @@ export default function AdminApiKeys() {
     await persistRefs(activeTier, activeSub, newConfigs, pool.active_index || 0)
   }
 
-  // 测试：先持久化当前引用，再调测试
-  const testTier = async (tier, sub) => {
-    const sig = poolSig(tier, sub)
-    const pool = tierKeys[tier]?.[sub]
-    if (pool) await persistRefs(tier, sub, pool.configs, pool.active_index || 0)
-    setTesting(sig)
+  // 测试：先持久化当前 pool 引用（确保当前页改动被测到），再测所有 key（每个 key_id 只测一次），
+  // 测完重载所有 pool 状态，所有页面都更新。
+  const testAll = async () => {
+    const pool = tierKeys[activeTier]?.[activeSub]
+    if (pool) await persistRefs(activeTier, activeSub, pool.configs, pool.active_index || 0)
+    setTesting(true)
     setTestResult(null)
     try {
-      const result = await adminApi.testApiKey(tier, sub)
-      setTestResult({ sig, results: result.results || [result] })
-      loadKeyStatuses(tier, sub)
+      const result = await adminApi.testAllKeys()
+      setTestResult({ results: result.results || [], count: result.count || 0 })
+      // 重载所有 pool 的状态，让所有 tier/sub 页面都更新到最新测试结果
+      for (const tier of TIERS) {
+        const tierData = tierKeys[tier]
+        if (!tierData) continue
+        for (const sp of SUB_POOLS) {
+          if ((tierData[sp.key]?.configs || []).length > 0) {
+            await loadKeyStatuses(tier, sp.key)
+          }
+        }
+      }
     } catch (e) {
-      setTestResult({ sig, results: [{ index: 0, status: 'error', message: e.message }] })
+      setTestResult({ results: [], count: 0, error: e.message })
     } finally {
-      setTesting(null)
+      setTesting(false)
     }
   }
 
@@ -298,22 +308,34 @@ export default function AdminApiKeys() {
               title={_refClipboard ? `剪贴板有引用配置` : '剪贴板为空'}>
               粘贴引用
             </button>
-            <button onClick={() => testTier(activeTier, activeSub)} disabled={testing === currentSig}
-              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50">
-              {testing === currentSig ? '测试中...' : '测试'}
+            <button onClick={testAll} disabled={testing}
+              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50"
+              title="测试所有 tier/sub 出现过的所有 Key（每个 key 只测一次，结果同步到所有页面）">
+              {testing ? '测试中...' : '测试所有'}
             </button>
             <button onClick={openAddModal} className="px-3 py-1 bg-[#c9a96e] text-[#1a1a2e] rounded text-sm font-bold">+ 添加</button>
           </div>
         </div>
 
-        {testResult && testResult.sig === currentSig && (
+        {testResult && (
           <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
-            <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
-            {testResult.results.map(r => (
-              <div key={r.index} className={r.status === 'ok' ? 'text-green-400' : r.status === 'empty' ? 'text-gray-400' : 'text-red-400'}>
-                Key #{r.index + 1}：{r.message}
-              </div>
-            ))}
+            <div className="text-[#e8d5b7]/60 text-xs">
+              测试结果（共 {testResult.count} 个 Key，结果已同步到所有 tier/sub 页面）：
+            </div>
+            {testResult.error && <div className="text-red-400">测试失败：{testResult.error}</div>}
+            {testResult.results.map(r => {
+              const k = keys[r.key_id] || {}
+              const label = k.title || (k.api_key ? (k.api_key.slice(0, 12) + '...') : '(未配置)')
+              const color = r.status === 'ok' ? 'text-green-400'
+                : r.status === 'empty' ? 'text-gray-400'
+                : r.status === 'rate_limited' ? 'text-yellow-400'
+                : 'text-red-400'
+              return (
+                <div key={r.key_id} className={color}>
+                  <span className="font-bold">{label}</span> · {k.model || '-'}：{r.message}
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -358,11 +380,13 @@ export default function AdminApiKeys() {
                   )}
                 </div>
               </div>
-              {/* key 核心属性：只读预览（点"编辑"改全局属性） */}
+              {/* key 核心属性：只读预览（点"编辑"改全局属性，含 title） */}
               <div className="flex-1 min-w-0">
-                <label className="text-[#e8d5b7]/60 text-xs">API Key（只读预览 · 改属性点"编辑"）</label>
+                <label className="text-[#e8d5b7]/60 text-xs">标题 / API Key（只读 · 改属性点"编辑"）</label>
                 <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">
-                  {kdef.api_key || '(未配置)'} {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
+                  {kdef.title && <span className="text-[#c9a96e] font-bold mr-1.5">{kdef.title}</span>}
+                  <span className={kdef.title ? 'text-[#e8d5b7]/60' : ''}>{kdef.api_key || '(未配置)'}</span>
+                  {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -428,6 +452,11 @@ export default function AdminApiKeys() {
             </p>
             <div className="space-y-3">
               <div>
+                <label className="text-[#e8d5b7]/60 text-xs block mb-1">标题（自定义名称，方便区分 Key）</label>
+                <input value={editModal.form.title} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, title: e.target.value } }))}
+                  placeholder="例如：主账号 / 备用 / 客户A" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
                 <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
                 <input value={editModal.form.api_key} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, api_key: e.target.value } }))}
                   placeholder="留空或保持脱敏值则不修改" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
@@ -490,6 +519,11 @@ export default function AdminApiKeys() {
             {addModal.mode === 'new' && (
               <div className="space-y-3">
                 <div>
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">标题（自定义名称，方便区分 Key）</label>
+                  <input value={addModal.newForm.title} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, title: e.target.value } }))}
+                    placeholder="例如：主账号 / 备用 / 客户A" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
                   <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
                   <input value={addModal.newForm.api_key} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, api_key: e.target.value } }))}
                     placeholder="sk-..." className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
@@ -531,6 +565,7 @@ export default function AdminApiKeys() {
                   return (
                     <button key={kid} onClick={() => addExistingKey(kid)}
                       className="w-full text-left px-3 py-2 bg-[#1a1a2e] border border-[#c9a96e]/20 rounded hover:border-[#c9a96e]/50">
+                      {k.title && <div className="text-[#c9a96e] font-bold text-sm">{k.title}</div>}
                       <div className="text-[#e8d5b7] text-sm font-mono">{k.api_key}</div>
                       <div className="text-[#e8d5b7]/50 text-xs">{k.model} · {k.base_url || '(默认 base_url)'}</div>
                     </button>
