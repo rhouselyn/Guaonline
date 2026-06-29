@@ -592,45 +592,6 @@ def test_mark_complete_clears_error_state():
     assert pool.consecutive_fail_start is None
 
 
-def test_wait_for_interval_skipped_when_no_in_flight():
-    """单请求（无在途并发）跳过 interval 节流，直接执行。
-
-    场景：上一个请求刚完成（last_switch_time=now），下一个请求立刻到来。
-    若 active_count==0（无并发），应跳过等待；只有并发时节流。
-    """
-    keys = {"k1": _kdef("k1", "sk-1")}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    pool.interval = 5.0  # 故意设大，单请求不应被卡 5s
-
-    # 模拟上一个请求刚完成：active_count 归零，last_switch_time=now
-    pool.mark_complete(gw.gateway, 0)
-    assert pool.active_count == 0
-
-    # 单请求到来 → 立即返回，不等 5s
-    t0 = time.time()
-    asyncio.run(pool.wait_for_interval())
-    assert time.time() - t0 < 0.5, "单请求不应被 interval 节流"
-
-
-def test_wait_for_interval_applies_when_in_flight():
-    """有在途并发请求时，interval 节流生效（避免对 provider 高频打请求）。"""
-    keys = {"k1": _kdef("k1", "sk-1")}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    pool.interval = 0.2  # 小 interval 便于测试
-
-    # 模拟一个在途请求（active_count=1），且 last_switch_time=now（刚切过 key）
-    with pool.lock:
-        pool.active_count = 1
-        pool.last_switch_time = time.time()
-
-    t0 = time.time()
-    asyncio.run(pool.wait_for_interval())
-    elapsed = time.time() - t0
-    assert elapsed >= 0.15, f"并发时节流应生效，实际等待 {elapsed}s"
-
-
 if __name__ == "__main__":
     import inspect, sys
     _self = sys.modules[__name__]

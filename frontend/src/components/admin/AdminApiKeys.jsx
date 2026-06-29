@@ -320,8 +320,7 @@ export default function AdminApiKeys() {
         {testResult && (
           <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
             <div className="text-[#e8d5b7]/60 text-xs">
-              测试结果（共 {testResult.count} 个 Key，结果已同步到所有 tier/sub 页面）
-              {testResult.skipped > 0 && <span className="text-[#e8d5b7]/40"> · 已跳过 {testResult.skipped} 个禁用 Key</span>}：
+              测试结果（共 {testResult.count} 个 Key，结果已同步到所有 tier/sub 页面）：
             </div>
             {testResult.error && <div className="text-red-400">测试失败：{testResult.error}</div>}
             {testResult.results.map(r => {
@@ -330,7 +329,6 @@ export default function AdminApiKeys() {
               const color = r.status === 'ok' ? 'text-green-400'
                 : r.status === 'empty' ? 'text-gray-400'
                 : r.status === 'rate_limited' ? 'text-yellow-400'
-                : r.status === 'disabled' ? 'text-gray-500'
                 : 'text-red-400'
               return (
                 <div key={r.key_id} className={color}>
