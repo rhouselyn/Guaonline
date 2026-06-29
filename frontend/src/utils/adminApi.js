@@ -40,8 +40,8 @@ export const adminApi = {
     const response = await axios.get(`${baseUrl}/api/admin/api-keys/defs`);
     return response.data;
   },
-  createKeyDef: async (api_key, base_url, model, input_price_per_million = 0, output_price_per_million = 0) => {
-    const response = await axios.post(`${baseUrl}/api/admin/api-keys/defs`, { api_key, base_url, model, input_price_per_million, output_price_per_million });
+  createKeyDef: async (api_key, base_url, model, input_price_per_million = 0, output_price_per_million = 0, title = '') => {
+    const response = await axios.post(`${baseUrl}/api/admin/api-keys/defs`, { api_key, base_url, model, input_price_per_million, output_price_per_million, title });
     return response.data;
   },
   updateKeyDef: async (keyId, fields) => {

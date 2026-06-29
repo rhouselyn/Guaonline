@@ -184,6 +184,7 @@ class KeyDefCreate(BaseModel):
     api_key: str = ""
     base_url: str = ""
     model: str = ""
+    title: str = ""
     input_price_per_million: float = 0
     output_price_per_million: float = 0
 
@@ -192,8 +193,9 @@ class KeyDefCreate(BaseModel):
 async def create_key_def_endpoint(req: KeyDefCreate, admin: AdminTokenData = Depends(require_admin)):
     """新建全局 key。返回 id，可被任意 tier/sub 引用。"""
     kid = create_key_def(req.api_key, req.base_url, req.model,
-                         req.input_price_per_million, req.output_price_per_million)
-    _log_action("create_key_def", "key", kid, {"model": req.model})
+                         req.input_price_per_million, req.output_price_per_million,
+                         title=req.title)
+    _log_action("create_key_def", "key", kid, {"model": req.model, "title": req.title})
     return {"status": "ok", "id": kid}
 
 
@@ -201,6 +203,7 @@ class KeyDefUpdate(BaseModel):
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     model: Optional[str] = None
+    title: Optional[str] = None
     input_price_per_million: Optional[float] = None
     output_price_per_million: Optional[float] = None
 
@@ -413,6 +416,7 @@ def _build_key_statuses(pool, gateway) -> list:
         status_info = {
             "index": i,
             "key_id": key_id,
+            "title": kdef.get("title", ""),
             "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
             "model": kdef.get("model", ""),
             "max_tokens": ref.get("max_tokens"),

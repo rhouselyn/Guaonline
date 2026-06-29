@@ -162,6 +162,7 @@ export default function AdminApiKeys() {
     setEditModal({
       open: true, keyId, refCount: countKeyRefs(keyId), saving: false,
       form: {
+        title: k.title || '',
         api_key: k.api_key || '',          // 脱敏值；用户改写才提交新值
         base_url: k.base_url || '',
         model: k.model || '',
@@ -188,12 +189,12 @@ export default function AdminApiKeys() {
   }
 
   // ── 添加 key 弹窗 ──
-  const openAddModal = () => setAddModal({ open: true, mode: 'choose', newForm: { api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }, selectedKeyId: null })
+  const openAddModal = () => setAddModal({ open: true, mode: 'choose', newForm: { title: '', api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0 }, selectedKeyId: null })
   const createNewKeyAndAdd = async () => {
     const f = addModal.newForm
     if (!f.api_key || !f.model) { alert('api_key 和 model 不能为空'); return }
     try {
-      const res = await adminApi.createKeyDef(f.api_key, f.base_url, f.model, f.input_price_per_million, f.output_price_per_million)
+      const res = await adminApi.createKeyDef(f.api_key, f.base_url, f.model, f.input_price_per_million, f.output_price_per_million, f.title)
       await appendRefToPool(res.id)
       setAddModal({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
     } catch (e) {
@@ -324,14 +325,14 @@ export default function AdminApiKeys() {
             {testResult.error && <div className="text-red-400">测试失败：{testResult.error}</div>}
             {testResult.results.map(r => {
               const k = keys[r.key_id] || {}
-              const preview = k.api_key ? (k.api_key.slice(0, 12) + '...') : '(未配置)'
+              const label = k.title || (k.api_key ? (k.api_key.slice(0, 12) + '...') : '(未配置)')
               const color = r.status === 'ok' ? 'text-green-400'
                 : r.status === 'empty' ? 'text-gray-400'
                 : r.status === 'rate_limited' ? 'text-yellow-400'
                 : 'text-red-400'
               return (
                 <div key={r.key_id} className={color}>
-                  {preview} · {k.model || '-'}：{r.message}
+                  <span className="font-bold">{label}</span> · {k.model || '-'}：{r.message}
                 </div>
               )
             })}
@@ -379,11 +380,13 @@ export default function AdminApiKeys() {
                   )}
                 </div>
               </div>
-              {/* key 核心属性：只读预览（点"编辑"改全局属性） */}
+              {/* key 核心属性：只读预览（点"编辑"改全局属性，含 title） */}
               <div className="flex-1 min-w-0">
-                <label className="text-[#e8d5b7]/60 text-xs">API Key（只读预览 · 改属性点"编辑"）</label>
+                <label className="text-[#e8d5b7]/60 text-xs">标题 / API Key（只读 · 改属性点"编辑"）</label>
                 <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">
-                  {kdef.api_key || '(未配置)'} {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
+                  {kdef.title && <span className="text-[#c9a96e] font-bold mr-1.5">{kdef.title}</span>}
+                  <span className={kdef.title ? 'text-[#e8d5b7]/60' : ''}>{kdef.api_key || '(未配置)'}</span>
+                  {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -449,6 +452,11 @@ export default function AdminApiKeys() {
             </p>
             <div className="space-y-3">
               <div>
+                <label className="text-[#e8d5b7]/60 text-xs block mb-1">标题（自定义名称，方便区分 Key）</label>
+                <input value={editModal.form.title} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, title: e.target.value } }))}
+                  placeholder="例如：主账号 / 备用 / 客户A" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+              </div>
+              <div>
                 <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
                 <input value={editModal.form.api_key} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, api_key: e.target.value } }))}
                   placeholder="留空或保持脱敏值则不修改" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
@@ -511,6 +519,11 @@ export default function AdminApiKeys() {
             {addModal.mode === 'new' && (
               <div className="space-y-3">
                 <div>
+                  <label className="text-[#e8d5b7]/60 text-xs block mb-1">标题（自定义名称，方便区分 Key）</label>
+                  <input value={addModal.newForm.title} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, title: e.target.value } }))}
+                    placeholder="例如：主账号 / 备用 / 客户A" className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
+                </div>
+                <div>
                   <label className="text-[#e8d5b7]/60 text-xs block mb-1">API Key</label>
                   <input value={addModal.newForm.api_key} onChange={e => setAddModal(m => ({ ...m, newForm: { ...m.newForm, api_key: e.target.value } }))}
                     placeholder="sk-..." className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
@@ -552,6 +565,7 @@ export default function AdminApiKeys() {
                   return (
                     <button key={kid} onClick={() => addExistingKey(kid)}
                       className="w-full text-left px-3 py-2 bg-[#1a1a2e] border border-[#c9a96e]/20 rounded hover:border-[#c9a96e]/50">
+                      {k.title && <div className="text-[#c9a96e] font-bold text-sm">{k.title}</div>}
                       <div className="text-[#e8d5b7] text-sm font-mono">{k.api_key}</div>
                       <div className="text-[#e8d5b7]/50 text-xs">{k.model} · {k.base_url || '(默认 base_url)'}</div>
                     </button>
