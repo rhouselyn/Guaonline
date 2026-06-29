@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { auth } from '../utils/auth';
 import {
   ArrowRight, Globe, PenTool, Brain, Star, Volume2, BarChart3,
@@ -7,20 +6,29 @@ import {
   X, MessageSquare, Zap, Search, Headphones, Languages, Code
 } from 'lucide-react';
 
-// 算法艺术背景 - Retro 波点 + 流动纹理（性能优化：不可见/后台时暂停，降低密度）
+// ponytail: 算法艺术背景 - Retro 波点 + 流动纹理（性能优化版）
+// 优化点：移动端降密度（88px）+ 降帧率（30fps via 节流）+ 减少 gradient 数量
+// 原版移动端主线程占用 5.2s（Style & Layout 2.8s），是 INP/LCP 主要瓶颈。
 function AlgorithmicArtBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // 尊重“减少动态效果”偏好，直接静态绘制一帧
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d');
     let animId;
     let time = 0;
     let visible = true;
     let pageVisible = true;
+    let lastDraw = 0;
+
+    // ponytail: 移动端使用更大的间距 + 更低的帧率，减少 Style & Layout 占用
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const dotSpacing = isMobile ? 88 : 44;
+    const gradientCount = isMobile ? 3 : 6;
+    // 移动端节流到 ~30fps（每 33ms 一帧），桌面端保持 60fps
+    const frameInterval = isMobile ? 33 : 16;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -37,8 +45,6 @@ function AlgorithmicArtBackground() {
       ctx.fillStyle = '#faf8f0';
       ctx.fillRect(0, 0, w, h);
 
-      // 加大间距，减少绘制点数量，降低主线程负载（INP）
-      const dotSpacing = 44;
       for (let x = dotSpacing / 2; x < w; x += dotSpacing) {
         for (let y = dotSpacing / 2; y < h; y += dotSpacing) {
           const dist = Math.sqrt((x - w / 2) ** 2 + (y - h / 2) ** 2);
@@ -52,7 +58,7 @@ function AlgorithmicArtBackground() {
         }
       }
 
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < gradientCount; i++) {
         const px = (Math.sin(i * 2.1 + time * 0.4) * 0.35 + 0.5) * w;
         const py = (Math.cos(i * 1.7 + time * 0.3) * 0.35 + 0.5) * h;
         const radius = 120 + Math.sin(i + time) * 40;
@@ -64,27 +70,27 @@ function AlgorithmicArtBackground() {
       }
     };
 
-    const loop = () => {
-      if (visible && pageVisible) draw();
+    // ponytail: 节流到目标帧率，避免 60fps 全速跑导致主线程被占满
+    const loop = (now) => {
+      if (visible && pageVisible && (now - lastDraw >= frameInterval)) {
+        draw();
+        lastDraw = now;
+      }
       animId = requestAnimationFrame(loop);
     };
 
-    // 仅绘制一帧用于降级场景
     if (prefersReduced) {
       draw();
       return () => window.removeEventListener('resize', resize);
     }
 
-    // 视口外暂停（节省主线程）
     const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { threshold: 0 });
     io.observe(canvas);
-    // 标签页隐藏时暂停
     const onVis = () => { pageVisible = !document.hidden; };
     document.addEventListener('visibilitychange', onVis);
 
     // ponytail: 推迟到浏览器空闲再启动 rAF 循环，让出 LCP 窗口期（前 ~1s）给首屏文本绘制。
-    // 主线程在首屏渲染期间被 draw() 占用会显著推迟 LCP 元素渲染延迟。
-    const startLoop = () => { loop(); };
+    const startLoop = () => { animId = requestAnimationFrame(loop); };
     const ric = window.requestIdleCallback;
     const idleId = ric
       ? ric(startLoop, { timeout: 1500 })
@@ -223,22 +229,16 @@ const PLANS = [
   },
 ];
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.6, delay: i * 0.1 } }),
-};
-
+// ponytail: 原 fadeUp variants 已被 CSS .reveal 类替代，由 IntersectionObserver 触发
 function SectionTitle({ children, sub }) {
   return (
-    <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }}
-      className="text-center mb-14">
-      <motion.h2 variants={fadeUp}
-        className="text-3xl md:text-4xl font-bold text-[#3d3929] mb-3"
+    <div className="reveal text-center mb-14">
+      <h2 className="text-3xl md:text-4xl font-bold text-[#3d3929] mb-3"
         style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
         {children}
-      </motion.h2>
-      {sub && <motion.p variants={fadeUp} custom={1} className="text-[#8b7e5e]">{sub}</motion.p>}
-    </motion.div>
+      </h2>
+      {sub && <p className="reveal text-[#8b7e5e]" style={{ transitionDelay: '100ms' }}>{sub}</p>}
+    </div>
   );
 }
 
@@ -249,8 +249,24 @@ export default function LandingPage() {
   useEffect(() => {
     auth.fetchUser().then(u => { if (u) setUser(u); }).catch(() => {});
     const onScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // ponytail: 单一 IntersectionObserver 处理所有 .reveal 元素的入场动画
+  // 替代 framer-motion 的 whileInView，零 JS 动画运行时（仅类名切换）
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-visible');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -80px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+    return () => io.disconnect();
   }, []);
 
   const scrollTo = (id) => {
@@ -290,9 +306,9 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero
-          ponytail: 首屏文本改原生 HTML + CSS 动画，不再等 framer-motion 加载。
+          ponytail: 首屏文本使用原生 HTML + CSS 动画，无 framer-motion 依赖。
           LCP 元素（描述段落）首帧即绘制，H1/副标题用 CSS slide-up 错峰呈现。
-          framer-motion 仍在视口外的下方区块使用，但已移出关键渲染路径。 */}
+          下方视口外区块使用 .reveal + IntersectionObserver，零 JS 动画运行时。 */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
         <AlgorithmicArtBackground />
         <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
@@ -341,17 +357,14 @@ export default function LandingPage() {
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-6xl mx-auto relative">
           <SectionTitle sub="传统语言学习的困境">学外语的素材，永远不够"自己"</SectionTitle>
-          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
-            variants={fadeUp} className="text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
+          <p className="reveal text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
             传统语言 App 提供固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的英语新闻、追的日剧台词、留学文书里的专业术语、中学英语课文——这些最贴近你生活的内容，标准化课程覆盖不了。
-          </motion.p>
+          </p>
           <div className="grid md:grid-cols-3 gap-6">
             {PAIN_POINTS.map((p, i) => {
               const Icon = p.icon;
               return (
-                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
-                  variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 relative overflow-hidden">
+                <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 relative overflow-hidden" style={{ transitionDelay: `${i * 100}ms` }}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-[#c45c3c]" />
                   <div className="w-11 h-11 rounded flex items-center justify-center mb-4 bg-[#c45c3c]/10">
                     <Icon className="w-5 h-5 text-[#c45c3c]" />
@@ -359,7 +372,7 @@ export default function LandingPage() {
                   <h3 className="text-lg font-bold text-[#3d3929] mb-2"
                     style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{p.title}</h3>
                   <p className="text-sm text-[#8b7e5e] leading-relaxed">{p.desc}</p>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -376,9 +389,7 @@ export default function LandingPage() {
             {MODES.map((m, i) => {
               const Icon = m.icon;
               return (
-                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                  variants={fadeUp} custom={i}
-                  className="rounded-lg overflow-hidden border border-[#d4c9a8]">
+                <div key={i} className="reveal rounded-lg overflow-hidden border border-[#d4c9a8]" style={{ transitionDelay: `${i * 100}ms` }}>
                   <div className="px-6 py-4" style={{ backgroundColor: m.bg }}>
                     <Icon className="w-6 h-6 text-[#faf8f0] mb-2" />
                     <h3 className="text-xl font-bold text-[#faf8f0]"
@@ -388,7 +399,7 @@ export default function LandingPage() {
                   <div className="px-6 py-5 bg-[#faf8f0]">
                     <p className="text-sm text-[#524d3c] leading-relaxed">{m.desc}</p>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -405,8 +416,7 @@ export default function LandingPage() {
             {STEPS.map((s, i) => {
               const Icon = s.icon;
               return (
-                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                  variants={fadeUp} custom={i} className="text-center relative">
+                <div key={i} className="reveal text-center relative" style={{ transitionDelay: `${i * 100}ms` }}>
                   <div className="w-14 h-14 mx-auto rounded-full bg-[#3d3929] text-[#faf8f0] flex items-center justify-center mb-3 shadow-[2px_2px_0_#d4a853]">
                     <Icon className="w-6 h-6" />
                   </div>
@@ -414,7 +424,7 @@ export default function LandingPage() {
                   <h3 className="font-bold text-[#3d3929] text-sm mb-1"
                     style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{s.title}</h3>
                   <p className="text-xs text-[#8b7e5e]">{s.desc}</p>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -427,13 +437,12 @@ export default function LandingPage() {
           <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">六大题型，从认到用</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {EXERCISES.map((ex, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
-                variants={fadeUp} custom={i} whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                className={`rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow ${
+              <div key={i} className={`reveal reveal-hover rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow ${
                   ex.phase === 0
                     ? 'bg-[#3d3929] text-[#faf8f0] border border-[#3d3929]'
                     : 'bg-[#faf8f0] border border-[#d4c9a8]'
-                }`}>
+                }`}
+                style={{ transitionDelay: `${i * 100}ms` }}>
                 {ex.phase > 0 ? (
                   <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold tracking-wide mb-3 ${
                     ex.phase === 1
@@ -464,7 +473,7 @@ export default function LandingPage() {
                       : 'bg-[#d4a853]/10 text-[#B8860B]'
                   }`}>{ex.demo}</code>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -482,9 +491,7 @@ export default function LandingPage() {
           </SectionTitle>
           <div className="space-y-4">
             {COMPARISON.map((row, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                variants={fadeUp} custom={i}
-                className="flex items-center gap-4 md:gap-8">
+              <div key={i} className="reveal flex items-center gap-4 md:gap-8" style={{ transitionDelay: `${i * 100}ms` }}>
                 <div className="flex-1 text-right">
                   <span className="text-[#b5ae8e] text-sm md:text-base line-through decoration-[#8b7e5e]/40">{row.duo}</span>
                 </div>
@@ -494,7 +501,7 @@ export default function LandingPage() {
                 <div className="flex-1">
                   <span className="text-[#faf8f0] text-sm md:text-base font-medium">{row.gua}</span>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -510,9 +517,7 @@ export default function LandingPage() {
             {FEATURES.map((f, i) => {
               const Icon = f.icon;
               return (
-                <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
-                  variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow">
+                <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow" style={{ transitionDelay: `${i * 100}ms` }}>
                   <div className="w-10 h-10 rounded flex items-center justify-center mb-4"
                     style={{ backgroundColor: f.color + '18' }}>
                     <Icon className="w-5 h-5" style={{ color: f.color }} />
@@ -520,7 +525,7 @@ export default function LandingPage() {
                   <h3 className="text-lg font-bold text-[#3d3929] mb-2"
                     style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{f.title}</h3>
                   <p className="text-sm text-[#8b7e5e] leading-relaxed">{f.desc}</p>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -533,9 +538,7 @@ export default function LandingPage() {
           <SectionTitle sub="留学备考、阅读理解辅助、职场外语、小语种学习">谁需要呱邻国？</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {TARGET_USERS.map((u, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
-                variants={fadeUp} custom={i} whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                className="bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 text-center">
+              <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 text-center" style={{ transitionDelay: `${i * 100}ms` }}>
                 <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl bg-[#8b7e5e]/10 border-2 border-[#8b7e5e]/15">
                   {u.icon}
                 </div>
@@ -543,7 +546,7 @@ export default function LandingPage() {
                   style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>{u.title}</h3>
                 <p className="text-sm text-[#8b7e5e] font-medium mb-3">{u.scene}</p>
                 <p className="text-sm text-[#524d3c] leading-relaxed">{u.desc}</p>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -554,18 +557,14 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative text-center">
-          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
-            variants={fadeUp} className="text-sm text-[#b5ae8e] mb-2">英语、日语、法语、德语、小语种……</motion.p>
-          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }}
-            variants={fadeUp} className="text-xs text-[#b5ae8e]/60 mb-4">支持的语言（部分展示）</motion.p>
+          <p className="reveal text-sm text-[#b5ae8e] mb-2">英语、日语、法语、德语、小语种……</p>
+          <p className="reveal text-xs text-[#b5ae8e]/60 mb-4" style={{ transitionDelay: '100ms' }}>支持的语言（部分展示）</p>
           <div className="flex flex-wrap justify-center gap-2">
             {LANG_CLOUD.map((lang, i) => (
-              <motion.span key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                variants={fadeUp} custom={i}
-                className="px-3 py-1 rounded text-xs font-semibold text-white tracking-wide hover:scale-110 transition-transform cursor-default"
-                style={{ backgroundColor: lang.color }}>
+              <span key={i} className="reveal px-3 py-1 rounded text-xs font-semibold text-white tracking-wide hover:scale-110 transition-transform cursor-default"
+                style={{ backgroundColor: lang.color, transitionDelay: `${i * 30}ms` }}>
                 {lang.name}
-              </motion.span>
+              </span>
             ))}
             <span className="px-3 py-1 rounded text-xs font-semibold text-white bg-[#78716c]">120+ ...</span>
           </div>
@@ -580,11 +579,10 @@ export default function LandingPage() {
           <SectionTitle sub="免费开始，随时升级">选择适合你的方案</SectionTitle>
           <div className="grid md:grid-cols-3 gap-6">
             {PLANS.map((plan, i) => (
-              <motion.div key={plan.id} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                variants={fadeUp} custom={i}
-                className={`bg-[#faf8f0] border rounded-lg p-7 relative ${
+              <div key={plan.id} className={`reveal bg-[#faf8f0] border rounded-lg p-7 relative ${
                   plan.highlight ? 'border-[#d4a853] shadow-[3px_3px_0_#d4a853]' : 'border-[#d4c9a8]'
-                }`}>
+                }`}
+                style={{ transitionDelay: `${i * 100}ms` }}>
                 {plan.highlight && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-[#d4a853] text-[#3d3929] text-xs font-bold rounded-full">
                     推荐
@@ -622,7 +620,7 @@ export default function LandingPage() {
                     {plan.cta}
                   </a>
                 )}
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>

@@ -1,26 +1,24 @@
 # ponytail: Cloudflare Pages 缓存策略
-# Lighthouse 报告 /assets/* 缓存只有 4 小时，导致重访时仍重新下载所有 JS/CSS。
+# Lighthouse 报告 /assets/* 缓存只有 4 小时（Cloudflare 边缘默认 TTL），
+# 尽管 max-age=31536000 已设置。原因：Cloudflare 边缘节点优先使用 s-maxage。
+# 修复：增加 s-maxage=31536000 让边缘节点也长缓存 1 年；浏览器仍用 max-age。
 # Vite 打包的 /assets/* 文件名带 hash，内容不变则 hash 不变，可安全长缓存。
 
-# 带 hash 的构建产物：1 年 immutable 缓存
+# 带 hash 的构建产物：1 年 immutable 缓存（浏览器 + CDN 边缘）
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# WebP 图片：1 年缓存（文件名固定但变更频率低，靠手动改名更新）
-/*.webp
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable
 
 # favicon PNG：1 天缓存（小文件，便于变更）
 /gualingo.png
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=86400, s-maxage=86400
 
 # 爬虫配置文件：1 小时
 /robots.txt
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=3600, s-maxage=3600
 /sitemap.xml
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=3600, s-maxage=3600
 /llms.txt
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=3600, s-maxage=3600
 
 # HTML 入口：不缓存，确保新部署立即生效
 /

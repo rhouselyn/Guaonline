@@ -162,6 +162,28 @@ body {
   .hero-sparkle { animation: none; }
 }
 
+/* ponytail: 滚动入场动画——替代 framer-motion 的 whileInView variants。
+   原理：元素初始 opacity:0 + translateY(30px)；IntersectionObserver 命中时
+   加 .reveal-visible 类，CSS transition 在合成线程跑（不阻塞主线程）。
+   优势：移除 framer-motion chunk（38.4 KiB）从首屏加载路径，节省 ~28 KiB。
+   .reveal-hover：可见后悬停 translateY(-4px)，复用同一 transition 不冲突。 */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease-out, transform 0.3s ease-out;
+  will-change: opacity, transform;
+}
+.reveal.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal.reveal-hover.reveal-visible:hover {
+  transform: translateY(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
 /* 滚动条 - 复古风格 */
 ::-webkit-scrollbar {
   width: 8px;

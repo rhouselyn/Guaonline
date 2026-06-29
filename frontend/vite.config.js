@@ -26,5 +26,18 @@ export default defineConfig({
         },
       },
     },
+    // ponytail: 关键修复——Vite 默认会把 manualChunks 中声明的所有 chunk 都 modulepreload，
+    // 包括 framer-motion。但 LandingPage 已不再依赖 framer-motion（仅 lazy-loaded 页面用），
+    // 预加载它会浪费 38 KiB（gzip）网络与解析时间，拖慢 LCP。
+    // 通过 resolveDependencies 过滤掉非首屏 chunk（framer-motion），
+    // 只保留 react-vendor + lucide 两个 LandingPage 真正需要的 chunk。
+    modulePreload: {
+      polyfill: true,
+      resolveDependencies: (filename, deps, { hostId, hostType }) => {
+        // 只为入口（hostType === 'html'）过滤；lazy chunk 的依赖照常预加载
+        if (hostType !== 'html') return deps
+        return deps.filter(dep => !dep.includes('framer-motion'))
+      },
+    },
   },
 })

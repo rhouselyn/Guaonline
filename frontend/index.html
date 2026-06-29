@@ -188,7 +188,8 @@
         background: #faf8f0; color: #8b7e5e;
         font-family: system-ui, 'Noto Serif SC', Georgia, serif;
       }
-      #root > .app-bootstrap img { width: 72px; height: 72px; margin-bottom: 20px; opacity: 0.92; }
+      #root > .app-bootstrap img,
+      #root > .app-bootstrap svg { width: 72px; height: 72px; margin-bottom: 20px; opacity: 0.92; }
       #root > .app-bootstrap .bs-spinner {
         width: 32px; height: 32px; border: 3px solid #d4c9a8; border-top-color: #d4a853;
         border-radius: 50%; animation: bs-spin 0.8s linear infinite;
@@ -207,8 +208,24 @@
     -->
     <div id="root">
       <div class="app-bootstrap" aria-hidden="true">
-        <!-- ponytail: loading 图改用 72px WebP（7.4KB vs PNG 107KB），加 width/height 防 CLS -->
-        <img src="/gualingo-72.webp" alt="" width="72" height="72" />
+        <!-- ponytail: loading 图改用内联 SVG（vs 72px WebP 7.4KB），节省一次 HTTP 请求 + 任意分辨率清晰。
+             SVG 与落地页 FrogLogo 一致，避免视觉跳变。 -->
+        <svg width="72" height="72" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <ellipse cx="100" cy="120" rx="70" ry="55" fill="#B5AE8E" stroke="#8B7E5E" stroke-width="3"/>
+          <ellipse cx="100" cy="115" rx="62" ry="48" fill="#D8D4BF"/>
+          <circle cx="68" cy="72" r="30" fill="#B5AE8E" stroke="#8B7E5E" stroke-width="3"/>
+          <circle cx="68" cy="72" r="24" fill="#FFF" stroke="#8B7E5E" stroke-width="2"/>
+          <circle cx="72" cy="68" r="10" fill="#524D3C"/>
+          <circle cx="75" cy="65" r="3" fill="#FFF"/>
+          <circle cx="132" cy="72" r="30" fill="#B5AE8E" stroke="#8B7E5E" stroke-width="3"/>
+          <circle cx="132" cy="72" r="24" fill="#FFF" stroke="#8B7E5E" stroke-width="2"/>
+          <circle cx="136" cy="68" r="10" fill="#524D3C"/>
+          <circle cx="139" cy="65" r="3" fill="#FFF"/>
+          <ellipse cx="100" cy="130" rx="32" ry="14" fill="#E8C985" stroke="#8B7E5E" stroke-width="2"/>
+          <path d="M74 126 Q100 146 126 126" stroke="#524D3C" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <ellipse cx="55" cy="110" rx="12" ry="8" fill="#D4A853" opacity="0.4"/>
+          <ellipse cx="145" cy="110" rx="12" ry="8" fill="#D4A853" opacity="0.4"/>
+        </svg>
         <div class="bs-spinner"></div>
         <div class="bs-hint">呱邻国加载中…</div>
       </div>
