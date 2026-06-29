@@ -18,8 +18,8 @@
     <meta property="og:title" content="呱邻国 Gualingo - 用你喜欢的文本学外语" />
     <meta property="og:description" content="AI驱动的沉浸式外语学习平台。学英语、日语、法语、德语、小语种，粘贴任何文本自动生成词汇表、分句翻译和练习题。留学备考、阅读理解辅助，120+种语言，你的素材你做主。" />
     <meta property="og:image" content="https://gualingo.dpdns.org/gualingo.png" />
-    <meta property="og:image:width" content="500" />
-    <meta property="og:image:height" content="500" />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
     <meta property="og:image:alt" content="呱邻国 Gualingo - AI驱动的沉浸式外语学习平台" />
     <meta property="og:url" content="https://gualingo.dpdns.org/" />
     <meta property="og:locale" content="zh_CN" />
@@ -167,7 +167,10 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" rel="stylesheet" />
+    <!-- ponytail: 字体改非阻塞加载（media=print + onload 切换），移出关键渲染路径。
+         font-display=swap 保证文字先用系统 serif 渲染，字体到位后再切换，避免 FCP/LCP 被字体阻塞。 -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+IPA&display=swap" /></noscript>
     <style>
       /* ponytail: FOUC 消除——首屏 loading 层盖住预渲染骨架（纯文本），React 挂载后 #root 整体被替换，loading 与骨架一起消失。
          视觉与落地页首屏一致（#faf8f0 背景 + 居中 logo + CSS spinner），无纯文本闪烁。 */

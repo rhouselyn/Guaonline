@@ -7,12 +7,33 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import FRONTEND_DIR, HOST, PORT
 from utils.state import storage
 
 # ── 创建应用 ──────────────────────────────────────────────
 app = FastAPI(title="呱邻国 - Gualingo", version="1.0.0")
+
+
+# ── 静态资源缓存中间件 ────────────────────────────────────
+# ponytail: PageSpeed 报告显示 /assets/* 和 /gualingo.png 只有 4h 缓存。
+# Vite 给 /assets/ 下的文件名加 content hash，内容变 = 文件名变 → 可永久缓存（immutable）。
+# /gualingo.png 等无 hash 的稳定资源用长缓存 + must-revalidate，避免更新后用户拿不到新版。
+class StaticCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        # 带 hash 的构建产物：1 年 immutable
+        if path.startswith("/assets/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        # 无 hash 的稳定静态资源（logo、robots、sitemap）：1 天 + must-revalidate
+        elif path in ("/gualingo.png", "/robots.txt", "/sitemap.xml", "/favicon.ico"):
+            response.headers.setdefault("Cache-Control", "public, max-age=86400, must-revalidate")
+        return response
+
+
+app.add_middleware(StaticCacheMiddleware)
 
 # ── CORS 中间件 ───────────────────────────────────────────
 app.add_middleware(
