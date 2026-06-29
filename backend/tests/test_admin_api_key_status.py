@@ -292,6 +292,78 @@ def test_test_all_endpoint_route_not_swallowed_by_tier_param():
     assert resp.status_code == 200, resp.text
 
 
+# ── 9. test-all 跳过全禁用 key ─────────────────────────────
+
+def test_test_all_skips_keys_disabled_in_all_pools():
+    """test-all 跳过在所有 pool 中都被禁用的 key（不浪费请求测试）。
+
+    构造 2 个 key：k_on（启用）和 k_off（在唯一引用它的 pool 中 disabled）。
+    test-all 应只测 k_on（count=1，skipped=1），k_off 不被测试。
+    """
+    keys = {
+        "k_on": _kdef("k_on", "sk-on"),
+        "k_off": _kdef("k_off", "sk-off"),
+    }
+    off_ref = _ref("k_off")
+    off_ref["disabled"] = True
+    data = {"keys": keys, "tier_keys": {"free": {
+        "sentence": {"configs": [_ref("k_on"), off_ref], "active_index": 0},
+        "title": {"configs": [], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
+    }}}
+    _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        resp = client.post("/api/admin/api-keys/test-all")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["count"] == 1, body          # 只测 k_on
+    assert body["skipped"] == 1, body         # k_off 被跳过
+    by_id = {r["key_id"]: r for r in body["results"]}
+    assert "k_off" not in by_id, by_id        # k_off 不在结果里
+
+
+def test_test_all_tests_key_enabled_in_any_pool():
+    """test-all 测试在至少一个 pool 中启用的 key（即使它在另一 pool 中被禁用）。"""
+    keys = {"k_shared": _kdef("k_shared", "sk-shared")}
+    off_ref = _ref("k_shared")
+    off_ref["disabled"] = True
+    data = {"keys": keys, "tier_keys": {"free": {
+        "sentence": {"configs": [off_ref], "active_index": 0},   # 禁用
+        "title": {"configs": [_ref("k_shared")], "active_index": 0},  # 启用
+        "word": {"configs": [], "active_index": 0},
+    }}}
+    _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        resp = client.post("/api/admin/api-keys/test-all")
+    body = resp.json()
+    assert body["count"] == 1, body            # 在 title 启用 → 测一次
+    assert body["skipped"] == 0, body
+
+
+def test_per_pool_test_marks_disabled_as_skipped():
+    """per-pool test 端点：disabled ref 不发起测试，结果标记 status=disabled。"""
+    keys = {"k_on": _kdef("k_on", "sk-on"), "k_off": _kdef("k_off", "sk-off")}
+    off_ref = _ref("k_off")
+    off_ref["disabled"] = True
+    data = _build_data_local(keys, [_ref("k_on"), off_ref])
+    _setup(data)
+    with patch("httpx.AsyncClient", _FakeAsyncClient):
+        resp = client.post("/api/admin/api-keys/free/test", params={"sub": "sentence"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    by_index = {r["index"]: r for r in body["results"]}
+    assert by_index[1]["status"] == "disabled", by_index[1]   # k_off 跳过
+    assert by_index[0]["status"] == "ok", by_index[0]          # k_on 正常测
+
+
+def _build_data_local(keys, refs):
+    return {"keys": keys, "tier_keys": {"free": {
+        "sentence": {"configs": refs, "active_index": 0},
+        "title": {"configs": [], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
+    }}}
+
+
 if __name__ == "__main__":
     import inspect, sys
     _self = sys.modules[__name__]

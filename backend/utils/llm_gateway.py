@@ -221,7 +221,11 @@ class TierKeyPool:
         return min(candidates) if candidates else None
 
     async def wait_for_interval(self):
+        # 仅在有在途并发请求时节流：单请求/孤立请求无需等待 interval，直接执行。
+        # 节流只对批处理切换 key 时起作用（避免对同一 provider 高频打请求）。
         with self.lock:
+            if self.active_count == 0:
+                return
             elapsed = time.time() - self.last_switch_time
             remaining = self.interval - elapsed
         if remaining > 0:

@@ -335,15 +335,18 @@ async def _test_key(gateway, key_id: str) -> dict:
 async def test_all_api_keys(admin: AdminTokenData = Depends(require_admin)):
     """测试所有 pool（所有 tier/sub）出现过的所有 key，每个 key_id 只测一次。
 
+    跳过在所有 pool 中都被禁用的 key（已禁用就不必浪费请求测试）。
     结果按 key_id 回写全局运行时状态，所有 tier/sub 页面都会拿到最新状态。
     注意：此路由必须声明在 /api-keys/{tier}/test 之前，否则 test-all 会被当成 tier 参数。
     """
     import asyncio
     from utils.llm_gateway import gateway
 
-    # 收集所有 pool 出现过的 key_id（保持发现顺序，去重）
+    # 收集所有 pool 出现过的 key_id（去重，保持发现顺序），
+    # 同时记录每个 key 是否在至少一个 pool 中被启用。
     seen = []
     seen_set = set()
+    enabled_anywhere = set()
     for tier in ("free", "basic", "pro"):
         tier_pools = gateway.pools.get(tier)
         if not tier_pools:
@@ -354,16 +357,22 @@ async def test_all_api_keys(admin: AdminTokenData = Depends(require_admin)):
                 continue
             for ref in pool.refs:
                 kid = ref.get("key_id")
-                if kid and kid not in seen_set:
+                if not kid:
+                    continue
+                if kid not in seen_set:
                     seen_set.add(kid)
                     seen.append(kid)
-    if not seen:
-        return {"results": [], "count": 0}
+                if not ref.get("disabled"):
+                    enabled_anywhere.add(kid)
+    # 只测试至少在一个 pool 中启用的 key
+    to_test = [kid for kid in seen if kid in enabled_anywhere]
+    if not to_test:
+        return {"results": [], "count": 0, "skipped": len(seen)}
 
-    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in seen])
+    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in to_test])
     gateway._notify()
-    _log_action("test_all_api_keys", "all", None, {"count": len(tested)})
-    return {"results": tested, "count": len(tested)}
+    _log_action("test_all_api_keys", "all", None, {"count": len(tested), "skipped": len(seen) - len(tested)})
+    return {"results": tested, "count": len(tested), "skipped": len(seen) - len(tested)}
 
 
 @router.post("/api-keys/{tier}/test")
@@ -384,18 +393,25 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
     if not pool or not pool.refs:
         raise HTTPException(status_code=400, detail="该 Tier/Sub 没有配置 API Key")
 
-    # 同一 pool 内重复引用的 key 只测一次（按 key_id 去重），结果按 ref 顺序展开
+    # 同一 pool 内重复引用的 key 只测一次（按 key_id 去重），结果按 ref 顺序展开。
+    # 跳过本 pool 内 disabled 的 ref（不发起测试，标记为 disabled 跳过）。
     keys_in_order: list = []
     seen_set = set()
     for ref in pool.refs:
+        if ref.get("disabled"):
+            continue
         kid = ref.get("key_id")
         if kid and kid not in seen_set:
             seen_set.add(kid)
             keys_in_order.append(kid)
-    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in keys_in_order])
+    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in keys_in_order]) if keys_in_order else []
     by_id = {r["key_id"]: r for r in tested}
     results = []
     for i, ref in enumerate(pool.refs):
+        if ref.get("disabled"):
+            results.append({"index": i, "key_id": ref.get("key_id"),
+                            "status": "disabled", "message": "已禁用，跳过测试"})
+            continue
         r = by_id[ref.get("key_id")]
         results.append({"index": i, **r})
     gateway._notify()
