@@ -554,7 +554,8 @@ class LLMGateway:
         try:
             import time as _t
             _t0 = _t.time()
-            print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_id={key_id}")
+            _title = self.key_defs.get(key_id, {}).get("title", "") or "-"
+            print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title}")
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(url, headers=headers, json=payload)
 
@@ -563,7 +564,7 @@ class LLMGateway:
                 pool.mark_complete(self, idx)
                 _elapsed = _t.time() - _t0
                 _usage = result_data.get("usage", {})
-                print(f"[GATEWAY] <<< OK user={user_id} tier={tier} type={request_type} key_id={key_id} elapsed={_elapsed:.1f}s tokens={_usage.get('total_tokens','?')}")
+                print(f"[GATEWAY] <<< OK user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title} elapsed={_elapsed:.1f}s tokens={_usage.get('total_tokens','?')}")
                 if user_id and result_data.get("usage"):
                     try:
                         from utils.token_tracker import record_token_usage
@@ -604,7 +605,7 @@ class LLMGateway:
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except httpx.HTTPError as e:
             # 其他网络错（连接失败、DNS 等）
-            print(f"[GATEWAY] network error key_id={key_id}: {e}")
+            print(f"[GATEWAY] network error key_id={key_id} title={_title}: {e}")
             pool.mark_network_error(self, idx)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except Exception as e:
