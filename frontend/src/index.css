@@ -136,6 +136,32 @@ body {
   color: #2A2319;
 }
 
+/* ponytail: Hero 首屏 CSS 动画——替代 framer-motion，不阻塞 LCP。
+   关键差异：CSS 动画在合成线程跑，不依赖 JS 加载；element 首帧即被绘制（即使 opacity:0），
+   满足 LCP "首次绘制" 判定，无需等 framer-motion JS 解析执行。 */
+@keyframes heroFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-fade-in {
+  opacity: 0;
+  animation: heroFadeIn 0.6s ease-out forwards;
+}
+@keyframes heroSparkle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(10deg); }
+  75% { transform: rotate(-10deg); }
+}
+.hero-sparkle {
+  animation: heroSparkle 2s ease-in-out infinite;
+  animation-delay: 3s;
+}
+/* 用户偏好"减少动态效果"时关闭 Hero 动画，直接显示终态 */
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-in { opacity: 1; animation: none; }
+  .hero-sparkle { animation: none; }
+}
+
 /* 滚动条 - 复古风格 */
 ::-webkit-scrollbar {
   width: 8px;

@@ -82,12 +82,21 @@ function AlgorithmicArtBackground() {
     const onVis = () => { pageVisible = !document.hidden; };
     document.addEventListener('visibilitychange', onVis);
 
-    loop();
+    // ponytail: 推迟到浏览器空闲再启动 rAF 循环，让出 LCP 窗口期（前 ~1s）给首屏文本绘制。
+    // 主线程在首屏渲染期间被 draw() 占用会显著推迟 LCP 元素渲染延迟。
+    const startLoop = () => { loop(); };
+    const ric = window.requestIdleCallback;
+    const idleId = ric
+      ? ric(startLoop, { timeout: 1500 })
+      : window.setTimeout(startLoop, 1200);
+
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
       io.disconnect();
       document.removeEventListener('visibilitychange', onVis);
+      if (ric) window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
     };
   }, []);
 
@@ -280,60 +289,49 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero */}
+      {/* Hero
+          ponytail: 首屏文本改原生 HTML + CSS 动画，不再等 framer-motion 加载。
+          LCP 元素（描述段落）首帧即绘制，H1/副标题用 CSS slide-up 错峰呈现。
+          framer-motion 仍在视口外的下方区块使用，但已移出关键渲染路径。 */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
         <AlgorithmicArtBackground />
         <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="flex justify-center mb-8">
+          <div className="flex justify-center mb-8 hero-fade-in" style={{ animationDelay: '0ms' }}>
             <div className="relative">
               <FrogLogo size={100} />
-              <motion.div className="absolute -top-2 -right-2"
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>
+              <div className="absolute -top-2 -right-2 hero-sparkle">
                 <Sparkles className="w-6 h-6 text-[#d4a853]" />
-              </motion.div>
+              </div>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="text-5xl md:text-7xl font-bold text-[#3d3929] mb-4"
-            style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif", letterSpacing: '-0.02em' }}>
+          <h1 className="text-5xl md:text-7xl font-bold text-[#3d3929] mb-4 hero-fade-in"
+            style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif", letterSpacing: '-0.02em', animationDelay: '150ms' }}>
             呱邻国
-          </motion.h1>
+          </h1>
 
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.25 }}
-            className="text-lg md:text-xl text-[#8b7e5e] mb-2"
-            style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+          <p className="text-lg md:text-xl text-[#8b7e5e] mb-2 hero-fade-in"
+            style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif", animationDelay: '250ms' }}>
             用你喜欢的文本学外语
-          </motion.p>
+          </p>
 
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.35 }}
-            className="text-[#8b7e5e]/70 mb-10 max-w-lg mx-auto leading-relaxed">
+          {/* LCP 元素：无动画，首帧即绘制，避免等待 framer-motion */}
+          <p className="text-[#8b7e5e]/70 mb-10 max-w-lg mx-auto leading-relaxed">
             学英语、日语、法语、德语、小语种——粘贴任何文本，自动生成词汇表、分句翻译和练习题。<br />
             留学备考、阅读理解辅助、职场外语，你的素材你做主。
-          </motion.p>
+          </p>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.45 }}
-            className="flex justify-center items-center">
+          <div className="flex justify-center items-center hero-fade-in" style={{ animationDelay: '450ms' }}>
             <a href={user ? '/learn' : '/login'}
               className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg flex items-center gap-2 shadow-[2px_2px_0_#8b7e5e]">
               {user ? '进入学习' : '免费开始'}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
-          </motion.div>
+          </div>
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.8 }} className="mt-16">
+          <div className="mt-16 hero-fade-in" style={{ animationDelay: '800ms' }}>
             <ChevronDown className="w-6 h-6 text-[#b5ae8e] mx-auto animate-bounce" />
-          </motion.div>
+          </div>
         </div>
       </section>
 
