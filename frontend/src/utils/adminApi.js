@@ -29,6 +29,12 @@ export const adminApi = {
     return response.data;
   },
 
+  // 测试所有 pool（所有 tier/sub）出现过的所有 key，每个 key_id 只测一次
+  testAllKeys: async () => {
+    const response = await axios.post(`${baseUrl}/api/admin/api-keys/test-all`);
+    return response.data;
+  },
+
   // 全局 key 定义 CRUD（引用语义模型：改一处全处生效）
   listKeyDefs: async () => {
     const response = await axios.get(`${baseUrl}/api/admin/api-keys/defs`);

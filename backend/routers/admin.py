@@ -257,6 +257,112 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
     return {"status": "ok"}
 
 
+async def _test_key(gateway, key_id: str) -> dict:
+    """按 key_id 测试一个全局 key，结果回写 gateway 全局运行时状态。
+
+    测试只更新 key 的 is_valid/last_error/circuit_state（200 时复位），
+    不切换 active_index，避免干扰真实流量。返回 {key_id, status, message}。
+    """
+    import httpx
+    from datetime import datetime, timezone
+
+    kdef = gateway.key_defs.get(key_id, {})
+    api_key = kdef.get("api_key", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rt = gateway._ensure_runtime(key_id)
+    if not api_key:
+        rt["is_valid"] = True
+        rt["last_error"] = None
+        rt["last_error_time"] = None
+        rt["rate_limited_until"] = None
+        return {"key_id": key_id, "status": "empty", "message": "未配置 Key"}
+    base_url = kdef.get("base_url", "https://api.openai.com/v1")
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": kdef.get("model", "gpt-4o-mini"),
+               "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+        body = resp.text[:160]
+        if resp.status_code == 200:
+            rt["is_valid"] = True
+            rt["last_error"] = None
+            rt["last_error_time"] = None
+            rt["rate_limited_until"] = None
+            rt["circuit_state"] = "closed"
+            rt["fail_count"] = 0
+            rt["half_open_probed"] = False
+            rt["invalid_streak"] = 0
+            return {"key_id": key_id, "status": "ok", "message": "API Key 可用"}
+        if resp.status_code == 401:
+            rt["is_valid"] = False
+            rt["last_error"] = "401 Unauthorized"
+            rt["last_error_time"] = now_iso
+            rt["rate_limited_until"] = None
+            return {"key_id": key_id, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
+        if resp.status_code == 429:
+            rt["is_valid"] = True
+            rt["last_error"] = "429 Rate Limited"
+            rt["last_error_time"] = now_iso
+            rt["rate_limited_until"] = None
+            return {"key_id": key_id, "status": "rate_limited", "message": f"限速中: {body}"}
+        rt["is_valid"] = True
+        rt["last_error"] = f"{resp.status_code} {body}"
+        rt["last_error_time"] = now_iso
+        rt["rate_limited_until"] = None
+        return {"key_id": key_id, "status": "error",
+                "message": f"API 返回 {resp.status_code}: {body}"}
+    except httpx.TimeoutException:
+        rt["is_valid"] = True
+        rt["last_error"] = "network: timeout"
+        rt["last_error_time"] = now_iso
+        rt["rate_limited_until"] = None
+        return {"key_id": key_id, "status": "error", "message": "请求超时（30s）"}
+    except Exception as e:
+        msg = str(e)[:160]
+        rt["is_valid"] = True
+        rt["last_error"] = f"network: {msg}"
+        rt["last_error_time"] = now_iso
+        rt["rate_limited_until"] = None
+        return {"key_id": key_id, "status": "error", "message": f"请求失败: {msg}"}
+
+
+@router.post("/api-keys/test-all")
+async def test_all_api_keys(admin: AdminTokenData = Depends(require_admin)):
+    """测试所有 pool（所有 tier/sub）出现过的所有 key，每个 key_id 只测一次。
+
+    结果按 key_id 回写全局运行时状态，所有 tier/sub 页面都会拿到最新状态。
+    注意：此路由必须声明在 /api-keys/{tier}/test 之前，否则 test-all 会被当成 tier 参数。
+    """
+    import asyncio
+    from utils.llm_gateway import gateway
+
+    # 收集所有 pool 出现过的 key_id（保持发现顺序，去重）
+    seen = []
+    seen_set = set()
+    for tier in ("free", "basic", "pro"):
+        tier_pools = gateway.pools.get(tier)
+        if not tier_pools:
+            continue
+        for sub in ("title", "sentence", "word"):
+            pool = tier_pools.get(sub)
+            if not pool:
+                continue
+            for ref in pool.refs:
+                kid = ref.get("key_id")
+                if kid and kid not in seen_set:
+                    seen_set.add(kid)
+                    seen.append(kid)
+    if not seen:
+        return {"results": [], "count": 0}
+
+    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in seen])
+    gateway._notify()
+    _log_action("test_all_api_keys", "all", None, {"count": len(tested)})
+    return {"results": tested, "count": len(tested)}
+
+
 @router.post("/api-keys/{tier}/test")
 async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData = Depends(require_admin)):
     """逐个测试该 pool 引用的所有 key，结果回写到 gateway 全局运行时状态（按 key_id）。
@@ -268,8 +374,6 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
     if sub not in ("title", "sentence", "word"):
         raise HTTPException(status_code=400, detail="Invalid sub")
     import asyncio
-    import httpx
-    from datetime import datetime, timezone
     from utils.llm_gateway import gateway
 
     tier_pools = gateway.pools.get(tier)
@@ -277,71 +381,20 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
     if not pool or not pool.refs:
         raise HTTPException(status_code=400, detail="该 Tier/Sub 没有配置 API Key")
 
-    async def _test_one(idx, ref):
-        key_id = ref.get("key_id")
-        kdef = gateway.key_defs.get(key_id, {})
-        api_key = kdef.get("api_key", "")
-        now_iso = datetime.now(timezone.utc).isoformat()
-        rt = gateway._ensure_runtime(key_id)
-        if not api_key:
-            rt["is_valid"] = True
-            rt["last_error"] = None
-            rt["last_error_time"] = None
-            rt["rate_limited_until"] = None
-            return {"index": idx, "key_id": key_id, "status": "empty", "message": "未配置 Key"}
-        base_url = kdef.get("base_url", "https://api.openai.com/v1")
-        url = f"{base_url.rstrip('/')}/chat/completions"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"model": kdef.get("model", "gpt-4o-mini"),
-                   "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, headers=headers, json=payload)
-            body = resp.text[:160]
-            if resp.status_code == 200:
-                rt["is_valid"] = True
-                rt["last_error"] = None
-                rt["last_error_time"] = None
-                rt["rate_limited_until"] = None
-                rt["circuit_state"] = "closed"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-                rt["invalid_streak"] = 0
-                return {"index": idx, "key_id": key_id, "status": "ok", "message": "API Key 可用"}
-            if resp.status_code == 401:
-                rt["is_valid"] = False
-                rt["last_error"] = "401 Unauthorized"
-                rt["last_error_time"] = now_iso
-                rt["rate_limited_until"] = None
-                return {"index": idx, "key_id": key_id, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
-            if resp.status_code == 429:
-                rt["is_valid"] = True
-                rt["last_error"] = "429 Rate Limited"
-                rt["last_error_time"] = now_iso
-                rt["rate_limited_until"] = None
-                return {"index": idx, "key_id": key_id, "status": "rate_limited", "message": f"限速中: {body}"}
-            rt["is_valid"] = True
-            rt["last_error"] = f"{resp.status_code} {body}"
-            rt["last_error_time"] = now_iso
-            rt["rate_limited_until"] = None
-            return {"index": idx, "key_id": key_id, "status": "error",
-                    "message": f"API 返回 {resp.status_code}: {body}"}
-        except httpx.TimeoutException:
-            rt["is_valid"] = True
-            rt["last_error"] = "network: timeout"
-            rt["last_error_time"] = now_iso
-            rt["rate_limited_until"] = None
-            return {"index": idx, "key_id": key_id, "status": "error", "message": "请求超时（30s）"}
-        except Exception as e:
-            msg = str(e)[:160]
-            rt["is_valid"] = True
-            rt["last_error"] = f"network: {msg}"
-            rt["last_error_time"] = now_iso
-            rt["rate_limited_until"] = None
-            return {"index": idx, "key_id": key_id, "status": "error", "message": f"请求失败: {msg}"}
-
-    results = await asyncio.gather(*[_test_one(i, r) for i, r in enumerate(pool.refs)])
-    results = sorted(results, key=lambda r: r["index"])
+    # 同一 pool 内重复引用的 key 只测一次（按 key_id 去重），结果按 ref 顺序展开
+    keys_in_order: list = []
+    seen_set = set()
+    for ref in pool.refs:
+        kid = ref.get("key_id")
+        if kid and kid not in seen_set:
+            seen_set.add(kid)
+            keys_in_order.append(kid)
+    tested = await asyncio.gather(*[_test_key(gateway, kid) for kid in keys_in_order])
+    by_id = {r["key_id"]: r for r in tested}
+    results = []
+    for i, ref in enumerate(pool.refs):
+        r = by_id[ref.get("key_id")]
+        results.append({"index": i, **r})
     gateway._notify()
     _log_action("test_api_keys", "tier", tier, {"results": results})
     return {"results": results}

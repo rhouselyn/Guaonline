@@ -18,7 +18,7 @@ export default function AdminApiKeys() {
   const [activeTier, setActiveTier] = useState('free')
   const [activeSub, setActiveSub] = useState('sentence')
   const [keyStatuses, setKeyStatuses] = useState({})  // {sig: [{index, key_id, status, ...}]}
-  const [testing, setTesting] = useState(null)
+  const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [interval, setInterval_] = useState(0.1)
   const [batchSize, setBatchSize] = useState(5)
@@ -212,21 +212,30 @@ export default function AdminApiKeys() {
     await persistRefs(activeTier, activeSub, newConfigs, pool.active_index || 0)
   }
 
-  // 测试：先持久化当前引用，再调测试
-  const testTier = async (tier, sub) => {
-    const sig = poolSig(tier, sub)
-    const pool = tierKeys[tier]?.[sub]
-    if (pool) await persistRefs(tier, sub, pool.configs, pool.active_index || 0)
-    setTesting(sig)
+  // 测试：先持久化当前 pool 引用（确保当前页改动被测到），再测所有 key（每个 key_id 只测一次），
+  // 测完重载所有 pool 状态，所有页面都更新。
+  const testAll = async () => {
+    const pool = tierKeys[activeTier]?.[activeSub]
+    if (pool) await persistRefs(activeTier, activeSub, pool.configs, pool.active_index || 0)
+    setTesting(true)
     setTestResult(null)
     try {
-      const result = await adminApi.testApiKey(tier, sub)
-      setTestResult({ sig, results: result.results || [result] })
-      loadKeyStatuses(tier, sub)
+      const result = await adminApi.testAllKeys()
+      setTestResult({ results: result.results || [], count: result.count || 0 })
+      // 重载所有 pool 的状态，让所有 tier/sub 页面都更新到最新测试结果
+      for (const tier of TIERS) {
+        const tierData = tierKeys[tier]
+        if (!tierData) continue
+        for (const sp of SUB_POOLS) {
+          if ((tierData[sp.key]?.configs || []).length > 0) {
+            await loadKeyStatuses(tier, sp.key)
+          }
+        }
+      }
     } catch (e) {
-      setTestResult({ sig, results: [{ index: 0, status: 'error', message: e.message }] })
+      setTestResult({ results: [], count: 0, error: e.message })
     } finally {
-      setTesting(null)
+      setTesting(false)
     }
   }
 
@@ -298,22 +307,34 @@ export default function AdminApiKeys() {
               title={_refClipboard ? `剪贴板有引用配置` : '剪贴板为空'}>
               粘贴引用
             </button>
-            <button onClick={() => testTier(activeTier, activeSub)} disabled={testing === currentSig}
-              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50">
-              {testing === currentSig ? '测试中...' : '测试'}
+            <button onClick={testAll} disabled={testing}
+              className="px-3 py-1 bg-[#c9a96e]/20 text-[#c9a96e] rounded text-sm hover:bg-[#c9a96e]/30 disabled:opacity-50"
+              title="测试所有 tier/sub 出现过的所有 Key（每个 key 只测一次，结果同步到所有页面）">
+              {testing ? '测试中...' : '测试所有'}
             </button>
             <button onClick={openAddModal} className="px-3 py-1 bg-[#c9a96e] text-[#1a1a2e] rounded text-sm font-bold">+ 添加</button>
           </div>
         </div>
 
-        {testResult && testResult.sig === currentSig && (
+        {testResult && (
           <div className="mb-4 p-2 rounded text-sm bg-[#1a1a2e] border border-[#c9a96e]/20 space-y-1">
-            <div className="text-[#e8d5b7]/60 text-xs">测试结果（共 {testResult.results.length} 个 Key）：</div>
-            {testResult.results.map(r => (
-              <div key={r.index} className={r.status === 'ok' ? 'text-green-400' : r.status === 'empty' ? 'text-gray-400' : 'text-red-400'}>
-                Key #{r.index + 1}：{r.message}
-              </div>
-            ))}
+            <div className="text-[#e8d5b7]/60 text-xs">
+              测试结果（共 {testResult.count} 个 Key，结果已同步到所有 tier/sub 页面）：
+            </div>
+            {testResult.error && <div className="text-red-400">测试失败：{testResult.error}</div>}
+            {testResult.results.map(r => {
+              const k = keys[r.key_id] || {}
+              const preview = k.api_key ? (k.api_key.slice(0, 12) + '...') : '(未配置)'
+              const color = r.status === 'ok' ? 'text-green-400'
+                : r.status === 'empty' ? 'text-gray-400'
+                : r.status === 'rate_limited' ? 'text-yellow-400'
+                : 'text-red-400'
+              return (
+                <div key={r.key_id} className={color}>
+                  {preview} · {k.model || '-'}：{r.message}
+                </div>
+              )
+            })}
           </div>
         )}
 
