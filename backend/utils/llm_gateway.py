@@ -26,7 +26,8 @@ GLOBAL_SETTINGS_FILE = str(__import__('config').DATA_DIR / "global_settings.json
 
 # 熔断器参数
 CIRCUIT_FAIL_THRESHOLD = 3      # 连续失败 N 次进 open
-CIRCUIT_COOLDOWN_401 = 300      # 401 阻塞 5min（key 失效，直接 open）
+CIRCUIT_COOLDOWN_401 = 300      # 401 首次阻塞 5min（key 失效，直接 open）
+CIRCUIT_COOLDOWN_401_MAX = 3600 # 401 升级封禁上限 1h（欠费 key 不会自愈，逐次翻倍到上限）
 CIRCUIT_COOLDOWN_5XX = 60       # 5xx 阻塞 60s（临时故障）
 CIRCUIT_COOLDOWN_NET = 30       # 网络错阻塞 30s
 
@@ -283,6 +284,7 @@ class LLMGateway:
                     "circuit_state": "closed",   # closed | open | half_open
                     "fail_count": 0,              # 连续失败次数（成功清零）
                     "half_open_probed": False,    # half-open 阶段是否已放过探测请求
+                    "invalid_streak": 0,          # 连续 401 次数（成功清零，用于升级封禁时长）
                 }
                 self.key_runtime[key_id] = rt
             return rt
@@ -350,6 +352,7 @@ class LLMGateway:
             rt["circuit_state"] = "closed"
             rt["fail_count"] = 0
             rt["half_open_probed"] = False
+            rt["invalid_streak"] = 0
         self._notify()
 
     def _mark_key_rate_limited(self, key_id, retry_after: Optional[int] = None):
@@ -370,11 +373,18 @@ class LLMGateway:
         self._notify()
 
     def _mark_key_invalid(self, key_id):
-        """401：key 失效，直接熔断 open 阻塞 5min。"""
+        """401：key 失效/欠费，熔断 open 并升级封禁。
+
+        欠费 key 不会自愈，反复每 5min 探测一次是浪费：按连续 401 次数逐次翻倍
+        cooldown（5min→10min→20min→40min→…），封顶 1h，避免死 key 被高频探测。
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._runtime_lock:
             rt = self._ensure_runtime(key_id)
-            rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_401
+            rt["invalid_streak"] = rt.get("invalid_streak", 0) + 1
+            cooldown = CIRCUIT_COOLDOWN_401 * (2 ** (rt["invalid_streak"] - 1))
+            cooldown = min(cooldown, CIRCUIT_COOLDOWN_401_MAX)
+            rt["rate_limited_until"] = time.time() + cooldown
             rt["is_valid"] = False
             rt["last_error"] = "401 Unauthorized"
             rt["last_error_time"] = now_iso
@@ -496,8 +506,18 @@ class LLMGateway:
         if not result:
             if not pool.has_any_usable_key(self):
                 raise Exception("服务暂时不可用，所有 Key 均已禁用，请在管理面板启用至少一个 Key")
-            print(f"[GATEWAY] --- all keys blocked, wait {pool.interval}s (admin interval) then retry tier={tier} type={request_type}")
-            await asyncio.sleep(pool.interval)
+            # 所有 key 都在熔断阻塞期 → 等到最近一个 key 恢复时刻，而不是每秒空转重试。
+            # 单次等待上限 60s：长封禁时仍能周期性回到 is_all_failed_too_long() 截止判定，
+            # 保证 10 分钟总截止兜底生效。
+            nxt = pool.next_available_time(self)
+            now = time.time()
+            if nxt is None or nxt <= now:
+                # 没有会自动恢复的 key（全部为永久/无恢复时间封禁）→ 停止尝试，等管理员解封
+                raise Exception("服务暂时不可用，所有 Key 均已熔断且无自动恢复时间，请在管理面板测试/解封后重试")
+            wait = min(nxt - now, 60)
+            print(f"[GATEWAY] --- all keys blocked, wait {wait:.1f}s until next recovery tier={tier} type={request_type}")
+            if wait > 0:
+                await asyncio.sleep(wait)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=_max_tokens_eff)
 
         config, idx = result

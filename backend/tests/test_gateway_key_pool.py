@@ -274,6 +274,47 @@ def test_circuit_401_directly_opens():
     assert rt["rate_limited_until"] > time.time() + 290, rt  # 300s
 
 
+def test_circuit_401_escalates_on_repeated_failures():
+    """连续 401 升级封禁时长：5min → 10min → 20min → 40min，封顶 1h。
+
+    欠费 key 不会自愈，反复每 5min 探测是浪费，故每次 401 翻倍 cooldown。
+    成功一次后 invalid_streak 清零，回到 5min。
+    """
+    keys = {"k1": _kdef("k1", "sk-1")}
+    gw = _setup(_build_data(keys, [_ref("k1")]))
+    g = gw.gateway
+    pool = g.pools["free"]["sentence"]
+    rt = g._ensure_runtime("k1")
+
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 1
+    assert 290 < rt["rate_limited_until"] - time.time() < 305  # 5min
+
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 2
+    assert 590 < rt["rate_limited_until"] - time.time() < 605  # 10min
+
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 3
+    assert 1190 < rt["rate_limited_until"] - time.time() < 1205  # 20min
+
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 4
+    assert 2390 < rt["rate_limited_until"] - time.time() < 2405  # 40min
+
+    # 第 5 次本应 80min，被 1h 上限截断
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 5
+    assert 3590 < rt["rate_limited_until"] - time.time() < 3605  # cap 1h
+
+    # 成功一次 → streak 清零，下次 401 回到 5min
+    pool.mark_complete(g, 0)
+    assert rt["invalid_streak"] == 0
+    pool.mark_invalid(g, 0)
+    assert rt["invalid_streak"] == 1
+    assert 290 < rt["rate_limited_until"] - time.time() < 305
+
+
 # ── 3. Retry-After 尊重 ─────────────────────────────────────
 
 def test_rate_limited_with_retry_after_blocks():

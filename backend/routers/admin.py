@@ -303,6 +303,10 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
                 rt["last_error"] = None
                 rt["last_error_time"] = None
                 rt["rate_limited_until"] = None
+                rt["circuit_state"] = "closed"
+                rt["fail_count"] = 0
+                rt["half_open_probed"] = False
+                rt["invalid_streak"] = 0
                 return {"index": idx, "key_id": key_id, "status": "ok", "message": "API Key 可用"}
             if resp.status_code == 401:
                 rt["is_valid"] = False
