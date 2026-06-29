@@ -30,6 +30,8 @@ export default function AdminApiKeys() {
   const [editModal, setEditModal] = useState({ open: false, keyId: null, form: null, refCount: 0, saving: false })
   // 添加 key 的弹窗（mode: 'choose' | 'new' | 'existing'）
   const [addModal, setAddModal] = useState({ open: false, mode: 'choose', newForm: null, selectedKeyId: null })
+  // 删除引用的确认弹窗（防止误点）
+  const [confirmDelete, setConfirmDelete] = useState(null)  // {tier, sub, idx}
 
   const poolSig = (tier, sub) => `${tier}:${sub}`
 
@@ -74,13 +76,16 @@ export default function AdminApiKeys() {
     setTimeout(() => setSettingsSaved(false), 2000)
   }
 
-  // 计算某 key 被多少 pool 引用（供"共享 N 处"标记）
+  // 计算某 key 被多少个 pool（唯一 tier/sub）引用（供"共享 N 处"标记）。
+  // 同一个 pool 内重复引用同一 key 只算 1 处，避免 paste 重复条目导致计数虚高。
   const countKeyRefs = (keyId) => {
-    let n = 0
+    const seen = new Set()
     for (const tier in tierKeys) for (const sub in tierKeys[tier]) {
-      n += (tierKeys[tier][sub].configs || []).filter(r => r.key_id === keyId).length
+      if ((tierKeys[tier][sub].configs || []).some(r => r.key_id === keyId)) {
+        seen.add(`${tier}:${sub}`)
+      }
     }
-    return n
+    return seen.size
   }
 
   // 持久化某 pool 的引用列表（结构性操作：增删/排序/粘贴/字段改动都走这里）
@@ -380,7 +385,15 @@ export default function AdminApiKeys() {
                   className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm"
                   title="SWRR 权重：数值越大被选中概率越高（默认 1）" />
               </div>
-              <button onClick={() => { updateRefField(activeTier, activeSub, i, 'disabled', !ref.disabled); commitRefField(activeTier, activeSub) }}
+              <button onClick={() => {
+                // 直接计算新 configs 并传给 persistRefs，避免 commitRefField 读到 setTierKeys 之前的旧状态
+                const newConfigs = currentPool.configs.map((r, j) => j === i ? { ...r, disabled: !ref.disabled } : r)
+                setTierKeys(prev => ({
+                  ...prev,
+                  [activeTier]: { ...prev[activeTier], [activeSub]: { ...prev[activeTier][activeSub], configs: newConfigs } }
+                }))
+                persistRefs(activeTier, activeSub, newConfigs, currentPool.active_index || 0)
+              }}
                 className={`px-2 py-1 rounded text-xs font-bold ${ref.disabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
                 title={ref.disabled ? '点击启用' : '点击禁用（仅此池，不影响其它池）'}>
                 {ref.disabled ? '已禁用' : '启用中'}
@@ -397,7 +410,8 @@ export default function AdminApiKeys() {
                 title="编辑此 Key 的全局属性（api_key/base_url/model/价格），改动会同步到所有引用处">
                 编辑
               </button>
-              <button onClick={() => removeRef(activeTier, activeSub, i)} className="text-red-400 text-sm px-2 py-1" title="移除此池对该 key 的引用（不删除全局 key）">删除引用</button>
+              <button onClick={() => setConfirmDelete({ tier: activeTier, sub: activeSub, idx: i })}
+                className="text-red-400 text-sm px-2 py-1 hover:bg-red-900/20 rounded" title="移除此池对该 key 的引用（不删除全局 key）">删除引用</button>
             </div>
           )
         })}
@@ -525,6 +539,22 @@ export default function AdminApiKeys() {
                 <button onClick={() => setAddModal(m => ({ ...m, mode: 'choose' }))} className="px-4 py-2 text-[#e8d5b7]/60 text-sm">返回</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 删除引用确认弹窗 */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-[#16213e] rounded-lg p-6 border border-red-500/40 w-[420px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-red-400 font-bold mb-2">确认删除引用</h3>
+            <p className="text-[#e8d5b7]/80 text-sm mb-1">确定要移除此池对该 Key 的引用吗？</p>
+            <p className="text-[#e8d5b7]/50 text-xs mb-5">此操作只移除当前池的引用，不会删除全局 Key 定义。可随时重新添加。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-[#e8d5b7]/60 text-sm hover:text-[#e8d5b7]">取消</button>
+              <button onClick={() => { removeRef(confirmDelete.tier, confirmDelete.sub, confirmDelete.idx); setConfirmDelete(null) }}
+                className="px-4 py-2 bg-red-500 text-white rounded font-bold text-sm hover:bg-red-600">删除引用</button>
+            </div>
           </div>
         </div>
       )}

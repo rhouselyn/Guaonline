@@ -1,4 +1,4 @@
-"""统一 LLM 调用网关（引用语义模型 + SWRR + 熔断器 + Retry-After + 主动健康检查）。
+"""统一 LLM 调用网关（引用语义模型 + SWRR + 熔断器 + Retry-After）。
 
 key 是全局对象（有 id），不同 tier/sub 通过引用复用同一个 key。
 - key 核心属性（api_key/base_url/model/价格）全局共享
@@ -8,7 +8,6 @@ key 是全局对象（有 id），不同 tier/sub 通过引用复用同一个 ke
 调度算法：平滑加权轮询 SWRR（Nginx 经典算法），不可用的 key（disabled/熔断 open）不参与本轮。
 熔断器：closed → 连续失败 N 次 → open（阻塞 cooldown）→ 到期 → half_open（放 1 个探测）→ 成功 closed / 失败 open。
 Retry-After：429 带 Retry-After 头时按其值阻塞，否则只切 key 不阻塞。
-主动健康检查：后台线程定时探针，默认关闭（HEALTH_CHECK_ENABLED=1 开启）。
 """
 
 import time
@@ -30,11 +29,6 @@ CIRCUIT_FAIL_THRESHOLD = 3      # 连续失败 N 次进 open
 CIRCUIT_COOLDOWN_401 = 300      # 401 阻塞 5min（key 失效，直接 open）
 CIRCUIT_COOLDOWN_5XX = 60       # 5xx 阻塞 60s（临时故障）
 CIRCUIT_COOLDOWN_NET = 30       # 网络错阻塞 30s
-
-# 健康检查
-HEALTH_CHECK_ENABLED = __import__('os').environ.get("HEALTH_CHECK_ENABLED", "") == "1"
-HEALTH_CHECK_INTERVAL = 60      # 每 60s 探针一轮
-HEALTH_CHECK_TIMEOUT = 15.0
 
 
 def _load_global_settings() -> dict:
@@ -271,11 +265,7 @@ class LLMGateway:
         self.key_runtime: Dict[str, dict] = {}
         self._runtime_lock = threading.RLock()  # 可重入
         self._status_event = None
-        self._health_thread = None
-        self._health_stop = threading.Event()
         self._reload_all()
-        if HEALTH_CHECK_ENABLED:
-            self.start_health_check()
 
     def _ensure_runtime(self, key_id) -> dict:
         """懒创建某 key 的运行时状态（含熔断器字段）。"""
@@ -440,95 +430,6 @@ class LLMGateway:
         with self._runtime_lock:
             rt = self.key_runtime.get(key_id)
             return bool(rt and rt.get("active_in_flight", 0) > 0)
-
-    # ── 主动健康检查 ──────────────────────────────────────
-
-    def start_health_check(self):
-        """启动后台健康检查线程（幂等）。"""
-        with self._runtime_lock:
-            if self._health_thread is not None and self._health_thread.is_alive():
-                return
-            self._health_stop.clear()
-            t = threading.Thread(target=self._health_check_loop, daemon=True, name="llm-health")
-            self._health_thread = t
-            t.start()
-
-    def stop_health_check(self):
-        self._health_stop.set()
-
-    def _health_check_loop(self):
-        while not self._health_stop.is_set():
-            # 启动后先等一个周期，避免与启动并发
-            if self._health_stop.wait(HEALTH_CHECK_INTERVAL):
-                break
-            try:
-                self._run_health_checks()
-            except Exception as e:
-                print(f"[HEALTH] check loop error: {e}")
-
-    def _run_health_checks(self):
-        """对所有 key 发探针。探针失败更新 last_error，401/429+Retry-After 触发熔断。"""
-        for key_id, kdef in list(self.key_defs.items()):
-            try:
-                self._probe_key(key_id, kdef)
-            except Exception as e:
-                print(f"[HEALTH] probe {key_id} error: {e}")
-
-    def _probe_key(self, key_id, kdef):
-        api_key = kdef.get("api_key", "")
-        if not api_key:
-            return
-        base_url = kdef.get("base_url", "https://api.openai.com/v1")
-        url = f"{base_url.rstrip('/')}/chat/completions"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"model": kdef.get("model", "gpt-4o-mini"),
-                   "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 1}
-        now_iso = datetime.now(timezone.utc).isoformat()
-        try:
-            with httpx.Client(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                resp = client.post(url, headers=headers, json=payload)
-            with self._runtime_lock:
-                rt = self._ensure_runtime(key_id)
-                if resp.status_code == 200:
-                    # 探针成功：清 last_error，但不强行复位熔断（让真实请求管理状态机）
-                    rt["last_error"] = None
-                    rt["last_error_time"] = None
-                    rt["is_valid"] = True
-                elif resp.status_code == 401:
-                    rt["is_valid"] = False
-                    rt["last_error"] = "401 Unauthorized (probe)"
-                    rt["last_error_time"] = now_iso
-                    rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_401
-                    rt["circuit_state"] = "open"
-                    rt["fail_count"] = 0
-                    rt["half_open_probed"] = False
-                elif resp.status_code == 429:
-                    retry_after = _parse_retry_after(resp.headers.get("retry-after"))
-                    rt["last_error"] = "429 Rate Limited (probe)"
-                    rt["last_error_time"] = now_iso
-                    if retry_after and retry_after > 0:
-                        rt["rate_limited_until"] = time.time() + retry_after
-                        rt["circuit_state"] = "open"
-                        rt["fail_count"] = 0
-                        rt["half_open_probed"] = False
-                elif resp.status_code >= 500:
-                    rt["last_error"] = f"{resp.status_code} (probe)"
-                    rt["last_error_time"] = now_iso
-                    # 探针 5xx 不直接熔断，只记录（避免探针误判）
-                else:
-                    rt["last_error"] = f"{resp.status_code} (probe)"
-                    rt["last_error_time"] = now_iso
-        except httpx.TimeoutException:
-            with self._runtime_lock:
-                rt = self._ensure_runtime(key_id)
-                rt["last_error"] = "network: timeout (probe)"
-                rt["last_error_time"] = now_iso
-        except Exception as e:
-            with self._runtime_lock:
-                rt = self._ensure_runtime(key_id)
-                rt["last_error"] = f"network: {str(e)[:80]} (probe)"
-                rt["last_error_time"] = now_iso
-        self._notify()
 
     # ── 加载/重载 ─────────────────────────────────────────
 
