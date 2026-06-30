@@ -35,7 +35,8 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             # 翻译方向是 target_lang(母语) → source_lang(学习语言)
             source_lang_name = get_lang_name(source_lang)
             target_lang_name = get_lang_name(target_lang)
-            gateway.reload()
+            # 不在每次请求前 reload：admin 改 key 配置时已触发 gateway.reload()
+            # 这里再 reload 会重建 TierKeyPool、重置 SWRR 状态，导致每次都从第一个 key 开始（不轮换）
             messages = [
                 {
                     "role": "system",
@@ -56,7 +57,8 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             _preserve_gen = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", **_preserve_gen}
             source_lang_name = get_lang_name(source_lang)
-            gateway.reload()
+            # 不在每次请求前 reload：admin 改 key 配置时已触发 gateway.reload()
+            # 这里再 reload 会重建 TierKeyPool、重置 SWRR 状态，导致每次都从第一个 key 开始（不轮换）
             messages = [
                 {
                     "role": "system",
@@ -339,7 +341,8 @@ async def translate_text(request: dict, current_user: TokenData = Depends(requir
         source_lang_name = get_lang_name(source_lang)
         target_lang_name = get_lang_name(target_lang)
 
-        gateway.reload()
+        # 不在每次请求前 reload：admin 改 key 配置时已触发 gateway.reload()
+        # 这里再 reload 会重建 TierKeyPool、重置 SWRR 状态，导致每次都从第一个 key 开始（不轮换）
         messages = [
             {
                 "role": "system",
@@ -378,7 +381,8 @@ async def generate_text(request: dict, current_user: TokenData = Depends(require
 
         source_lang_name = get_lang_name(source_lang)
 
-        gateway.reload()
+        # 不在每次请求前 reload：admin 改 key 配置时已触发 gateway.reload()
+        # 这里再 reload 会重建 TierKeyPool、重置 SWRR 状态，导致每次都从第一个 key 开始（不轮换）
         messages = [
             {
                 "role": "system",

@@ -159,8 +159,9 @@ def list_key_defs() -> list:
 def create_key_def(api_key: str, base_url: str, model: str,
                    input_price_per_million: float = 0,
                    output_price_per_million: float = 0,
-                   title: str = "") -> str:
-    """新建全局 key，返回 id。"""
+                   title: str = "",
+                   capabilities: dict = None) -> str:
+    """新建全局 key，返回 id。capabilities 存该 key 支持的可选参数（探测后写入）。"""
     data = _load_data()
     kid = gen_key_id()
     data.setdefault("keys", {})[kid] = {
@@ -171,6 +172,7 @@ def create_key_def(api_key: str, base_url: str, model: str,
         "model": model,
         "input_price_per_million": input_price_per_million,
         "output_price_per_million": output_price_per_million,
+        "capabilities": capabilities or {},
     }
     _save_data(data)
     _reload_gateway()
@@ -184,7 +186,8 @@ def update_key_def(key_id: str, **fields):
     if key_id not in keys:
         raise ValueError(f"key {key_id} not found")
     kdef = keys[key_id]
-    for f in ("title", "api_key", "base_url", "model", "input_price_per_million", "output_price_per_million"):
+    for f in ("title", "api_key", "base_url", "model", "input_price_per_million",
+              "output_price_per_million", "capabilities"):
         if f in fields and fields[f] is not None:
             # 脱敏形式（带 *）的 api_key 视为未修改，保留原值
             if f == "api_key" and "*" in str(fields[f]):
@@ -233,6 +236,7 @@ def get_tier_keys() -> dict:
         k = kdef.get("api_key", "")
         keys[kid] = {
             "id": kid,
+            "title": kdef.get("title", ""),
             "api_key": _mask_key(k),
             "has_key": bool(k),
             "base_url": kdef.get("base_url", ""),

@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import time
+import asyncio
 import tempfile
 import importlib
 from unittest.mock import patch
@@ -290,6 +291,127 @@ def test_test_all_endpoint_route_not_swallowed_by_tier_param():
     with patch("httpx.AsyncClient", _FakeAsyncClient):
         resp = client.post("/api/admin/api-keys/test-all")
     assert resp.status_code == 200, resp.text
+
+
+# ── 8. 逐参数能力探测（从完整逐渐缩小） ───────────────────────
+
+def test_probe_enable_thinking_supported_first_try():
+    """第 1 次带 max_tokens + enable_thinking=False 直接 200 → 标记支持。"""
+    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
+    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    importlib.reload(gw_mod)
+    gw_mod.gateway._reload_all()
+
+    call_seq = []
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            call_seq.append(json)
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _Client):
+        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
+
+    assert caps == {"enable_thinking": True}, caps
+    # 只调用了 1 次（第 1 轮就成功）
+    assert len(call_seq) == 1, call_seq
+    assert call_seq[0].get("enable_thinking") is False
+
+
+def test_probe_enable_thinking_unsupported_explicit_error():
+    """第 1 次 400 + 错误明确提到 enable_thinking → 第 2 次不带该参 → 标记不支持。"""
+    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
+    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    importlib.reload(gw_mod)
+    gw_mod.gateway._reload_all()
+
+    call_seq = []
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            call_seq.append(json)
+            if "enable_thinking" in json:
+                return _FakeResp(400, "property 'enable_thinking' is unsupported")
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _Client):
+        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
+
+    assert caps == {"enable_thinking": False}, caps
+    # 调用了 2 次：第 1 次带 enable_thinking（400），第 2 次不带（200）
+    assert len(call_seq) == 2, call_seq
+    assert call_seq[0].get("enable_thinking") is False
+    assert "enable_thinking" not in call_seq[1]
+
+
+def test_probe_enable_thinking_unsupported_other_4xx():
+    """第 1 次 4xx 但错误没提 enable_thinking（如 max_tokens 问题）→ 标记不支持。"""
+    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
+    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    importlib.reload(gw_mod)
+    gw_mod.gateway._reload_all()
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            # 所有请求都返回 400，错误不提 enable_thinking（模拟 max_tokens 超限）
+            return _FakeResp(400, "max_tokens exceeds maximum")
+
+    with patch("httpx.AsyncClient", _Client):
+        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
+
+    assert caps == {"enable_thinking": False}, caps
+
+
+def test_test_key_probes_and_persists_capabilities():
+    """_test_key 200 后自动探测能力，并持久化到 key_defs。"""
+    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
+    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    importlib.reload(gw_mod)
+    gw_mod.gateway._reload_all()
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            # _test_key 第 1 次请求（不带 enable_thinking）成功；探测时第 2 次带 enable_thinking 也成功
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _Client):
+        result = asyncio.run(admin_mod._test_key(gw_mod.gateway, "k1"))
+
+    assert result["status"] == "ok", result
+    assert result["capabilities"] == {"enable_thinking": True}, result
+    # 持久化到 key_defs
+    saved = llm_api._load_data()["keys"]["k1"]["capabilities"]
+    assert saved == {"enable_thinking": True}, saved
+    # 运行时也更新
+    assert gw_mod.gateway.key_defs["k1"]["capabilities"] == {"enable_thinking": True}
 
 
 if __name__ == "__main__":
