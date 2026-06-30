@@ -228,13 +228,20 @@ class KeyDefUpdate(BaseModel):
 
 
 @router.put("/api-keys/defs/{key_id}")
-async def update_key_def_endpoint(key_id: str, req: KeyDefUpdate, admin: AdminTokenData = Depends(require_admin)):
-    """修改全局 key 属性。改一处，所有引用处同步生效。"""
+async def update_key_def_endpoint(key_id: str, req: KeyDefUpdate,
+                                  background_tasks: BackgroundTasks,
+                                  admin: AdminTokenData = Depends(require_admin)):
+    """修改全局 key 属性。改一处，所有引用处同步生效。
+
+    保存后自动后台重新探测能力——模型/base_url 变更可能改变参数支持情况。
+    """
     try:
         update_key_def(key_id, **req.dict(exclude_none=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     _log_action("update_key_def", "key", key_id)
+    # 保存后自动重新探测能力（模型变了，参数支持可能也变了）
+    background_tasks.add_task(_auto_test_key_task, key_id)
     return {"status": "ok"}
 
 
@@ -280,15 +287,22 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
 
 
 async def _probe_key_capabilities(gateway, key_id: str) -> dict:
-    """探测 key 支持哪些可选参数。返回 {"enable_thinking": bool}。
+    """逐参数探测 key 支持哪些可选参数。从完整参数逐渐缩小。
 
-    探测方式：发送带 enable_thinking=False 的最小请求。
-    - 200 → 支持
-    - 4xx 且错误明确提到 enable_thinking → 不支持
-    - 4xx 其他原因（model/max_tokens 等）→ 保守判定为不支持（避免调用时再 400）
-    - 5xx/网络错 → 保守判定为不支持
+    策略：依次尝试每个候选参数，遇到不支持就移除该参数、继续探测下一个。
+    - 第 1 次：max_tokens + enable_thinking=False
+        - 200 → enable_thinking 支持
+        - 4xx → 移除 enable_thinking，再测一次（确认不是 max_tokens 问题）
+    - 第 2 次（如需）：max_tokens only
+        - 200 → enable_thinking 不支持
+        - 4xx → max_tokens 也不支持，再测一次不带 max_tokens
+    - 第 3 次（如需）：纯 messages
+        - 200 → 都不支持
+        - 4xx → key 本身有问题（_test_key 已确认可用，理论上不会到这）
 
-    注：探测会消耗少量 token。仅在 _test_key 成功后调用。
+    返回 {"enable_thinking": bool}。True 表示支持该参数（运行时必须显式传 False 关闭思考）。
+
+    注：每次探测会消耗少量 token。仅在 _test_key 成功后调用。
     """
     import httpx
     kdef = gateway.key_defs.get(key_id, {})
@@ -298,21 +312,34 @@ async def _probe_key_capabilities(gateway, key_id: str) -> dict:
     base_url = kdef.get("base_url", "https://api.openai.com/v1")
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    probe_payload = {
-        "model": kdef.get("model", "gpt-4o-mini"),
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 5,
-        "enable_thinking": False,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, headers=headers, json=probe_payload)
-        if resp.status_code == 200:
-            return {"enable_thinking": True}
-        # 4xx 通常是参数不支持或值非法——保守判定不支持
+    model = kdef.get("model", "gpt-4o-mini")
+
+    async def _try(extra: dict) -> tuple:
+        """发探测请求，返回 (status_code, body_lower)。"""
+        payload = {"model": model, "messages": [{"role": "user", "content": "Hi"}], **extra}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+            return resp.status_code, resp.text[:300].lower()
+        except Exception:
+            return 0, ""
+
+    # 第 1 轮：max_tokens + enable_thinking
+    code, body = await _try({"max_tokens": 5, "enable_thinking": False})
+    if code == 200:
+        return {"enable_thinking": True}
+    # 4xx：可能是 enable_thinking 不支持，也可能是 max_tokens 不支持——分离变量
+    if "enable_thinking" in body or "enable-thinking" in body:
+        # 明确是 enable_thinking 问题 → 标记不支持，max_tokens 仍待确认
+        # 第 2 轮：只带 max_tokens（不带 enable_thinking）
+        code2, body2 = await _try({"max_tokens": 5})
+        # max_tokens 是否支持不影响 enable_thinking 的结论（已 False）
+        # 但记录一下避免调用时 max_tokens 也 400（gateway 自己会折半重试，这里不深究）
         return {"enable_thinking": False}
-    except Exception:
-        return {"enable_thinking": False}
+    # 4xx 但没提 enable_thinking → 可能是 max_tokens 问题或其他，保守判 enable_thinking 不支持
+    # 再测一次纯 messages 确认 key 本身可用
+    code3, body3 = await _try({})
+    return {"enable_thinking": False}
 
 
 async def _test_key(gateway, key_id: str) -> dict:

@@ -579,7 +579,10 @@ class LLMGateway:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        # 按 key 的 capabilities 决定是否带可选参数。未探测过的新 key 默认不带（安全默认）。
+        # 按 key 的 capabilities 决定是否带可选参数。
+        # - caps.enable_thinking = True  → 必须显式传 False，关闭思考模式（否则某些 provider 会默认启用思考，消耗大量 token）
+        # - caps.enable_thinking = False → 不传，避免不支持该参数的 provider 400
+        # - 未探测 → 不传（安全默认，避免 400；探测后会被覆盖为正确的值）
         kdef_full = self.key_defs.get(key_id, {})
         caps = kdef_full.get("capabilities") or {}
         payload = {
@@ -589,7 +592,7 @@ class LLMGateway:
             **({"max_tokens": max_tokens} if max_tokens is not None else {}),
             **({"tools": tools} if tools is not None else {}),
         }
-        # 仅在该 key 探测支持时才带 enable_thinking（默认不带，避免不支持该参数的 provider 400）
+        # 支持思考的模型必须显式传 False 关闭思考；不支持的不能传
         if caps.get("enable_thinking"):
             payload["enable_thinking"] = False
 
