@@ -592,6 +592,140 @@ def test_mark_complete_clears_error_state():
     assert pool.consecutive_fail_start is None
 
 
+# ── 7. reload() 不再重置 SWRR 状态 ─────────────────────────
+
+def test_reload_preserves_swrr_state_when_refs_unchanged():
+    """reload() 时若 refs 内容未变，应保留旧 pool 对象（包括 SWRR 状态）。
+
+    回归：之前 _reload_all 总是创建新 TierKeyPool，每次 admin 改配置都把
+    swrr_weights 归零，导致每次都从第一个 key 开始（不轮换）。
+    """
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
+    pool = gw.gateway.pools["free"]["sentence"]
+    # 制造 SWRR 状态：选 k1 → swrr_weights=[-1, 1]
+    cfg, idx = pool.get_current(gw.gateway); pool.mark_complete(gw.gateway, idx)
+    assert pool.swrr_weights == [-1, 1], pool.swrr_weights
+    # reload（refs 未变）
+    gw.gateway.reload()
+    new_pool = gw.gateway.pools["free"]["sentence"]
+    # 同一对象引用 + SWRR 状态保留
+    assert new_pool is pool, "refs 未变时应保留旧 pool 对象"
+    assert new_pool.swrr_weights == [-1, 1], new_pool.swrr_weights
+
+
+def test_reload_preserves_swrr_state_when_refs_reordered():
+    """reload() 时若 refs 顺序变了（拖拽重排），应保留 SWRR 状态。
+
+    refs 内容变化时按 _rebuild_preserving_state 复用 swrr_weights，避免
+    重置轮询状态。SWRR 算法不依赖 refs 内容稳定，只依赖位置索引。
+    """
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
+    pool = gw.gateway.pools["free"]["sentence"]
+    cfg, idx = pool.get_current(gw.gateway); pool.mark_complete(gw.gateway, idx)
+    assert pool.swrr_weights == [-1, 1]
+    # 拖拽重排：把 k2 移到 k1 前面
+    import llm_api
+    llm_api.update_tier_keys("free", "sentence", [
+        {"key_id": "k2", "max_tokens": None, "disabled": False, "weight": 1},
+        {"key_id": "k1", "max_tokens": None, "disabled": False, "weight": 1},
+    ], 0)
+    # reload 后 SWRR 状态应保留
+    new_pool = gw.gateway.pools["free"]["sentence"]
+    assert new_pool.swrr_weights == [-1, 1], new_pool.swrr_weights
+
+
+def test_reload_preserves_swrr_state_when_refs_shrink():
+    """reload() 时若 refs 变少（删除引用），按新长度截断 swrr_weights。"""
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2"), "k3": _kdef("k3", "sk-3")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2"), _ref("k3")]))
+    pool = gw.gateway.pools["free"]["sentence"]
+    cfg, idx = pool.get_current(gw.gateway); pool.mark_complete(gw.gateway, idx)
+    assert len(pool.swrr_weights) == 3
+    # 删除 k3 引用
+    import llm_api
+    llm_api.update_tier_keys("free", "sentence", [
+        {"key_id": "k1", "max_tokens": None, "disabled": False, "weight": 1},
+        {"key_id": "k2", "max_tokens": None, "disabled": False, "weight": 1},
+    ], 0)
+    new_pool = gw.gateway.pools["free"]["sentence"]
+    assert len(new_pool.swrr_weights) == 2, new_pool.swrr_weights
+    # 前 2 个状态保留（截断前缀）
+    assert new_pool.swrr_weights[:2] == pool.swrr_weights[:2], new_pool.swrr_weights
+
+
+def test_reload_preserves_active_count_and_consecutive_fail():
+    """reload() 时若 refs 变了，应保留 active_count 和 consecutive_fail_start。
+
+    避免正在执行中的请求状态丢失。
+    """
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
+    pool = gw.gateway.pools["free"]["sentence"]
+    # 制造 in-flight：get_current 占用 1 个但不 mark_complete（模拟调用进行中）
+    pool.get_current(gw.gateway)
+    assert pool.active_count == 1, pool.active_count
+    # 制造 consecutive_fail_start：在另一个 idx 上 mark_server_error（mark 会 active_count-=1）
+    pool.mark_server_error(gw.gateway, 0)
+    assert pool.consecutive_fail_start is not None
+    fail_start = pool.consecutive_fail_start
+    # 再次占用一个，让 active_count=1（前面那次被 mark 抵消了）
+    pool.get_current(gw.gateway)
+    assert pool.active_count == 1, pool.active_count
+    # 修改 refs 触发 reload
+    import llm_api
+    llm_api.update_tier_keys("free", "sentence", [
+        {"key_id": "k1", "max_tokens": 8192, "disabled": False, "weight": 1},
+        {"key_id": "k2", "max_tokens": 8192, "disabled": False, "weight": 1},
+    ], 0)
+    new_pool = gw.gateway.pools["free"]["sentence"]
+    assert new_pool.active_count == 1, "active_count 应保留"
+    assert new_pool.consecutive_fail_start == fail_start, "consecutive_fail_start 应保留"
+
+
+# ── 8. reload() 后 SSE 通知被触发 ───────────────────────────
+
+def test_reload_triggers_notify():
+    """reload() 后应调用 _notify() 让 SSE 推送新状态。
+
+    回归：之前 reload() 只调 _reload_all()，没调 _notify()，导致
+    admin 改完配置（如禁用某 key）后前端 SSE 不推送，状态显示滞后。
+    """
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
+    import asyncio
+    event = gw.gateway.get_status_event()
+    # event 初始是 cleared
+    assert not event.is_set()
+    # reload 后应 set
+    gw.gateway.reload()
+    assert event.is_set(), "reload() 后应通过 _notify() 触发 SSE 事件"
+
+
+# ── 9. 禁用某 key 后调度切到其他可用 key ───────────────────
+
+def test_disable_one_key_switches_to_other():
+    """禁用 key 0 后，调度应只用 key 1（模拟 admin 点禁用按钮的场景）。"""
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
+    g = gw.gateway
+    pool = g.pools["free"]["sentence"]
+    # 禁用 k1（模拟 admin 通过 update_tier_keys 改 disabled）
+    import llm_api
+    llm_api.update_tier_keys("free", "sentence", [
+        {"key_id": "k1", "max_tokens": None, "disabled": True, "weight": 1},
+        {"key_id": "k2", "max_tokens": None, "disabled": False, "weight": 1},
+    ], 0)
+    new_pool = g.pools["free"]["sentence"]
+    # 多次选 key 都应只选 k2（idx=1）
+    for _ in range(5):
+        cfg, idx = new_pool.get_current(g)
+        assert idx == 1, idx
+        assert cfg["api_key"] == "sk-2"
+        new_pool.mark_complete(g, idx)
+
+
 if __name__ == "__main__":
     import inspect, sys
     _self = sys.modules[__name__]

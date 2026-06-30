@@ -72,7 +72,6 @@ class TierKeyPool:
         self.tier = tier
         self.sub = sub
         self.refs = refs  # [{key_id, max_tokens, disabled, weight}]
-        self.current_index = 0
         self.lock = threading.Lock()
         self.batch_size = batch_size
         self.interval = interval
@@ -81,6 +80,25 @@ class TierKeyPool:
         self.consecutive_fail_start = None  # per-pool 连续失败起点
         # SWRR 状态：每个 ref 的 current_weight
         self.swrr_weights: List[int] = []
+
+    @classmethod
+    def _rebuild_preserving_state(cls, old_pool: "TierKeyPool", refs: list, batch_size: int, interval: float) -> "TierKeyPool":
+        """构造新 pool 但保留旧 SWRR/active_count/consecutive_fail 状态。
+
+        refs 长度变化时按 min(old, new) 复用 swrr_weights，避免每次 admin 改配置都重置轮询状态。
+        refs 内容（key_id 顺序）变化时也保留——SWRR 算法不依赖 refs 内容稳定，只依赖位置索引。
+        """
+        new_pool = cls(old_pool.tier, old_pool.sub, refs, batch_size, interval)
+        # 复用 SWRR 状态：长度不一致时按新 refs 长度截断/补零（_sync_swrr 兜底）
+        if old_pool.swrr_weights:
+            if len(refs) >= len(old_pool.swrr_weights):
+                new_pool.swrr_weights = list(old_pool.swrr_weights) + [0] * (len(refs) - len(old_pool.swrr_weights))
+            else:
+                new_pool.swrr_weights = list(old_pool.swrr_weights[:len(refs)])
+        new_pool.active_count = old_pool.active_count
+        new_pool.last_switch_time = old_pool.last_switch_time
+        new_pool.consecutive_fail_start = old_pool.consecutive_fail_start
+        return new_pool
 
     def _ref_weight(self, ref) -> int:
         w = ref.get("weight")
@@ -160,7 +178,6 @@ class TierKeyPool:
             if self.active_count <= 0:
                 self.active_count = 0
                 self.last_switch_time = time.time()
-                self.current_index += 1
         gateway._mark_key_complete(key_id)
 
     def _mark_fail(self, gateway, idx, fail_type: str, retry_after: Optional[int] = None):
@@ -172,7 +189,6 @@ class TierKeyPool:
                 self.active_count = 0
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
-            self.current_index += 1
         if fail_type == "rate_limited":
             gateway._mark_key_rate_limited(key_id, retry_after=retry_after)
         elif fail_type == "invalid":
@@ -444,23 +460,44 @@ class LLMGateway:
     # ── 加载/重载 ─────────────────────────────────────────
 
     def _reload_all(self):
+        """增量重载：refs 未变的 pool 完全保留旧对象；refs 变了的 pool 用
+        _rebuild_preserving_state 保留 SWRR/active_count/consecutive_fail_start，
+        避免 admin 改配置（禁用/排序/增删引用）就重置轮询状态。
+
+        key_defs / batch_size / interval 总是刷新（这些不影响 SWRR 状态）。
+        """
         data = _load_data()
         self.key_defs = data.get("keys", {})
         settings = _load_global_settings()
         batch_size = settings.get("batch_size", 3)
         interval = settings.get("request_interval", 1.0)
+        old_pools = self.pools or {}
         new_pools = {}
         for tier, raw_tier in data.get("tier_keys", {}).items():
             tier_pools = {}
+            old_tier = old_pools.get(tier, {})
             for sub in SUB_POOLS:
                 sub_data = raw_tier.get(sub) or {}
                 refs = sub_data.get("configs", [])
-                tier_pools[sub] = TierKeyPool(tier, sub, refs, batch_size, interval)
+                old_pool = old_tier.get(sub)
+                if old_pool is not None and old_pool.refs is refs:
+                    # 同一引用对象（理论上不会发生，但留作快速路径）
+                    tier_pools[sub] = old_pool
+                elif old_pool is not None and old_pool.refs == refs and old_pool.batch_size == batch_size and old_pool.interval == interval:
+                    # refs 内容完全没变 → 保留旧 pool（包括 SWRR 状态）
+                    tier_pools[sub] = old_pool
+                elif old_pool is not None:
+                    # refs 变了 → 重建但保留状态
+                    tier_pools[sub] = TierKeyPool._rebuild_preserving_state(old_pool, refs, batch_size, interval)
+                else:
+                    tier_pools[sub] = TierKeyPool(tier, sub, refs, batch_size, interval)
             new_pools[tier] = tier_pools
         self.pools = new_pools
 
     def reload(self):
+        """重载配置并通知 SSE 订阅者状态已变化。"""
         self._reload_all()
+        self._notify()
 
     def _resolve_pool(self, tier: str, request_type: str) -> Optional[TierKeyPool]:
         sub = self._SUB_BY_REQUEST_TYPE.get(request_type, self._DEFAULT_SUB)
