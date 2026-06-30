@@ -1139,7 +1139,12 @@ async def background_word_gen(file_id: str):
         if word_to_gen.lower() in {w.lower() for w in processing}:
             continue
 
-        asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid, tier=tier))
+        # 关键：必须强引用 task，否则 asyncio 只持弱引用，GC 会在 task 执行中途把它回收掉
+        # （表现为：派发出去后既没有 [GATEWAY] START 也没有 [ERROR]，task 静默消失）
+        tasks = state.setdefault("tasks", set())
+        task = asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid, tier=tier))
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
         await asyncio.sleep(0.1)
 
     state["task"] = None
