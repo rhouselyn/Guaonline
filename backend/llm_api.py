@@ -233,6 +233,7 @@ def get_tier_keys() -> dict:
         k = kdef.get("api_key", "")
         keys[kid] = {
             "id": kid,
+            "title": kdef.get("title", ""),
             "api_key": _mask_key(k),
             "has_key": bool(k),
             "base_url": kdef.get("base_url", ""),
