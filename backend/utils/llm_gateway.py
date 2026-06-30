@@ -579,14 +579,19 @@ class LLMGateway:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        # 按 key 的 capabilities 决定是否带可选参数。未探测过的新 key 默认不带（安全默认）。
+        kdef_full = self.key_defs.get(key_id, {})
+        caps = kdef_full.get("capabilities") or {}
         payload = {
             "model": model,
             "messages": messages,
             **({"temperature": temperature} if temperature is not None else {}),
             **({"max_tokens": max_tokens} if max_tokens is not None else {}),
             **({"tools": tools} if tools is not None else {}),
-            "enable_thinking": False,
         }
+        # 仅在该 key 探测支持时才带 enable_thinking（默认不带，避免不支持该参数的 provider 400）
+        if caps.get("enable_thinking"):
+            payload["enable_thinking"] = False
 
         try:
             import time as _t
@@ -628,6 +633,18 @@ class LLMGateway:
             else:
                 body = resp.text[:300]
                 low = body.lower()
+                # 运行时回退：错误明确提到 enable_thinking 不支持 → 更新 caps + 同 key 重试不带该参
+                if "enable_thinking" in low or "enable-thinking" in low:
+                    print(f"[GATEWAY] enable_thinking 不被支持，更新 caps 并重试 key_id={key_id}")
+                    # 更新运行时 + 持久化（避免下次再 400）
+                    kdef_full["capabilities"] = {**caps, "enable_thinking": False}
+                    try:
+                        from llm_api import update_key_def
+                        update_key_def(key_id, capabilities=kdef_full["capabilities"])
+                    except Exception:
+                        pass
+                    pool.mark_complete(self, idx)
+                    return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
                 if "max_tokens" in low and ("非法" in body or "invalid" in low or "range" in low or "exceed" in low or "maximum" in low):
                     halved = max(eff // 2, 256)
                     if halved < eff:

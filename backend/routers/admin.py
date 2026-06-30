@@ -5,7 +5,7 @@ import json
 import asyncio
 import sqlite3
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -190,13 +190,32 @@ class KeyDefCreate(BaseModel):
 
 
 @router.post("/api-keys/defs")
-async def create_key_def_endpoint(req: KeyDefCreate, admin: AdminTokenData = Depends(require_admin)):
-    """新建全局 key。返回 id，可被任意 tier/sub 引用。"""
+async def create_key_def_endpoint(req: KeyDefCreate,
+                                  background_tasks: BackgroundTasks,
+                                  admin: AdminTokenData = Depends(require_admin)):
+    """新建全局 key。返回 id，可被任意 tier/sub 引用。
+
+    创建后自动后台触发一次完整测试（含能力探测），不阻塞响应。
+    测试结果通过 SSE 推送给前端。
+    """
     kid = create_key_def(req.api_key, req.base_url, req.model,
                          req.input_price_per_million, req.output_price_per_million,
                          title=req.title)
     _log_action("create_key_def", "key", kid, {"model": req.model, "title": req.title})
+    # 后台自动测试 + 能力探测（不阻塞响应）
+    background_tasks.add_task(_auto_test_key_task, kid)
     return {"status": "ok", "id": kid}
+
+
+async def _auto_test_key_task(key_id: str):
+    """添加 key 后自动跑一次测试 + 能力探测，结果通过 SSE 推送。"""
+    from utils.llm_gateway import gateway
+    try:
+        result = await _test_key(gateway, key_id)
+        gateway._notify()
+        print(f"[ADMIN] auto-test key {key_id}: {result.get('status')} caps={result.get('capabilities')}")
+    except Exception as e:
+        print(f"[ADMIN] auto-test failed for {key_id}: {e}")
 
 
 class KeyDefUpdate(BaseModel):
@@ -260,11 +279,49 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
     return {"status": "ok"}
 
 
+async def _probe_key_capabilities(gateway, key_id: str) -> dict:
+    """探测 key 支持哪些可选参数。返回 {"enable_thinking": bool}。
+
+    探测方式：发送带 enable_thinking=False 的最小请求。
+    - 200 → 支持
+    - 4xx 且错误明确提到 enable_thinking → 不支持
+    - 4xx 其他原因（model/max_tokens 等）→ 保守判定为不支持（避免调用时再 400）
+    - 5xx/网络错 → 保守判定为不支持
+
+    注：探测会消耗少量 token。仅在 _test_key 成功后调用。
+    """
+    import httpx
+    kdef = gateway.key_defs.get(key_id, {})
+    api_key = kdef.get("api_key", "")
+    if not api_key:
+        return {"enable_thinking": False}
+    base_url = kdef.get("base_url", "https://api.openai.com/v1")
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    probe_payload = {
+        "model": kdef.get("model", "gpt-4o-mini"),
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 5,
+        "enable_thinking": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, headers=headers, json=probe_payload)
+        if resp.status_code == 200:
+            return {"enable_thinking": True}
+        # 4xx 通常是参数不支持或值非法——保守判定不支持
+        return {"enable_thinking": False}
+    except Exception:
+        return {"enable_thinking": False}
+
+
 async def _test_key(gateway, key_id: str) -> dict:
     """按 key_id 测试一个全局 key，结果回写 gateway 全局运行时状态。
 
     测试只更新 key 的 is_valid/last_error/circuit_state（200 时复位），
     不切换 active_index，避免干扰真实流量。返回 {key_id, status, message}。
+
+    测试成功后自动探测能力（enable_thinking 等可选参数），写入 key_defs 持久化。
     """
     import httpx
     from datetime import datetime, timezone
@@ -297,7 +354,14 @@ async def _test_key(gateway, key_id: str) -> dict:
             rt["fail_count"] = 0
             rt["half_open_probed"] = False
             rt["invalid_streak"] = 0
-            return {"key_id": key_id, "status": "ok", "message": "API Key 可用"}
+            # 探测能力（enable_thinking 等可选参数），写入 key_defs 持久化
+            caps = await _probe_key_capabilities(gateway, key_id)
+            rt["capabilities"] = caps
+            try:
+                update_key_def(key_id, capabilities=caps)
+            except Exception:
+                pass  # 持久化失败不阻塞测试结果返回
+            return {"key_id": key_id, "status": "ok", "message": "API Key 可用", "capabilities": caps}
         if resp.status_code == 401:
             rt["is_valid"] = False
             rt["last_error"] = "401 Unauthorized"

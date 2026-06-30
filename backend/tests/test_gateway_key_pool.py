@@ -726,6 +726,138 @@ def test_disable_one_key_switches_to_other():
         new_pool.mark_complete(g, idx)
 
 
+# ── 10. capabilities 控制 enable_thinking 参数 ───────────────
+
+def test_gateway_no_enable_thinking_by_default():
+    """未探测过的新 key（无 capabilities）→ payload 不带 enable_thinking（安全默认）。
+
+    回归：之前 gateway 硬编码 "enable_thinking": False，对不支持该参数的
+    provider（Groq/OpenAI 等）直接 400。
+    """
+    keys = {"k1": _kdef("k1", "sk-1")}
+    gw = _setup(_build_data(keys, [_ref("k1")]))
+
+    captured = {}
+
+    class _CapClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            captured["payload"] = json
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _CapClient):
+        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
+
+    assert "enable_thinking" not in captured["payload"], captured["payload"]
+    assert captured["payload"]["model"] == "m"
+
+
+def test_gateway_enable_thinking_when_caps_supported():
+    """探测支持 enable_thinking 的 key → payload 带 enable_thinking=False。"""
+    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
+    gw = _setup(_build_data(keys, [_ref("k1")]))
+
+    captured = {}
+
+    class _CapClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            captured["payload"] = json
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _CapClient):
+        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
+
+    assert captured["payload"].get("enable_thinking") is False, captured["payload"]
+
+
+def test_gateway_runtime_fallback_on_unsupported_enable_thinking():
+    """运行时回退：第一次返回 400 + 'enable_thinking unsupported'
+    → 更新 caps（持久化）+ 重试不带该参 → 200。
+
+    回归：用户报告 "property 'enable_thinking' is unsupported" 直接报错。
+    现在应自动去掉该参数重试，并把 caps 写入 key_defs 避免下次再 400。
+    """
+    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
+    gw = _setup(_build_data(keys, [_ref("k1")]))
+
+    call_count = {"n": 0}
+
+    class _FallbackClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # 第一次：模拟 Groq 不支持 enable_thinking
+                return _FakeResp(400, '{"error":{"message":"property \'enable_thinking\' is unsupported","type":"invalid_request_error"}}')
+            # 第二次：不带 enable_thinking 应成功
+            assert "enable_thinking" not in json, f"重试时应去掉 enable_thinking，但发了: {json}"
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _FallbackClient):
+        result = asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
+
+    # 重试了一次
+    assert call_count["n"] == 2, call_count
+    # 最终成功
+    assert result == {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+    # caps 被更新为 enable_thinking=False（持久化到 key_defs）
+    import llm_api
+    saved = llm_api._load_data()["keys"]["k1"]["capabilities"]
+    assert saved == {"enable_thinking": False}, saved
+    # 运行时也更新了
+    assert gw.gateway.key_defs["k1"]["capabilities"] == {"enable_thinking": False}
+
+
+def test_gateway_runtime_fallback_only_once():
+    """运行时回退只触发一次：第二次调用同一 key 不应再 400（caps 已持久化）。"""
+    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
+    gw = _setup(_build_data(keys, [_ref("k1")]))
+
+    call_count = {"n": 0}
+
+    class _OnceClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def post(self, url, headers=None, json=None):
+            call_count["n"] += 1
+            # 任何带 enable_thinking 的请求都 400
+            if "enable_thinking" in json:
+                return _FakeResp(400, "property 'enable_thinking' is unsupported")
+            return _FakeResp(200, '{"ok":1}')
+
+    with patch("httpx.AsyncClient", _OnceClient):
+        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
+    first_total = call_count["n"]
+    # 第一次调用：1（400） + 1（200 重试） = 2 次
+    assert first_total == 2, first_total
+
+    # 第二次调用：caps 已经更新，不该带 enable_thinking，直接 200，1 次
+    with patch("httpx.AsyncClient", _OnceClient):
+        asyncio.run(gw.gateway.call("u2", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
+    second_total = call_count["n"] - first_total
+    assert second_total == 1, second_total
+
+
 if __name__ == "__main__":
     import inspect, sys
     _self = sys.modules[__name__]
