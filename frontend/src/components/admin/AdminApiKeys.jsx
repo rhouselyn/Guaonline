@@ -14,15 +14,12 @@ let _refClipboard = null
 
 export default function AdminApiKeys() {
   const [keys, setKeys] = useState({})          // 全局 key 仓库（脱敏）：{id: {id, api_key, has_key, base_url, model, prices}}
-  const [tierKeys, setTierKeys] = useState({})  // 引用表：{tier: {sub: {configs:[{key_id,max_tokens,disabled}], active_index}}}
+  const [tierKeys, setTierKeys] = useState({})  // 引用表：{tier: {sub: {configs:[{key_id,max_tokens,disabled}]}}}
   const [activeTier, setActiveTier] = useState('free')
   const [activeSub, setActiveSub] = useState('sentence')
   const [keyStatuses, setKeyStatuses] = useState({})  // {sig: [{index, key_id, status, ...}]}
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
-  const [interval, setInterval_] = useState(0.1)
-  const [batchSize, setBatchSize] = useState(5)
-  const [settingsSaved, setSettingsSaved] = useState(false)
   const esRef = useRef(null)
   const [dragIndex, setDragIndex] = useState(null)
   const [copiedSig, setCopiedSig] = useState(null)
@@ -50,10 +47,6 @@ export default function AdminApiKeys() {
 
   useEffect(() => {
     reloadAll()
-    adminApi.getGlobalSettings().then(data => {
-      setInterval_(data.request_interval ?? 0.1)
-      setBatchSize(data.batch_size ?? 5)
-    })
   }, [])
 
   useEffect(() => {
@@ -70,12 +63,6 @@ export default function AdminApiKeys() {
     return () => { es.close(); if (esRef.current === es) esRef.current = null }
   }, [activeTier, activeSub])
 
-  const saveSettings = async () => {
-    await adminApi.updateGlobalSettings({ request_interval: interval, batch_size: batchSize })
-    setSettingsSaved(true)
-    setTimeout(() => setSettingsSaved(false), 2000)
-  }
-
   // 计算某 key 被多少个 pool（唯一 tier/sub）引用（供"共享 N 处"标记）。
   // 同一个 pool 内重复引用同一 key 只算 1 处，避免 paste 重复条目导致计数虚高。
   const countKeyRefs = (keyId) => {
@@ -89,9 +76,9 @@ export default function AdminApiKeys() {
   }
 
   // 持久化某 pool 的引用列表（结构性操作：增删/排序/粘贴/字段改动都走这里）
-  const persistRefs = async (tier, sub, refs, activeIndex = 0) => {
+  const persistRefs = async (tier, sub, refs) => {
     try {
-      await adminApi.updateApiKeys(tier, sub, refs, activeIndex)
+      await adminApi.updateApiKeys(tier, sub, refs)
       await reloadAll()
       loadKeyStatuses(tier, sub)
     } catch (e) {
@@ -112,7 +99,7 @@ export default function AdminApiKeys() {
   // max_tokens 失焦时持久化（避免输入过程中频繁请求）
   const commitRefField = (tier, sub) => {
     const pool = tierKeys[tier]?.[sub]
-    if (pool) persistRefs(tier, sub, pool.configs, pool.active_index || 0)
+    if (pool) persistRefs(tier, sub, pool.configs)
   }
 
   // 拖拽重排序
@@ -123,7 +110,7 @@ export default function AdminApiKeys() {
     const [moved] = configs.splice(from, 1)
     configs.splice(to, 0, moved)
     setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs } } }))
-    persistRefs(tier, sub, configs, pool.active_index || 0)
+    persistRefs(tier, sub, configs)
   }
 
   // 删除引用（不删全局 key）
@@ -131,10 +118,10 @@ export default function AdminApiKeys() {
     const pool = tierKeys[tier][sub]
     const newConfigs = pool.configs.filter((_, i) => i !== idx)
     setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }))
-    persistRefs(tier, sub, newConfigs, pool.active_index || 0)
+    persistRefs(tier, sub, newConfigs)
   }
 
-  // 复制引用配置到剪贴板（key_id + max_tokens + disabled + weight）
+  // 复制引用配置到剪贴板（key_id + max_tokens + disabled）
   const copyRef = (tier, sub, idx) => {
     const ref = tierKeys[tier][sub].configs[idx]
     if (!ref) return
@@ -149,10 +136,10 @@ export default function AdminApiKeys() {
     if (!_refClipboard) { alert('剪贴板为空，先在某行点"复制"'); return }
     const pool = tierKeys[tier][sub]
     if (!pool) return
-    const newRef = { key_id: _refClipboard.key_id, max_tokens: _refClipboard.max_tokens ?? defaultMaxTokens(tier), disabled: false, weight: _refClipboard.weight ?? 1 }
+    const newRef = { key_id: _refClipboard.key_id, max_tokens: _refClipboard.max_tokens ?? defaultMaxTokens(tier), disabled: false }
     const newConfigs = [...pool.configs, newRef]
     setTierKeys(prev => ({ ...prev, [tier]: { ...prev[tier], [sub]: { ...prev[tier][sub], configs: newConfigs } } }))
-    persistRefs(tier, sub, newConfigs, pool.active_index || 0)
+    persistRefs(tier, sub, newConfigs)
   }
 
   // ── 编辑 key 全局属性弹窗 ──
@@ -207,17 +194,17 @@ export default function AdminApiKeys() {
   }
   const appendRefToPool = async (keyId) => {
     const pool = tierKeys[activeTier][activeSub]
-    const newRef = { key_id: keyId, max_tokens: defaultMaxTokens(activeTier), disabled: false, weight: 1 }
+    const newRef = { key_id: keyId, max_tokens: defaultMaxTokens(activeTier), disabled: false }
     const newConfigs = [...pool.configs, newRef]
     setTierKeys(prev => ({ ...prev, [activeTier]: { ...prev[activeTier], [activeSub]: { ...prev[activeTier][activeSub], configs: newConfigs } } }))
-    await persistRefs(activeTier, activeSub, newConfigs, pool.active_index || 0)
+    await persistRefs(activeTier, activeSub, newConfigs)
   }
 
   // 测试：先持久化当前 pool 引用（确保当前页改动被测到），再测所有 key（每个 key_id 只测一次），
   // 测完重载所有 pool 状态，所有页面都更新。
   const testAll = async () => {
     const pool = tierKeys[activeTier]?.[activeSub]
-    if (pool) await persistRefs(activeTier, activeSub, pool.configs, pool.active_index || 0)
+    if (pool) await persistRefs(activeTier, activeSub, pool.configs)
     setTesting(true)
     setTestResult(null)
     try {
@@ -244,37 +231,13 @@ export default function AdminApiKeys() {
 
   const currentSig = poolSig(activeTier, activeSub)
   const currentStatuses = keyStatuses[currentSig] || []
-  const currentPool = tierKeys[activeTier]?.[activeSub] || { configs: [], active_index: 0 }
+  const currentPool = tierKeys[activeTier]?.[activeSub] || { configs: [] }
   const activeSubMeta = SUB_POOLS.find(s => s.key === activeSub)
   const unusedKeyIds = Object.keys(keys).filter(kid => !currentPool.configs.some(r => r.key_id === kid))
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-[#c9a96e] mb-6">全局 API Key 管理</h2>
-
-      {/* 全局设置 */}
-      <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20 mb-6">
-        <h3 className="text-[#c9a96e] font-bold mb-3">全局设置</h3>
-        <div className="flex gap-8 items-end">
-          <div className="flex-1">
-            <label className="text-[#e8d5b7]/60 text-sm block mb-1">请求间隔（秒）</label>
-            <div className="flex items-center gap-3">
-              <input type="range" min={0.01} max={10} step={0.01} value={interval} onChange={e => setInterval_(Number(e.target.value))} className="flex-1" />
-              <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{interval.toFixed(2)}s</span>
-            </div>
-          </div>
-          <div className="flex-1">
-            <label className="text-[#e8d5b7]/60 text-sm block mb-1">并发批大小</label>
-            <div className="flex items-center gap-3">
-              <input type="range" min={1} max={100} step={1} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))} className="flex-1" />
-              <span className="text-[#c9a96e] font-bold text-sm w-16 text-right">{batchSize}</span>
-            </div>
-          </div>
-          <button onClick={saveSettings} className="px-4 py-2 bg-[#c9a96e] text-[#1a1a2e] rounded font-bold text-sm">
-            {settingsSaved ? '已保存' : '保存设置'}
-          </button>
-        </div>
-      </div>
 
       {/* tier tab */}
       <div className="flex gap-2 mb-3">
@@ -401,14 +364,6 @@ export default function AdminApiKeys() {
                   onBlur={() => commitRefField(activeTier, activeSub)}
                   className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
-              <div className="w-16">
-                <label className="text-[#e8d5b7]/60 text-xs" title="SWRR 平滑加权轮询的权重，数值越大被选中概率越高">权重</label>
-                <input type="number" step="1" min="1" value={ref.weight ?? 1}
-                  onChange={e => updateRefField(activeTier, activeSub, i, 'weight', Math.max(1, Number(e.target.value) || 1))}
-                  onBlur={() => commitRefField(activeTier, activeSub)}
-                  className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm"
-                  title="SWRR 权重：数值越大被选中概率越高（默认 1）" />
-              </div>
               <button onClick={() => {
                 // 直接计算新 configs 并传给 persistRefs，避免 commitRefField 读到 setTierKeys 之前的旧状态
                 const newConfigs = currentPool.configs.map((r, j) => j === i ? { ...r, disabled: !ref.disabled } : r)
@@ -416,7 +371,7 @@ export default function AdminApiKeys() {
                   ...prev,
                   [activeTier]: { ...prev[activeTier], [activeSub]: { ...prev[activeTier][activeSub], configs: newConfigs } }
                 }))
-                persistRefs(activeTier, activeSub, newConfigs, currentPool.active_index || 0)
+                persistRefs(activeTier, activeSub, newConfigs)
               }}
                 className={`px-2 py-1 rounded text-xs font-bold ${ref.disabled ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-700/40 text-gray-300'}`}
                 title={ref.disabled ? '点击启用' : '点击禁用（仅此池，不影响其它池）'}>

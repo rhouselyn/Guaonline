@@ -64,54 +64,39 @@ def _parse_retry_after(header_value: Optional[str]) -> Optional[int]:
 
 
 class TierKeyPool:
-    """单个 tier/sub 的引用池。只持有引用 + per-pool 配置，不持有 key 定义。"""
+    """单个 tier/sub 的引用池。只持有引用 + per-pool 配置，不持有 key 定义。
+
+    调度算法：原子 counter 轮询 + 向前扫描跳过不可用 key。
+    - 每次 get_current 都 counter+=1，从新位置向前扫描，跳过 disabled/熔断 open
+    - 多用户并发时每个 pick 拿到不同起始位置，天然均匀分布到不同 key，互不阻塞
+    熔断器：closed → 连续失败 N 次 → open（阻塞 cooldown）→ 到期 → half_open（放 1 个探测）→ 成功 closed / 失败 open。
+    Retry-After：429 带 Retry-After 头时按其值阻塞，否则只切 key 不阻塞。
+    """
 
     FAIL_DEADLINE = 600  # 连续失败 10 分钟才放弃
 
-    def __init__(self, tier: str, sub: str, refs: list, batch_size: int = 3, interval: float = 1.0):
+    def __init__(self, tier: str, sub: str, refs: list):
         self.tier = tier
         self.sub = sub
-        self.refs = refs  # [{key_id, max_tokens, disabled, weight}]
+        self.refs = refs  # [{key_id, max_tokens, disabled}]
         self.lock = threading.Lock()
-        self.batch_size = batch_size
-        self.interval = interval
-        self.active_count = 0  # per-pool 在途并发（用于 batch 切换判断）
-        self.last_switch_time = 0
+        self.counter = 0  # 轮询计数器（每次 pick 推进 1）
         self.consecutive_fail_start = None  # per-pool 连续失败起点
-        # SWRR 状态：每个 ref 的 current_weight
-        self.swrr_weights: List[int] = []
 
     @classmethod
-    def _rebuild_preserving_state(cls, old_pool: "TierKeyPool", refs: list, batch_size: int, interval: float) -> "TierKeyPool":
-        """构造新 pool 但保留旧 SWRR/active_count/consecutive_fail 状态。
+    def _rebuild_preserving_state(cls, old_pool: "TierKeyPool", refs: list) -> "TierKeyPool":
+        """构造新 pool 但保留旧 counter/consecutive_fail_start 状态。
 
-        refs 长度变化时按 min(old, new) 复用 swrr_weights，避免每次 admin 改配置都重置轮询状态。
-        refs 内容（key_id 顺序）变化时也保留——SWRR 算法不依赖 refs 内容稳定，只依赖位置索引。
+        refs 长度变化时 counter 对新长度取模，避免越界。
         """
-        new_pool = cls(old_pool.tier, old_pool.sub, refs, batch_size, interval)
-        # 复用 SWRR 状态：长度不一致时按新 refs 长度截断/补零（_sync_swrr 兜底）
-        if old_pool.swrr_weights:
-            if len(refs) >= len(old_pool.swrr_weights):
-                new_pool.swrr_weights = list(old_pool.swrr_weights) + [0] * (len(refs) - len(old_pool.swrr_weights))
-            else:
-                new_pool.swrr_weights = list(old_pool.swrr_weights[:len(refs)])
-        new_pool.active_count = old_pool.active_count
-        new_pool.last_switch_time = old_pool.last_switch_time
+        new_pool = cls(old_pool.tier, old_pool.sub, refs)
+        # 保留 counter：长度变化时取模，避免越界
+        if refs:
+            new_pool.counter = old_pool.counter % len(refs)
+        else:
+            new_pool.counter = 0
         new_pool.consecutive_fail_start = old_pool.consecutive_fail_start
         return new_pool
-
-    def _ref_weight(self, ref) -> int:
-        w = ref.get("weight")
-        try:
-            w = int(w) if w is not None else 1
-        except (ValueError, TypeError):
-            w = 1
-        return max(1, w)
-
-    def _sync_swrr(self):
-        """refs 长度变化时重置 swrr_weights。"""
-        if len(self.swrr_weights) != len(self.refs):
-            self.swrr_weights = [0] * len(self.refs)
 
     def _key_def(self, gateway, key_id) -> dict:
         return gateway.key_defs.get(key_id, {})
@@ -120,73 +105,53 @@ class TierKeyPool:
         return gateway.key_runtime.get(key_id) or gateway._ensure_runtime(key_id)
 
     def get_current(self, gateway) -> Optional[tuple]:
-        """SWRR 选一个可用 key，返回 (resolved_config, idx) 或 None。
+        """轮询选一个可用 key，返回 (resolved_config, idx) 或 None。
 
-        跳过：per-pool disabled、熔断 open（未到期）、half-open 已有探测在途的 key。
+        每次 pick 都 counter+=1，从新位置向前扫描，跳过：
+        per-pool disabled、熔断 open（未到期）、half-open 已有探测在途的 key。
         """
         with self.lock:
-            self._sync_swrr()
+            n = len(self.refs)
+            if n == 0:
+                return None
+            start = self.counter
+            self.counter += 1
             now = time.time()
-            # 收集可用 idx（带 weight）
-            usable = []
-            for i, ref in enumerate(self.refs):
+            for offset in range(n):
+                idx = (start + offset) % n
+                ref = self.refs[idx]
                 if ref.get("disabled"):
                     continue
                 key_id = ref.get("key_id")
                 if not gateway._is_key_available_for_pick(key_id, now):
                     continue
-                usable.append(i)
-            if not usable:
-                return None
-            # SWRR：current += weight，选最大，减 total
-            total = 0
-            best = None
-            best_cw = None
-            for i in usable:
-                w = self._ref_weight(self.refs[i])
-                self.swrr_weights[i] += w
-                total += w
-                if best_cw is None or self.swrr_weights[i] > best_cw:
-                    best_cw = self.swrr_weights[i]
-                    best = i
-            self.swrr_weights[best] -= total
-            idx = best
-            ref = self.refs[idx]
-            key_id = ref.get("key_id")
-            # 占用
-            self.active_count += 1
-            gateway._inc_active(key_id)
-            gateway._mark_key_picked(key_id)  # half-open 时记录"已放过探测"
-            kdef = gateway.key_defs.get(key_id, {})
-            config = {
-                "id": key_id,
-                "api_key": kdef.get("api_key", ""),
-                "base_url": kdef.get("base_url", ""),
-                "model": kdef.get("model", ""),
-                "input_price_per_million": kdef.get("input_price_per_million", 0),
-                "output_price_per_million": kdef.get("output_price_per_million", 0),
-            }
-            gateway._notify()
-            return config, idx
+                # 命中：占用 + 标记 half_open 探测 + 返回
+                gateway._inc_active(key_id)
+                gateway._mark_key_picked(key_id)
+                kdef = gateway.key_defs.get(key_id, {})
+                config = {
+                    "id": key_id,
+                    "api_key": kdef.get("api_key", ""),
+                    "base_url": kdef.get("base_url", ""),
+                    "model": kdef.get("model", ""),
+                    "input_price_per_million": kdef.get("input_price_per_million", 0),
+                    "output_price_per_million": kdef.get("output_price_per_million", 0),
+                }
+                gateway._notify()
+                return config, idx
+            return None
 
     def mark_complete(self, gateway, idx):
-        """成功：per-pool 释放占用 + 该 key 熔断器复位为 closed。"""
+        """成功：该 key 熔断器复位为 closed。"""
         key_id = self.refs[idx].get("key_id")
         with self.lock:
-            self.active_count -= 1
             self.consecutive_fail_start = None
-            if self.active_count <= 0:
-                self.active_count = 0
-                self.last_switch_time = time.time()
         gateway._mark_key_complete(key_id)
 
     def _mark_fail(self, gateway, idx, fail_type: str, retry_after: Optional[int] = None):
-        """失败：per-pool 切换 + 该 key 熔断器状态推进。"""
+        """失败：该 key 熔断器状态推进。"""
         key_id = self.refs[idx].get("key_id")
         with self.lock:
-            self.active_count -= 1
-            if self.active_count < 0:
-                self.active_count = 0
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
         if fail_type == "rate_limited":
@@ -235,13 +200,6 @@ class TierKeyPool:
             if rt and rt.get("rate_limited_until") and rt["rate_limited_until"] > now:
                 candidates.append(rt["rate_limited_until"])
         return min(candidates) if candidates else None
-
-    async def wait_for_interval(self):
-        with self.lock:
-            elapsed = time.time() - self.last_switch_time
-            remaining = self.interval - elapsed
-        if remaining > 0:
-            await asyncio.sleep(remaining)
 
 
 class LLMGateway:
@@ -461,16 +419,13 @@ class LLMGateway:
 
     def _reload_all(self):
         """增量重载：refs 未变的 pool 完全保留旧对象；refs 变了的 pool 用
-        _rebuild_preserving_state 保留 SWRR/active_count/consecutive_fail_start，
-        避免 admin 改配置（禁用/排序/增删引用）就重置轮询状态。
+        _rebuild_preserving_state 保留 counter/consecutive_fail_start，
+        避免 admin 改配置（禁用/排序/增删引用）就重置轮询位置。
 
-        key_defs / batch_size / interval 总是刷新（这些不影响 SWRR 状态）。
+        key_defs 总是刷新（不影响 counter 状态）。
         """
         data = _load_data()
         self.key_defs = data.get("keys", {})
-        settings = _load_global_settings()
-        batch_size = settings.get("batch_size", 3)
-        interval = settings.get("request_interval", 1.0)
         old_pools = self.pools or {}
         new_pools = {}
         for tier, raw_tier in data.get("tier_keys", {}).items():
@@ -480,17 +435,14 @@ class LLMGateway:
                 sub_data = raw_tier.get(sub) or {}
                 refs = sub_data.get("configs", [])
                 old_pool = old_tier.get(sub)
-                if old_pool is not None and old_pool.refs is refs:
-                    # 同一引用对象（理论上不会发生，但留作快速路径）
-                    tier_pools[sub] = old_pool
-                elif old_pool is not None and old_pool.refs == refs and old_pool.batch_size == batch_size and old_pool.interval == interval:
-                    # refs 内容完全没变 → 保留旧 pool（包括 SWRR 状态）
+                if old_pool is not None and old_pool.refs == refs:
+                    # refs 内容完全没变 → 保留旧 pool（包括 counter 状态）
                     tier_pools[sub] = old_pool
                 elif old_pool is not None:
                     # refs 变了 → 重建但保留状态
-                    tier_pools[sub] = TierKeyPool._rebuild_preserving_state(old_pool, refs, batch_size, interval)
+                    tier_pools[sub] = TierKeyPool._rebuild_preserving_state(old_pool, refs)
                 else:
-                    tier_pools[sub] = TierKeyPool(tier, sub, refs, batch_size, interval)
+                    tier_pools[sub] = TierKeyPool(tier, sub, refs)
             new_pools[tier] = tier_pools
         self.pools = new_pools
 
@@ -533,8 +485,6 @@ class LLMGateway:
         pool = self._resolve_pool(tier, request_type)
         if not pool:
             raise Exception(f"No API Key configured for tier: {tier} (request_type={request_type})")
-
-        await pool.wait_for_interval()
 
         if pool.is_all_failed_too_long():
             raise Exception("服务暂时不可用，连续 10 分钟无有效输出，请检查 API Key 或稍后重试")

@@ -1,8 +1,7 @@
-"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + weight）：
-
+"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + per-pool disabled）：
 1. test 端点按 key_id 测试，结果回写到 gateway 全局 key_runtime。
 2. status 端点暴露 circuit_state（open/half_open）。
-3. status 端点暴露 per-pool weight。
+3. status 端点暴露 per-pool disabled。
 4. is_busy 反映全局 active_in_flight。
 5. 运行时状态跨 pool 一致。
 6. SSE 鉴权（无 token 401 / 无效 token 401 / 有效 token 放行）。
@@ -57,16 +56,16 @@ def _kdef(kid, api_key="sk-x", base_url="https://example.com/v1", model="m"):
             "input_price_per_million": 0, "output_price_per_million": 0}
 
 
-def _ref(kid, max_tokens=None, disabled=False, weight=1):
-    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled, "weight": weight}
+def _ref(kid, max_tokens=None, disabled=False):
+    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled}
 
 
 def _build(keys, sentence_refs, title_refs=None):
     """构造新格式数据。title_refs 默认空。"""
     return {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": title_refs or [], "active_index": 0},
-        "sentence": {"configs": sentence_refs, "active_index": 0},
-        "word": {"configs": [], "active_index": 0},
+        "title": {"configs": title_refs or []},
+        "sentence": {"configs": sentence_refs},
+        "word": {"configs": []},
     }}}
 
 
@@ -167,16 +166,19 @@ def test_status_exposes_circuit_state():
     assert statuses["k2"]["status_text"] == "探测中"
 
 
-# ── 3. status 端点暴露 per-pool weight ──────────────────────
+# ── 3. status 端点暴露 per-pool disabled ──────────────────────
 
-def test_status_exposes_weight():
+def test_status_exposes_per_pool_disabled():
+    """status 端点返回每个引用的 per-pool disabled 字段（不再有 weight）。"""
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    data = _build(keys, [_ref("k1", weight=3), _ref("k2", weight=1)])
+    data = _build(keys, [_ref("k1", disabled=True), _ref("k2", disabled=False)])
     _setup(data)
     resp = client.get("/api/admin/api-keys/free/status?sub=sentence")
     statuses = {s["key_id"]: s for s in resp.json()["statuses"]}
-    assert statuses["k1"]["weight"] == 3
-    assert statuses["k2"]["weight"] == 1
+    assert statuses["k1"]["disabled"] is True
+    assert statuses["k2"]["disabled"] is False
+    # weight 字段已删除
+    assert "weight" not in statuses["k1"], "weight 字段应已删除"
 
 
 # ── 4. is_busy 反映全局 active_in_flight ────────────────────
@@ -264,9 +266,9 @@ def test_test_all_endpoint_tests_each_key_once():
         "k_bad": _kdef("k_bad", "sk-bad"),
     }
     data = {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": [_ref("k_good")], "active_index": 0},
-        "sentence": {"configs": [_ref("k_good"), _ref("k_bad")], "active_index": 0},
-        "word": {"configs": [], "active_index": 0},
+        "title": {"configs": [_ref("k_good")]},
+        "sentence": {"configs": [_ref("k_good"), _ref("k_bad")]},
+        "word": {"configs": []},
     }}}
     _setup(data)
     with patch("httpx.AsyncClient", _FakeAsyncClient):
