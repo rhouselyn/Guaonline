@@ -323,7 +323,7 @@ async def detect_language(text: str) -> str:
         user_id="system", tier="free", messages=messages,
         temperature=0.0, max_tokens=16, request_type="detect_language",
     )
-    if "choices" in response and len(response["choices"]) > 0:
+    if response.get("choices"):
         result = response["choices"][0].get("message", {}).get("content", "").strip().lower()
         if result in LANGUAGE_MAP:
             return result

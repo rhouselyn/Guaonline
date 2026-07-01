@@ -44,7 +44,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 {"role": "user", "content": text}
             ]
             response = await gateway.call(user_id, tier, messages, temperature=0.3, request_type="translate")
-            if "choices" in response and len(response["choices"]) > 0:
+            if response.get("choices"):
                 translated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if translated:
                     text = translated
@@ -65,7 +65,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 {"role": "user", "content": text}
             ]
             response = await gateway.call(user_id, tier, messages, temperature=0.7, request_type="generate")
-            if "choices" in response and len(response["choices"]) > 0:
+            if response.get("choices"):
                 generated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if generated:
                     text = generated
@@ -353,7 +353,7 @@ async def translate_text(request: dict, current_user: TokenData = Depends(requir
         response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.3, request_type="translate")
 
         translated_text = ""
-        if "choices" in response and len(response["choices"]) > 0:
+        if response.get("choices"):
             translated_text = response["choices"][0].get("message", {}).get("content", "").strip()
 
         if not translated_text:
@@ -392,7 +392,7 @@ async def generate_text(request: dict, current_user: TokenData = Depends(require
         response = await gateway.call(current_user.user_id, current_user.tier.value, messages, temperature=0.7, request_type="generate")
 
         generated_text = ""
-        if "choices" in response and len(response["choices"]) > 0:
+        if response.get("choices"):
             generated_text = response["choices"][0].get("message", {}).get("content", "").strip()
 
         if not generated_text:

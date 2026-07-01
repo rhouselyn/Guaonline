@@ -1235,7 +1235,7 @@ async def refresh_global_vocab_detail(word_id: str, admin: AdminTokenData = Depe
 
     try:
         response = await gateway.call("system", "free", messages, temperature=0.7, request_type="admin_vocab_refresh")
-        if "choices" in response and len(response["choices"]) > 0:
+        if response.get("choices"):
             content = response["choices"][0].get("message", {}).get("content", "")
             # 尝试解析 JSON
             import re

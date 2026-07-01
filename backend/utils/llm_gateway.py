@@ -561,9 +561,16 @@ class LLMGateway:
 
             if resp.status_code == 200:
                 result_data = resp.json()
-                pool.mark_complete(self, idx)
-                _elapsed = _t.time() - _t0
                 _usage = result_data.get("usage", {})
+                _elapsed = _t.time() - _t0
+                # 防御：某些 provider（如 ModelScope GLM）偶发返回 200 但 choices 为 null（空输出，
+                # 常伴随 total_tokens=0）。这是瞬时故障，按 server_error 切 key 重试自愈，
+                # 避免把空结果当成功透传给调用方导致后续 len(None) 崩溃或静默用错文本。
+                if not result_data.get("choices"):
+                    print(f"[GATEWAY] <<< EMPTY 200 choices=null tokens={_usage.get('total_tokens','?')} user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title} elapsed={_elapsed:.1f}s")
+                    pool.mark_server_error(self, idx)
+                    return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+                pool.mark_complete(self, idx)
                 print(f"[GATEWAY] <<< OK user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title} elapsed={_elapsed:.1f}s tokens={_usage.get('total_tokens','?')}")
                 if user_id and result_data.get("usage"):
                     try:
