@@ -173,6 +173,8 @@ class TierKeyPool:
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
             self.current_index += 1
+        # 失败也要释放 key 级 in-flight 占用，否则 is_busy 永远为 true
+        gateway._dec_active(key_id)
         if fail_type == "rate_limited":
             gateway._mark_key_rate_limited(key_id, retry_after=retry_after)
         elif fail_type == "invalid":
@@ -293,6 +295,15 @@ class LLMGateway:
         with self._runtime_lock:
             rt = self._ensure_runtime(key_id)
             rt["active_in_flight"] += 1
+
+    def _dec_active(self, key_id):
+        """递减 key 级 in-flight 计数。
+        失败路径（429/401/5xx/网络错）也必须调用，否则 is_busy 永远为 true，
+        前端"占用中"徽章卡死不消失。"""
+        with self._runtime_lock:
+            rt = self.key_runtime.get(key_id)
+            if rt:
+                rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
 
     def _mark_key_picked(self, key_id):
         """key 被选中时：half_open 状态标记已放过探测。"""

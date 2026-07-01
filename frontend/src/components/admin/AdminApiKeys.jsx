@@ -368,7 +368,7 @@ export default function AdminApiKeys() {
                     'bg-gray-700/30 text-gray-400'}`}>
                     {status?.status_text || '未知'}
                   </span>
-                  {status?.is_busy && (
+                  {status?.is_busy && !ref.disabled && (
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-900/30 text-cyan-300 flex items-center gap-1 animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>占用中
                     </span>
