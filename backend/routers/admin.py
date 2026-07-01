@@ -268,7 +268,6 @@ async def get_key_refs_endpoint(key_id: str, admin: AdminTokenData = Depends(req
 
 class TierKeyUpdate(BaseModel):
     configs: List[dict]  # refs: [{key_id, max_tokens, disabled}]
-    active_index: int = 0
     sub: str = "sentence"
 
 
@@ -279,7 +278,7 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
     if req.sub not in ("title", "sentence", "word"):
         raise HTTPException(status_code=400, detail="Invalid sub")
     try:
-        update_tier_keys(tier, req.sub, req.configs, req.active_index)
+        update_tier_keys(tier, req.sub, req.configs)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     _log_action("update_api_keys", "tier", tier, {"sub": req.sub, "ref_count": len(req.configs)})
@@ -495,7 +494,7 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
 
 
 def _build_key_statuses(pool, gateway) -> list:
-    """构建 pool 内每个引用的状态：per-pool disabled/weight + key 全局熔断/运行时状态。"""
+    """构建 pool 内每个引用的状态：per-pool disabled + key 全局熔断/运行时状态。"""
     statuses = []
     for i, ref in enumerate(pool.refs):
         key_id = ref.get("key_id")
@@ -511,7 +510,6 @@ def _build_key_statuses(pool, gateway) -> list:
             "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
             "model": kdef.get("model", ""),
             "max_tokens": ref.get("max_tokens"),
-            "weight": ref.get("weight", 1),  # per-pool
             "disabled": ref.get("disabled", False),  # per-pool
             "is_valid": is_valid,  # 全局
             "is_busy": gateway.is_key_busy(key_id),  # 全局
@@ -1126,7 +1124,7 @@ def _load_global_settings() -> dict:
         with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"request_interval": 0.1, "batch_size": 5}
+        return {}
 
 
 def _save_global_settings(data: dict):
@@ -1140,24 +1138,15 @@ async def get_global_settings(admin: AdminTokenData = Depends(require_admin)):
 
 
 class GlobalSettingsUpdate(BaseModel):
-    request_interval: Optional[float] = None
-    batch_size: Optional[int] = None
+    """已废弃：gateway 不再使用 batch_size/request_interval。保留空模型以兼容前端调用。"""
+    pass
 
 
 @router.put("/global-settings")
 async def update_global_settings(req: GlobalSettingsUpdate, admin: AdminTokenData = Depends(require_admin)):
-    settings = _load_global_settings()
-    if req.request_interval is not None:
-        settings["request_interval"] = req.request_interval
-    if req.batch_size is not None:
-        settings["batch_size"] = req.batch_size
+    """已废弃：不再有可配置字段。保留 endpoint 以兼容前端，返回空对象。"""
+    settings = {}
     _save_global_settings(settings)
-    # 通知 gateway 刷新配置
-    try:
-        from utils.llm_gateway import gateway
-        gateway.reload()
-    except Exception:
-        pass
     _log_action("update_global_settings", details=settings)
     return settings
 
