@@ -365,10 +365,14 @@ function App() {
             clearInterval(pollingInterval)
           }
           const errMsg = status.error || ''
-          // 单句失败（partial）：只提示不退出，下次进入时自动重试
+          // 单句失败（partial）：自动触发重试并恢复轮询，避免必须重新进入条目
           if (status.partial && status.failed_sentences && status.failed_sentences.length > 0) {
             const failedList = status.failed_sentences.map(f => `#${f.index + 1}`).join(', ')
-            showAlert(`${status.error || ''}\n失败句子：${failedList}\n重新进入该条目时会自动重试失败句子。`)
+            showAlert(`${status.error || ''}\n失败句子：${failedList}\n已自动重试失败句子。`)
+            api.retryFailedSentences(currentFileId).catch(() => {})
+            // 恢复轮询，等待重试完成
+            setSkipPolling(false)
+            pollCount = 0  // 重置计数，给重试新一轮 10 分钟
           } else if (errMsg.includes('API Key') || errMsg.includes('Key')) {
             setStep('input')
             showAlert(t.processFailed || '处理失败，请重试')
@@ -409,10 +413,11 @@ function App() {
       }
     }
 
-    // 立即执行一次轮询
-    pollStatus()
-    // 设置轮询间隔为2秒，减少服务器负担
+    // 设置轮询间隔：1 秒。注意 handleNavigateToRecord 已在进入条目时手动拉过一次 status，
+    // 这里不再立即调用 pollStatus()，避免 1 秒内重复请求。
     pollingInterval = setInterval(pollStatus, 1000)
+    // 若不是从历史记录进入（如刚提交文本），则手动拉一次首次状态
+    if (!skipPolling) pollStatus()
 
     // 清理函数
     return () => {
@@ -1200,32 +1205,10 @@ function App() {
         console.error('Failed to load phase units:', e)
       }
 
-      // 检查该条目是否仍在生成中，如果是则启用轮询实时更新
-      try {
-        const status = await api.getStatus(fileId)
-        if (status.status === 'processing') {
-          setSkipPolling(false)
-          setProgress(status.progress || 0)
-          if (status.current_sentence !== undefined && status.total_sentences !== undefined) {
-            setProcessingInfo({ current: status.current_sentence, total: status.total_sentences })
-          }
-        } else if (status.status === 'error' && status.partial) {
-          // 有失败句子：自动重试，恢复轮询
-          api.retryFailedSentences(fileId).catch(() => {})
-          setSkipPolling(false)
-          setProgress(status.progress || 0)
-          setProcessingInfo(null)
-        } else {
-          setSkipPolling(true)
-          setProgress(100)
-          setProcessingInfo(null)
-        }
-      } catch (e) {
-        // 如果状态检查失败，默认跳过轮询
-        setSkipPolling(true)
-        setProgress(100)
-        setProcessingInfo(null)
-      }
+      // 进入条目时不再手动 getStatus——下面的轮询 useEffect 在 currentFileId 变化时会立即拉一次。
+      // 这里只通过 setSkipPolling(false) 启用轮询；首次拉取会带回真实状态/进度/数据。
+      // 失败句子重试改由 useEffect 内部判定后触发（见 pollStatus 中 status.partial 分支）
+      setSkipPolling(false)
 
       api.startWordGen(fileId).catch(() => {})
       setStep('dictionary')
