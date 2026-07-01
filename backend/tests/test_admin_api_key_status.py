@@ -1,7 +1,8 @@
-"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + per-pool disabled）：
+"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + weight）：
+
 1. test 端点按 key_id 测试，结果回写到 gateway 全局 key_runtime。
 2. status 端点暴露 circuit_state（open/half_open）。
-3. status 端点暴露 per-pool disabled。
+3. status 端点暴露 per-pool weight。
 4. is_busy 反映全局 active_in_flight。
 5. 运行时状态跨 pool 一致。
 6. SSE 鉴权（无 token 401 / 无效 token 401 / 有效 token 放行）。
@@ -12,7 +13,6 @@ import os
 import sys
 import json
 import time
-import asyncio
 import tempfile
 import importlib
 from unittest.mock import patch
@@ -56,16 +56,16 @@ def _kdef(kid, api_key="sk-x", base_url="https://example.com/v1", model="m"):
             "input_price_per_million": 0, "output_price_per_million": 0}
 
 
-def _ref(kid, max_tokens=None, disabled=False):
-    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled}
+def _ref(kid, max_tokens=None, disabled=False, weight=1):
+    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled, "weight": weight}
 
 
 def _build(keys, sentence_refs, title_refs=None):
     """构造新格式数据。title_refs 默认空。"""
     return {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": title_refs or []},
-        "sentence": {"configs": sentence_refs},
-        "word": {"configs": []},
+        "title": {"configs": title_refs or [], "active_index": 0},
+        "sentence": {"configs": sentence_refs, "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
 
 
@@ -166,19 +166,16 @@ def test_status_exposes_circuit_state():
     assert statuses["k2"]["status_text"] == "探测中"
 
 
-# ── 3. status 端点暴露 per-pool disabled ──────────────────────
+# ── 3. status 端点暴露 per-pool weight ──────────────────────
 
-def test_status_exposes_per_pool_disabled():
-    """status 端点返回每个引用的 per-pool disabled 字段（不再有 weight）。"""
+def test_status_exposes_weight():
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    data = _build(keys, [_ref("k1", disabled=True), _ref("k2", disabled=False)])
+    data = _build(keys, [_ref("k1", weight=3), _ref("k2", weight=1)])
     _setup(data)
     resp = client.get("/api/admin/api-keys/free/status?sub=sentence")
     statuses = {s["key_id"]: s for s in resp.json()["statuses"]}
-    assert statuses["k1"]["disabled"] is True
-    assert statuses["k2"]["disabled"] is False
-    # weight 字段已删除
-    assert "weight" not in statuses["k1"], "weight 字段应已删除"
+    assert statuses["k1"]["weight"] == 3
+    assert statuses["k2"]["weight"] == 1
 
 
 # ── 4. is_busy 反映全局 active_in_flight ────────────────────
@@ -266,9 +263,9 @@ def test_test_all_endpoint_tests_each_key_once():
         "k_bad": _kdef("k_bad", "sk-bad"),
     }
     data = {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": [_ref("k_good")]},
-        "sentence": {"configs": [_ref("k_good"), _ref("k_bad")]},
-        "word": {"configs": []},
+        "title": {"configs": [_ref("k_good")], "active_index": 0},
+        "sentence": {"configs": [_ref("k_good"), _ref("k_bad")], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
     _setup(data)
     with patch("httpx.AsyncClient", _FakeAsyncClient):
@@ -293,127 +290,6 @@ def test_test_all_endpoint_route_not_swallowed_by_tier_param():
     with patch("httpx.AsyncClient", _FakeAsyncClient):
         resp = client.post("/api/admin/api-keys/test-all")
     assert resp.status_code == 200, resp.text
-
-
-# ── 8. 逐参数能力探测（从完整逐渐缩小） ───────────────────────
-
-def test_probe_enable_thinking_supported_first_try():
-    """第 1 次带 max_tokens + enable_thinking=False 直接 200 → 标记支持。"""
-    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
-    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    importlib.reload(gw_mod)
-    gw_mod.gateway._reload_all()
-
-    call_seq = []
-
-    class _Client:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            call_seq.append(json)
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _Client):
-        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
-
-    assert caps == {"enable_thinking": True}, caps
-    # 只调用了 1 次（第 1 轮就成功）
-    assert len(call_seq) == 1, call_seq
-    assert call_seq[0].get("enable_thinking") is False
-
-
-def test_probe_enable_thinking_unsupported_explicit_error():
-    """第 1 次 400 + 错误明确提到 enable_thinking → 第 2 次不带该参 → 标记不支持。"""
-    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
-    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    importlib.reload(gw_mod)
-    gw_mod.gateway._reload_all()
-
-    call_seq = []
-
-    class _Client:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            call_seq.append(json)
-            if "enable_thinking" in json:
-                return _FakeResp(400, "property 'enable_thinking' is unsupported")
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _Client):
-        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
-
-    assert caps == {"enable_thinking": False}, caps
-    # 调用了 2 次：第 1 次带 enable_thinking（400），第 2 次不带（200）
-    assert len(call_seq) == 2, call_seq
-    assert call_seq[0].get("enable_thinking") is False
-    assert "enable_thinking" not in call_seq[1]
-
-
-def test_probe_enable_thinking_unsupported_other_4xx():
-    """第 1 次 4xx 但错误没提 enable_thinking（如 max_tokens 问题）→ 标记不支持。"""
-    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
-    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    importlib.reload(gw_mod)
-    gw_mod.gateway._reload_all()
-
-    class _Client:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            # 所有请求都返回 400，错误不提 enable_thinking（模拟 max_tokens 超限）
-            return _FakeResp(400, "max_tokens exceeds maximum")
-
-    with patch("httpx.AsyncClient", _Client):
-        caps = asyncio.run(admin_mod._probe_key_capabilities(gw_mod.gateway, "k1"))
-
-    assert caps == {"enable_thinking": False}, caps
-
-
-def test_test_key_probes_and_persists_capabilities():
-    """_test_key 200 后自动探测能力，并持久化到 key_defs。"""
-    data = _build({"k1": _kdef("k1", "sk-1")}, [_ref("k1")])
-    with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    importlib.reload(gw_mod)
-    gw_mod.gateway._reload_all()
-
-    class _Client:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            # _test_key 第 1 次请求（不带 enable_thinking）成功；探测时第 2 次带 enable_thinking 也成功
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _Client):
-        result = asyncio.run(admin_mod._test_key(gw_mod.gateway, "k1"))
-
-    assert result["status"] == "ok", result
-    assert result["capabilities"] == {"enable_thinking": True}, result
-    # 持久化到 key_defs
-    saved = llm_api._load_data()["keys"]["k1"]["capabilities"]
-    assert saved == {"enable_thinking": True}, saved
-    # 运行时也更新
-    assert gw_mod.gateway.key_defs["k1"]["capabilities"] == {"enable_thinking": True}
 
 
 if __name__ == "__main__":

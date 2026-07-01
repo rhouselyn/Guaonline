@@ -62,11 +62,19 @@ def _mask_key(key: str) -> str:
 # ── 老格式迁移 ─────────────────────────────────────────────
 
 def _normalize_old_tier(raw: dict) -> dict:
-    """把单 tier 的老数据归一化为 {sub: {configs}}。active_index 字段忽略（轮询不依赖）。"""
+    """把单 tier 的老数据归一化为 {sub: {configs, active_index}}。"""
     if any(sub in raw for sub in SUB_POOLS):
-        return {sub: {"configs": (raw.get(sub) or {}).get("configs", [])} for sub in SUB_POOLS}
+        result = {}
+        for sub in SUB_POOLS:
+            sub_data = raw.get(sub) or {}
+            result[sub] = {
+                "configs": sub_data.get("configs", []),
+                "active_index": sub_data.get("active_index", 0),
+            }
+        return result
     configs = raw.get("configs", [])
-    return {sub: {"configs": list(configs)} for sub in SUB_POOLS}
+    active_index = raw.get("active_index", 0)
+    return {sub: {"configs": list(configs), "active_index": active_index} for sub in SUB_POOLS}
 
 
 def _migrate_old(raw: dict) -> dict:
@@ -105,8 +113,9 @@ def _migrate_old(raw: dict) -> dict:
                     "key_id": kid,
                     "max_tokens": cfg.get("max_tokens"),
                     "disabled": cfg.get("disabled", False),
+                    "weight": cfg.get("weight", 1),
                 })
-            new_tier_keys[tier][sub] = {"configs": new_refs}
+            new_tier_keys[tier][sub] = {"configs": new_refs, "active_index": pool.get("active_index", 0)}
     return {"keys": new_keys, "tier_keys": new_tier_keys}
 
 
@@ -150,9 +159,8 @@ def list_key_defs() -> list:
 def create_key_def(api_key: str, base_url: str, model: str,
                    input_price_per_million: float = 0,
                    output_price_per_million: float = 0,
-                   title: str = "",
-                   capabilities: dict = None) -> str:
-    """新建全局 key，返回 id。capabilities 存该 key 支持的可选参数（探测后写入）。"""
+                   title: str = "") -> str:
+    """新建全局 key，返回 id。"""
     data = _load_data()
     kid = gen_key_id()
     data.setdefault("keys", {})[kid] = {
@@ -163,7 +171,6 @@ def create_key_def(api_key: str, base_url: str, model: str,
         "model": model,
         "input_price_per_million": input_price_per_million,
         "output_price_per_million": output_price_per_million,
-        "capabilities": capabilities or {},
     }
     _save_data(data)
     _reload_gateway()
@@ -177,8 +184,7 @@ def update_key_def(key_id: str, **fields):
     if key_id not in keys:
         raise ValueError(f"key {key_id} not found")
     kdef = keys[key_id]
-    for f in ("title", "api_key", "base_url", "model", "input_price_per_million",
-              "output_price_per_million", "capabilities"):
+    for f in ("title", "api_key", "base_url", "model", "input_price_per_million", "output_price_per_million"):
         if f in fields and fields[f] is not None:
             # 脱敏形式（带 *）的 api_key 视为未修改，保留原值
             if f == "api_key" and "*" in str(fields[f]):
@@ -227,7 +233,6 @@ def get_tier_keys() -> dict:
         k = kdef.get("api_key", "")
         keys[kid] = {
             "id": kid,
-            "title": kdef.get("title", ""),
             "api_key": _mask_key(k),
             "has_key": bool(k),
             "base_url": kdef.get("base_url", ""),
@@ -241,15 +246,18 @@ def get_tier_keys() -> dict:
         tier_data = data.get("tier_keys", {}).get(tier, {})
         tier_keys[tier] = {}
         for sub in SUB_POOLS:
-            pool = tier_data.get(sub) or {"configs": []}
-            tier_keys[tier][sub] = {"configs": pool.get("configs", [])}
+            pool = tier_data.get(sub) or {"configs": [], "active_index": 0}
+            tier_keys[tier][sub] = {
+                "configs": pool.get("configs", []),
+                "active_index": pool.get("active_index", 0),
+            }
     return {"keys": keys, "tier_keys": tier_keys}
 
 
-def update_tier_keys(tier: str, sub: str, refs: list):
+def update_tier_keys(tier: str, sub: str, refs: list, active_index: int = 0):
     """更新指定 tier/sub 的引用列表（结构性操作：增删/排序/粘贴引用）。
 
-    refs = [{key_id, max_tokens, disabled}, ...]  (weight 字段被忽略并丢弃)
+    refs = [{key_id, max_tokens, disabled}, ...]
     """
     if sub not in SUB_POOLS:
         raise ValueError(f"Invalid sub: {sub}, expected one of {SUB_POOLS}")
@@ -258,19 +266,12 @@ def update_tier_keys(tier: str, sub: str, refs: list):
     data = _load_data()
     tier_keys = data.setdefault("tier_keys", {})
     tier_data = tier_keys.setdefault(tier, {})
-    # 校验所有 key_id 存在；strip 掉残留的 weight 字段
+    # 校验所有 key_id 存在
     existing_keys = set(data.get("keys", {}).keys())
-    clean_refs = []
     for ref in refs:
-        kid = ref.get("key_id")
-        if kid not in existing_keys:
-            raise ValueError(f"key_id {kid} 不存在")
-        clean_refs.append({
-            "key_id": kid,
-            "max_tokens": ref.get("max_tokens"),
-            "disabled": ref.get("disabled", False),
-        })
-    tier_data[sub] = {"configs": clean_refs}
+        if ref.get("key_id") not in existing_keys:
+            raise ValueError(f"key_id {ref.get('key_id')} 不存在")
+    tier_data[sub] = {"configs": refs, "active_index": active_index}
     _save_data(data)
     _reload_gateway()
 

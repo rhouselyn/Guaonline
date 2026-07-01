@@ -19,8 +19,8 @@ export const adminApi = {
   },
 
   // pool 引用管理：refs = [{key_id, max_tokens, disabled}]
-  updateApiKeys: async (tier, sub, refs) => {
-    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs: refs, sub });
+  updateApiKeys: async (tier, sub, refs, activeIndex = 0) => {
+    const response = await axios.put(`${baseUrl}/api/admin/api-keys/${tier}`, { configs: refs, active_index: activeIndex, sub });
     return response.data;
   },
 

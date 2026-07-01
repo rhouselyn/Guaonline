@@ -5,7 +5,7 @@ import json
 import asyncio
 import sqlite3
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -190,32 +190,13 @@ class KeyDefCreate(BaseModel):
 
 
 @router.post("/api-keys/defs")
-async def create_key_def_endpoint(req: KeyDefCreate,
-                                  background_tasks: BackgroundTasks,
-                                  admin: AdminTokenData = Depends(require_admin)):
-    """新建全局 key。返回 id，可被任意 tier/sub 引用。
-
-    创建后自动后台触发一次完整测试（含能力探测），不阻塞响应。
-    测试结果通过 SSE 推送给前端。
-    """
+async def create_key_def_endpoint(req: KeyDefCreate, admin: AdminTokenData = Depends(require_admin)):
+    """新建全局 key。返回 id，可被任意 tier/sub 引用。"""
     kid = create_key_def(req.api_key, req.base_url, req.model,
                          req.input_price_per_million, req.output_price_per_million,
                          title=req.title)
     _log_action("create_key_def", "key", kid, {"model": req.model, "title": req.title})
-    # 后台自动测试 + 能力探测（不阻塞响应）
-    background_tasks.add_task(_auto_test_key_task, kid)
     return {"status": "ok", "id": kid}
-
-
-async def _auto_test_key_task(key_id: str):
-    """添加 key 后自动跑一次测试 + 能力探测，结果通过 SSE 推送。"""
-    from utils.llm_gateway import gateway
-    try:
-        result = await _test_key(gateway, key_id)
-        gateway._notify()
-        print(f"[ADMIN] auto-test key {key_id}: {result.get('status')} caps={result.get('capabilities')}")
-    except Exception as e:
-        print(f"[ADMIN] auto-test failed for {key_id}: {e}")
 
 
 class KeyDefUpdate(BaseModel):
@@ -228,20 +209,13 @@ class KeyDefUpdate(BaseModel):
 
 
 @router.put("/api-keys/defs/{key_id}")
-async def update_key_def_endpoint(key_id: str, req: KeyDefUpdate,
-                                  background_tasks: BackgroundTasks,
-                                  admin: AdminTokenData = Depends(require_admin)):
-    """修改全局 key 属性。改一处，所有引用处同步生效。
-
-    保存后自动后台重新探测能力——模型/base_url 变更可能改变参数支持情况。
-    """
+async def update_key_def_endpoint(key_id: str, req: KeyDefUpdate, admin: AdminTokenData = Depends(require_admin)):
+    """修改全局 key 属性。改一处，所有引用处同步生效。"""
     try:
         update_key_def(key_id, **req.dict(exclude_none=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     _log_action("update_key_def", "key", key_id)
-    # 保存后自动重新探测能力（模型变了，参数支持可能也变了）
-    background_tasks.add_task(_auto_test_key_task, key_id)
     return {"status": "ok"}
 
 
@@ -268,6 +242,7 @@ async def get_key_refs_endpoint(key_id: str, admin: AdminTokenData = Depends(req
 
 class TierKeyUpdate(BaseModel):
     configs: List[dict]  # refs: [{key_id, max_tokens, disabled}]
+    active_index: int = 0
     sub: str = "sentence"
 
 
@@ -278,67 +253,11 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
     if req.sub not in ("title", "sentence", "word"):
         raise HTTPException(status_code=400, detail="Invalid sub")
     try:
-        update_tier_keys(tier, req.sub, req.configs)
+        update_tier_keys(tier, req.sub, req.configs, req.active_index)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     _log_action("update_api_keys", "tier", tier, {"sub": req.sub, "ref_count": len(req.configs)})
     return {"status": "ok"}
-
-
-async def _probe_key_capabilities(gateway, key_id: str) -> dict:
-    """逐参数探测 key 支持哪些可选参数。从完整参数逐渐缩小。
-
-    策略：依次尝试每个候选参数，遇到不支持就移除该参数、继续探测下一个。
-    - 第 1 次：max_tokens + enable_thinking=False
-        - 200 → enable_thinking 支持
-        - 4xx → 移除 enable_thinking，再测一次（确认不是 max_tokens 问题）
-    - 第 2 次（如需）：max_tokens only
-        - 200 → enable_thinking 不支持
-        - 4xx → max_tokens 也不支持，再测一次不带 max_tokens
-    - 第 3 次（如需）：纯 messages
-        - 200 → 都不支持
-        - 4xx → key 本身有问题（_test_key 已确认可用，理论上不会到这）
-
-    返回 {"enable_thinking": bool}。True 表示支持该参数（运行时必须显式传 False 关闭思考）。
-
-    注：每次探测会消耗少量 token。仅在 _test_key 成功后调用。
-    """
-    import httpx
-    kdef = gateway.key_defs.get(key_id, {})
-    api_key = kdef.get("api_key", "")
-    if not api_key:
-        return {"enable_thinking": False}
-    base_url = kdef.get("base_url", "https://api.openai.com/v1")
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    model = kdef.get("model", "gpt-4o-mini")
-
-    async def _try(extra: dict) -> tuple:
-        """发探测请求，返回 (status_code, body_lower)。"""
-        payload = {"model": model, "messages": [{"role": "user", "content": "Hi"}], **extra}
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, headers=headers, json=payload)
-            return resp.status_code, resp.text[:300].lower()
-        except Exception:
-            return 0, ""
-
-    # 第 1 轮：max_tokens + enable_thinking
-    code, body = await _try({"max_tokens": 5, "enable_thinking": False})
-    if code == 200:
-        return {"enable_thinking": True}
-    # 4xx：可能是 enable_thinking 不支持，也可能是 max_tokens 不支持——分离变量
-    if "enable_thinking" in body or "enable-thinking" in body:
-        # 明确是 enable_thinking 问题 → 标记不支持，max_tokens 仍待确认
-        # 第 2 轮：只带 max_tokens（不带 enable_thinking）
-        code2, body2 = await _try({"max_tokens": 5})
-        # max_tokens 是否支持不影响 enable_thinking 的结论（已 False）
-        # 但记录一下避免调用时 max_tokens 也 400（gateway 自己会折半重试，这里不深究）
-        return {"enable_thinking": False}
-    # 4xx 但没提 enable_thinking → 可能是 max_tokens 问题或其他，保守判 enable_thinking 不支持
-    # 再测一次纯 messages 确认 key 本身可用
-    code3, body3 = await _try({})
-    return {"enable_thinking": False}
 
 
 async def _test_key(gateway, key_id: str) -> dict:
@@ -346,8 +265,6 @@ async def _test_key(gateway, key_id: str) -> dict:
 
     测试只更新 key 的 is_valid/last_error/circuit_state（200 时复位），
     不切换 active_index，避免干扰真实流量。返回 {key_id, status, message}。
-
-    测试成功后自动探测能力（enable_thinking 等可选参数），写入 key_defs 持久化。
     """
     import httpx
     from datetime import datetime, timezone
@@ -380,14 +297,7 @@ async def _test_key(gateway, key_id: str) -> dict:
             rt["fail_count"] = 0
             rt["half_open_probed"] = False
             rt["invalid_streak"] = 0
-            # 探测能力（enable_thinking 等可选参数），写入 key_defs 持久化
-            caps = await _probe_key_capabilities(gateway, key_id)
-            rt["capabilities"] = caps
-            try:
-                update_key_def(key_id, capabilities=caps)
-            except Exception:
-                pass  # 持久化失败不阻塞测试结果返回
-            return {"key_id": key_id, "status": "ok", "message": "API Key 可用", "capabilities": caps}
+            return {"key_id": key_id, "status": "ok", "message": "API Key 可用"}
         if resp.status_code == 401:
             rt["is_valid"] = False
             rt["last_error"] = "401 Unauthorized"
@@ -494,7 +404,7 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
 
 
 def _build_key_statuses(pool, gateway) -> list:
-    """构建 pool 内每个引用的状态：per-pool disabled + key 全局熔断/运行时状态。"""
+    """构建 pool 内每个引用的状态：per-pool disabled/weight + key 全局熔断/运行时状态。"""
     statuses = []
     for i, ref in enumerate(pool.refs):
         key_id = ref.get("key_id")
@@ -510,6 +420,7 @@ def _build_key_statuses(pool, gateway) -> list:
             "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
             "model": kdef.get("model", ""),
             "max_tokens": ref.get("max_tokens"),
+            "weight": ref.get("weight", 1),  # per-pool
             "disabled": ref.get("disabled", False),  # per-pool
             "is_valid": is_valid,  # 全局
             "is_busy": gateway.is_key_busy(key_id),  # 全局
@@ -1124,7 +1035,7 @@ def _load_global_settings() -> dict:
         with open(GLOBAL_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+        return {"request_interval": 0.1, "batch_size": 5}
 
 
 def _save_global_settings(data: dict):
@@ -1138,15 +1049,24 @@ async def get_global_settings(admin: AdminTokenData = Depends(require_admin)):
 
 
 class GlobalSettingsUpdate(BaseModel):
-    """已废弃：gateway 不再使用 batch_size/request_interval。保留空模型以兼容前端调用。"""
-    pass
+    request_interval: Optional[float] = None
+    batch_size: Optional[int] = None
 
 
 @router.put("/global-settings")
 async def update_global_settings(req: GlobalSettingsUpdate, admin: AdminTokenData = Depends(require_admin)):
-    """已废弃：不再有可配置字段。保留 endpoint 以兼容前端，返回空对象。"""
-    settings = {}
+    settings = _load_global_settings()
+    if req.request_interval is not None:
+        settings["request_interval"] = req.request_interval
+    if req.batch_size is not None:
+        settings["batch_size"] = req.batch_size
     _save_global_settings(settings)
+    # 通知 gateway 刷新配置
+    try:
+        from utils.llm_gateway import gateway
+        gateway.reload()
+    except Exception:
+        pass
     _log_action("update_global_settings", details=settings)
     return settings
 

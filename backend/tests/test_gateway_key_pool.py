@@ -1,7 +1,7 @@
-"""验证 gateway Key 池的引用语义模型 + 纯轮询 + 熔断器 + Retry-After 行为。
+"""验证 gateway Key 池的引用语义模型 + SWRR + 熔断器 + Retry-After 行为。
 
 覆盖要点：
-1. 纯轮询（原子 counter 推进 / 跳过 disabled / 跳过熔断 open / reload 保留 counter）
+1. SWRR 平滑加权轮询（等权/加权/跳过 disabled/跳过熔断 open）
 2. 熔断器状态机（5xx 阈值 / half_open 探测 / half_open 成功复位 / half_open 失败重开 / 401 直接 open）
 3. Retry-After 尊重（带 retry_after 阻塞 / 无 retry_after 不阻塞）
 4. 引用语义：运行时状态全局共享 / per-pool disabled 独立 / 重排引用保留 key_id
@@ -40,17 +40,17 @@ def _kdef(kid, api_key="sk-x", base_url="https://x/v1", model="m"):
             "input_price_per_million": 0, "output_price_per_million": 0}
 
 
-def _ref(kid, max_tokens=None, disabled=False):
-    """构造一个 pool 引用（不再含 weight）。"""
-    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled}
+def _ref(kid, max_tokens=None, disabled=False, weight=1):
+    """构造一个 pool 引用。"""
+    return {"key_id": kid, "max_tokens": max_tokens, "disabled": disabled, "weight": weight}
 
 
 def _build_data(keys, sentence_refs, tier="free"):
-    """构造新格式数据：keys 为 {kid: kdef}，sentence_refs 为 [ref,...]（不再含 active_index）。"""
+    """构造新格式数据：keys 为 {kid: kdef}，sentence_refs 为 [ref,...]。"""
     return {"keys": keys, "tier_keys": {tier: {
-        "title": {"configs": []},
-        "sentence": {"configs": sentence_refs},
-        "word": {"configs": []},
+        "title": {"configs": [], "active_index": 0},
+        "sentence": {"configs": sentence_refs, "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
 
 
@@ -111,10 +111,10 @@ class _FakeAsyncClient:
         return _FakeResp(200, '{"ok":1}')
 
 
-# ── 1. 纯轮询 ──────────────────────────────────────────────
+# ── 1. SWRR 平滑加权轮询 ────────────────────────────────────
 
-def test_rotation_distributes_evenly():
-    """两个等权 key，8 次 pick 应 4/4 交替分布（counter 每次推进 1）。"""
+def test_swrr_equal_weights_distribute_evenly():
+    """两个 key weight=1，SWRR 应交替选中，分布约 50%/50%。"""
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
     gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
     pool = gw.gateway.pools["free"]["sentence"]
@@ -126,8 +126,21 @@ def test_rotation_distributes_evenly():
     assert counts == {0: 4, 1: 4}, counts
 
 
-def test_rotation_skips_disabled():
-    """disabled 的 ref 不参与轮询，始终选可用 key。"""
+def test_swrr_weighted_distribution():
+    """key1 weight=3, key2 weight=1，SWRR 应按 75%/25% 分布。"""
+    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
+    gw = _setup(_build_data(keys, [_ref("k1", weight=3), _ref("k2", weight=1)]))
+    pool = gw.gateway.pools["free"]["sentence"]
+    counts = {0: 0, 1: 0}
+    for _ in range(8):
+        cfg, idx = pool.get_current(gw.gateway)
+        counts[idx] += 1
+        pool.mark_complete(gw.gateway, idx)
+    assert counts[0] == 6 and counts[1] == 2, counts
+
+
+def test_swrr_skips_disabled_ref():
+    """disabled 的 ref 不参与 SWRR，始终选可用 key。"""
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
     gw = _setup(_build_data(keys, [_ref("k1", disabled=True), _ref("k2")]))
     pool = gw.gateway.pools["free"]["sentence"]
@@ -139,8 +152,8 @@ def test_rotation_skips_disabled():
     assert pool.has_any_usable_key(gw.gateway) is True
 
 
-def test_rotation_skips_circuit_open_key():
-    """熔断 open 且在阻塞期内的 key 不参与轮询。"""
+def test_swrr_skips_circuit_open_key():
+    """熔断 open 且在阻塞期内的 key 不参与 SWRR。"""
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
     gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
     g = gw.gateway
@@ -154,21 +167,6 @@ def test_rotation_skips_circuit_open_key():
         assert idx == 1, idx  # 只能选 k2
         assert cfg["api_key"] == "sk-2"
         pool.mark_complete(g, idx)
-
-
-def test_rotation_advances_counter_each_pick():
-    """每次 pick 都推进 counter，连续 pick 不重复同一 key（n=2 时交替）。"""
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    seq = []
-    for _ in range(6):
-        cfg, idx = pool.get_current(gw.gateway)
-        seq.append(idx)
-        pool.mark_complete(gw.gateway, idx)
-    # 交替：0,1,0,1,0,1
-    assert seq == [0, 1, 0, 1, 0, 1], seq
-    assert pool.counter == 6, pool.counter
 
 
 # ── 2. 熔断器状态机 ─────────────────────────────────────────
@@ -369,9 +367,9 @@ def test_runtime_state_is_global_across_pools():
     """同一 key 被多个 pool 引用时，运行时状态全局共享。"""
     keys = {"k1": _kdef("k1", "sk-shared")}
     data = {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": [_ref("k1")]},
-        "sentence": {"configs": [_ref("k1")]},
-        "word": {"configs": []},
+        "title": {"configs": [_ref("k1")], "active_index": 0},
+        "sentence": {"configs": [_ref("k1")], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
     gw = _setup(data)
     g = gw.gateway
@@ -397,9 +395,9 @@ def test_per_pool_disabled_is_independent():
     """per-pool disabled 独立：free:sentence 禁用 k1 不影响 free:title 用 k1。"""
     keys = {"k1": _kdef("k1", "sk-shared")}
     data = {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": [_ref("k1", disabled=False)]},
-        "sentence": {"configs": [_ref("k1", disabled=True)]},
-        "word": {"configs": []},
+        "title": {"configs": [_ref("k1", disabled=False)], "active_index": 0},
+        "sentence": {"configs": [_ref("k1", disabled=True)], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
     gw = _setup(data)
     g = gw.gateway
@@ -424,9 +422,9 @@ def test_reorder_refs_preserves_key_id_mapping():
     import llm_api
     # 模拟前端拖拽重排：把 k2 移到 k1 前面
     llm_api.update_tier_keys("free", "sentence", [
-        {"key_id": "k2", "max_tokens": None, "disabled": False},
-        {"key_id": "k1", "max_tokens": None, "disabled": False},
-    ])
+        {"key_id": "k2", "max_tokens": None, "disabled": False, "weight": 1},
+        {"key_id": "k1", "max_tokens": None, "disabled": False, "weight": 1},
+    ], 0)
 
     saved = llm_api._load_data()["tier_keys"]["free"]["sentence"]["configs"]
     assert saved[0]["key_id"] == "k2", saved[0]
@@ -443,6 +441,7 @@ def test_call_caps_max_tokens_to_free_default():
     """free tier 默认封顶 16384，调用方传 65536 应被截到 16384。"""
     keys = {"k1": _kdef("k1", "sk-good")}
     gw = _setup(_build_data(keys, [_ref("k1")]))
+    gw.gateway.pools["free"]["sentence"].interval = 0
     captured = {}
 
     class _C(_FakeAsyncClient):
@@ -459,6 +458,7 @@ def test_call_caps_max_tokens_to_per_pool_value():
     """per-pool max_tokens=8000 时，调用方传 65536 应被截到 8000。"""
     keys = {"k1": _kdef("k1", "sk-good")}
     gw = _setup(_build_data(keys, [_ref("k1", max_tokens=8000)], tier="basic"))
+    gw.gateway.pools["basic"]["sentence"].interval = 0
     captured = {}
 
     class _C(_FakeAsyncClient):
@@ -475,6 +475,7 @@ def test_call_keeps_smaller_caller_max_tokens():
     """调用方传更小值时不被 key 封顶抬高。"""
     keys = {"k1": _kdef("k1", "sk-good")}
     gw = _setup(_build_data(keys, [_ref("k1", max_tokens=16384)]))
+    gw.gateway.pools["free"]["sentence"].interval = 0
     captured = {}
 
     class _C(_FakeAsyncClient):
@@ -491,6 +492,7 @@ def test_call_halves_max_tokens_on_400():
     """provider 返回 max_tokens 非法的 400 时，gateway 折半重试直到成功。"""
     keys = {"k1": _kdef("k1", "sk-x")}
     gw = _setup(_build_data(keys, [_ref("k1", max_tokens=16384)]))
+    gw.gateway.pools["free"]["sentence"].interval = 0
     attempts = []
 
     class _C(_FakeAsyncClient):
@@ -513,9 +515,9 @@ def test_sub_pool_routing_by_request_type():
     """不同 request_type 路由到不同 sub-pool；sub 为空时回退到 sentence。"""
     keys = {"kt": _kdef("kt", "sk-title"), "ks": _kdef("ks", "sk-sentence")}
     data = {"keys": keys, "tier_keys": {"free": {
-        "title": {"configs": [_ref("kt")]},
-        "sentence": {"configs": [_ref("ks")]},
-        "word": {"configs": []},
+        "title": {"configs": [_ref("kt")], "active_index": 0},
+        "sentence": {"configs": [_ref("ks")], "active_index": 0},
+        "word": {"configs": [], "active_index": 0},
     }}}
     gw = _setup(data)
     g = gw.gateway
@@ -588,262 +590,6 @@ def test_mark_complete_clears_error_state():
     assert rt["rate_limited_until"] is None
     assert rt["circuit_state"] == "closed"
     assert pool.consecutive_fail_start is None
-
-
-# ── 7. reload() 不再重置 counter ──────────────────────────
-
-def test_reload_preserves_counter_when_refs_unchanged():
-    """reload() 时若 refs 内容未变，应保留旧 pool 对象（包括 counter）。
-
-    回归：之前每次 admin 改配置都重置轮询状态，导致每次都从第一个 key 开始（不轮换）。
-    """
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    # 制造 counter 状态：pick 一次 → counter=1
-    cfg, idx = pool.get_current(gw.gateway); pool.mark_complete(gw.gateway, idx)
-    assert pool.counter == 1, pool.counter
-    # reload（refs 未变）
-    gw.gateway.reload()
-    new_pool = gw.gateway.pools["free"]["sentence"]
-    # 同一对象引用 + counter 保留
-    assert new_pool is pool, "refs 未变时应保留旧 pool 对象"
-    assert new_pool.counter == 1, new_pool.counter
-
-
-def test_reload_preserves_counter_when_refs_reordered():
-    """reload() 时若 refs 顺序变了（拖拽重排），应保留 counter。
-
-    refs 内容变化时按 _rebuild_preserving_state 复用 counter，避免重置轮询位置。
-    counter 是纯整数，不受 refs 内容变化影响（只受长度影响，见下个测试）。
-    """
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    cfg, idx = pool.get_current(gw.gateway); pool.mark_complete(gw.gateway, idx)
-    assert pool.counter == 1
-    # 拖拽重排：把 k2 移到 k1 前面
-    import llm_api
-    llm_api.update_tier_keys("free", "sentence", [
-        {"key_id": "k2", "max_tokens": None, "disabled": False},
-        {"key_id": "k1", "max_tokens": None, "disabled": False},
-    ])
-    # reload 后 counter 应保留
-    new_pool = gw.gateway.pools["free"]["sentence"]
-    assert new_pool.counter == 1, new_pool.counter
-
-
-def test_reload_wraps_counter_when_refs_shrink():
-    """reload() 时若 refs 变少（删除引用），counter 对新长度取模。"""
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2"), "k3": _kdef("k3", "sk-3")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2"), _ref("k3")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    # pick 5 次 → counter=5（5 % 3 = 2）
-    for _ in range(5):
-        cfg, idx = pool.get_current(gw.gateway)
-        pool.mark_complete(gw.gateway, idx)
-    assert pool.counter == 5
-    # 删除 k3 引用，新长度=2 → counter % 2 = 1
-    import llm_api
-    llm_api.update_tier_keys("free", "sentence", [
-        {"key_id": "k1", "max_tokens": None, "disabled": False},
-        {"key_id": "k2", "max_tokens": None, "disabled": False},
-    ])
-    new_pool = gw.gateway.pools["free"]["sentence"]
-    assert new_pool.counter == 1, new_pool.counter  # 5 % 2 = 1
-
-
-def test_reload_preserves_consecutive_fail():
-    """reload() 时若 refs 变了，应保留 consecutive_fail_start（避免重置失败计时）。"""
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    pool = gw.gateway.pools["free"]["sentence"]
-    # 制造 consecutive_fail_start：mark_server_error
-    pool.mark_server_error(gw.gateway, 0)
-    assert pool.consecutive_fail_start is not None
-    fail_start = pool.consecutive_fail_start
-    # 修改 refs 触发 reload
-    import llm_api
-    llm_api.update_tier_keys("free", "sentence", [
-        {"key_id": "k1", "max_tokens": 8192, "disabled": False},
-        {"key_id": "k2", "max_tokens": 8192, "disabled": False},
-    ])
-    new_pool = gw.gateway.pools["free"]["sentence"]
-    assert new_pool.consecutive_fail_start == fail_start, "consecutive_fail_start 应保留"
-
-
-# ── 8. reload() 后 SSE 通知被触发 ───────────────────────────
-
-def test_reload_triggers_notify():
-    """reload() 后应调用 _notify() 让 SSE 推送新状态。
-
-    回归：之前 reload() 只调 _reload_all()，没调 _notify()，导致
-    admin 改完配置（如禁用某 key）后前端 SSE 不推送，状态显示滞后。
-    """
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    import asyncio
-    event = gw.gateway.get_status_event()
-    # event 初始是 cleared
-    assert not event.is_set()
-    # reload 后应 set
-    gw.gateway.reload()
-    assert event.is_set(), "reload() 后应通过 _notify() 触发 SSE 事件"
-
-
-# ── 9. 禁用某 key 后调度切到其他可用 key ───────────────────
-
-def test_disable_one_key_switches_to_other():
-    """禁用 key 0 后，调度应只用 key 1（模拟 admin 点禁用按钮的场景）。"""
-    keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
-    gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
-    g = gw.gateway
-    pool = g.pools["free"]["sentence"]
-    # 禁用 k1（模拟 admin 通过 update_tier_keys 改 disabled）
-    import llm_api
-    llm_api.update_tier_keys("free", "sentence", [
-        {"key_id": "k1", "max_tokens": None, "disabled": True},
-        {"key_id": "k2", "max_tokens": None, "disabled": False},
-    ])
-    new_pool = g.pools["free"]["sentence"]
-    # 多次选 key 都应只选 k2（idx=1）
-    for _ in range(5):
-        cfg, idx = new_pool.get_current(g)
-        assert idx == 1, idx
-        assert cfg["api_key"] == "sk-2"
-        new_pool.mark_complete(g, idx)
-
-
-# ── 10. capabilities 控制 enable_thinking 参数 ───────────────
-
-def test_gateway_no_enable_thinking_by_default():
-    """未探测过的新 key（无 capabilities）→ payload 不带 enable_thinking（安全默认）。
-
-    回归：之前 gateway 硬编码 "enable_thinking": False，对不支持该参数的
-    provider（Groq/OpenAI 等）直接 400。
-    """
-    keys = {"k1": _kdef("k1", "sk-1")}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-
-    captured = {}
-
-    class _CapClient:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            captured["payload"] = json
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _CapClient):
-        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
-
-    assert "enable_thinking" not in captured["payload"], captured["payload"]
-    assert captured["payload"]["model"] == "m"
-
-
-def test_gateway_enable_thinking_when_caps_supported():
-    """探测支持 enable_thinking 的 key → payload 带 enable_thinking=False。"""
-    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-
-    captured = {}
-
-    class _CapClient:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            captured["payload"] = json
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _CapClient):
-        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
-
-    assert captured["payload"].get("enable_thinking") is False, captured["payload"]
-
-
-def test_gateway_runtime_fallback_on_unsupported_enable_thinking():
-    """运行时回退：第一次返回 400 + 'enable_thinking unsupported'
-    → 更新 caps（持久化）+ 重试不带该参 → 200。
-
-    回归：用户报告 "property 'enable_thinking' is unsupported" 直接报错。
-    现在应自动去掉该参数重试，并把 caps 写入 key_defs 避免下次再 400。
-    """
-    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-
-    call_count = {"n": 0}
-
-    class _FallbackClient:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                # 第一次：模拟 Groq 不支持 enable_thinking
-                return _FakeResp(400, '{"error":{"message":"property \'enable_thinking\' is unsupported","type":"invalid_request_error"}}')
-            # 第二次：不带 enable_thinking 应成功
-            assert "enable_thinking" not in json, f"重试时应去掉 enable_thinking，但发了: {json}"
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _FallbackClient):
-        result = asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
-
-    # 重试了一次
-    assert call_count["n"] == 2, call_count
-    # 最终成功
-    assert result == {"choices": [{"message": {"content": "ok"}}], "usage": {}}
-    # caps 被更新为 enable_thinking=False（持久化到 key_defs）
-    import llm_api
-    saved = llm_api._load_data()["keys"]["k1"]["capabilities"]
-    assert saved == {"enable_thinking": False}, saved
-    # 运行时也更新了
-    assert gw.gateway.key_defs["k1"]["capabilities"] == {"enable_thinking": False}
-
-
-def test_gateway_runtime_fallback_only_once():
-    """运行时回退只触发一次：第二次调用同一 key 不应再 400（caps 已持久化）。"""
-    keys = {"k1": {**_kdef("k1", "sk-1"), "capabilities": {"enable_thinking": True}}}
-    gw = _setup(_build_data(keys, [_ref("k1")]))
-
-    call_count = {"n": 0}
-
-    class _OnceClient:
-        def __init__(self, *a, **kw):
-            pass
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *a):
-            return False
-        async def post(self, url, headers=None, json=None):
-            call_count["n"] += 1
-            # 任何带 enable_thinking 的请求都 400
-            if "enable_thinking" in json:
-                return _FakeResp(400, "property 'enable_thinking' is unsupported")
-            return _FakeResp(200, '{"ok":1}')
-
-    with patch("httpx.AsyncClient", _OnceClient):
-        asyncio.run(gw.gateway.call("u1", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
-    first_total = call_count["n"]
-    # 第一次调用：1（400） + 1（200 重试） = 2 次
-    assert first_total == 2, first_total
-
-    # 第二次调用：caps 已经更新，不该带 enable_thinking，直接 200，1 次
-    with patch("httpx.AsyncClient", _OnceClient):
-        asyncio.run(gw.gateway.call("u2", "free", [{"role": "user", "content": "hi"}], request_type="translate"))
-    second_total = call_count["n"] - first_total
-    assert second_total == 1, second_total
 
 
 if __name__ == "__main__":
