@@ -4,7 +4,7 @@
 1. SWRR 平滑加权轮询（等权/加权/跳过 disabled/跳过熔断 open）
 2. 熔断器状态机（5xx 阈值 / half_open 探测 / half_open 成功复位 / half_open 失败重开 / 401 直接 open）
 3. Retry-After 尊重（带 retry_after 阻塞 / 无 retry_after 不阻塞）
-4. 引用语义：运行时状态全局共享 / per-pool disabled 独立 / 重排引用保留 key_id
+4. 引用语义：运行时状态 per-pool per-ref 独立 / per-pool disabled 独立 / 重排引用保留 key_id
 5. max_tokens 封顶（free 默认 16384 / per-pool 覆盖 / 折半重试）
 6. sub-pool 路由
 """
@@ -61,7 +61,7 @@ def _setup(data):
     - 重载 config/llm_api（确保 TIER_KEYS_FILE 指向本目录）
     - 写入新格式数据
     - 重载 utils.llm_gateway（重建 gateway 单例）
-    - 防御性清空 key_runtime + 重新加载 pools，避免单例残留污染
+    - 重新加载 pools，避免单例残留污染
     """
     os.environ["DATA_DIR"] = _tmp
     importlib.reload(config)
@@ -70,16 +70,16 @@ def _setup(data):
         json.dump(data, f, ensure_ascii=False)
     import utils.llm_gateway as gw
     importlib.reload(gw)
-    # 防御：清空运行时状态并重建 pools，确保无残留
-    gw.gateway.key_runtime.clear()
+    # 防御：重建 pools，确保无残留运行时状态
     gw.gateway._reload_all()
     return gw
 
 
 def _rt(gw, pool, idx):
-    """取 pool 第 idx 个引用对应 key 的运行时状态。"""
-    key_id = pool.refs[idx]["key_id"]
-    return gw.gateway.key_runtime[key_id]
+    """取 pool 第 idx 个引用的 per-ref 运行时状态（先确保已 sync）。"""
+    with pool.lock:
+        pool._sync_runtime()
+        return pool.ref_runtime[idx]
 
 
 class _FakeResp:
@@ -157,11 +157,11 @@ def test_swrr_skips_circuit_open_key():
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
     gw = _setup(_build_data(keys, [_ref("k1"), _ref("k2")]))
     g = gw.gateway
-    # 把 k1 设为熔断 open 且在阻塞期内
-    rt1 = g._ensure_runtime("k1")
+    pool = g.pools["free"]["sentence"]
+    # 把 k1(idx=0) 设为熔断 open 且在阻塞期内
+    rt1 = _rt(gw, pool, 0)
     rt1["circuit_state"] = "open"
     rt1["rate_limited_until"] = time.time() + 60
-    pool = g.pools["free"]["sentence"]
     for _ in range(4):
         cfg, idx = pool.get_current(g)
         assert idx == 1, idx  # 只能选 k2
@@ -177,7 +177,7 @@ def test_circuit_5xx_threshold_three_failures():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
 
     pool.mark_server_error(g, 0)
     assert rt["circuit_state"] == "closed", rt
@@ -200,7 +200,7 @@ def test_circuit_half_open_allows_single_probe():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
     # 设为 open 且已过期 → 下次 pick 应转 half_open
     rt["circuit_state"] = "open"
     rt["rate_limited_until"] = time.time() - 1
@@ -227,7 +227,7 @@ def test_circuit_half_open_success_resets_to_closed():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
     rt["circuit_state"] = "open"
     rt["rate_limited_until"] = time.time() - 1
 
@@ -247,7 +247,7 @@ def test_circuit_half_open_failure_reopens():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
     rt["circuit_state"] = "open"
     rt["rate_limited_until"] = time.time() - 1
 
@@ -265,7 +265,7 @@ def test_circuit_401_directly_opens():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
 
     pool.mark_invalid(g, 0)
 
@@ -284,7 +284,7 @@ def test_circuit_401_escalates_on_repeated_failures():
     gw = _setup(_build_data(keys, [_ref("k1")]))
     g = gw.gateway
     pool = g.pools["free"]["sentence"]
-    rt = g._ensure_runtime("k1")
+    rt = _rt(gw, pool, 0)
 
     pool.mark_invalid(g, 0)
     assert rt["invalid_streak"] == 1
@@ -326,7 +326,7 @@ def test_rate_limited_with_retry_after_blocks():
     cfg, idx = pool.get_current(g)
     pool.mark_rate_limited(g, idx, retry_after=30)
 
-    rt = g.key_runtime[pool.refs[idx]["key_id"]]
+    rt = _rt(gw, pool, idx)
     assert rt["circuit_state"] == "open", rt
     assert rt["rate_limited_until"] > time.time() + 25, rt
 
@@ -348,7 +348,7 @@ def test_rate_limited_without_retry_after_does_not_block():
     cfg, idx = pool.get_current(g)
     pool.mark_rate_limited(g, idx)  # 无 retry_after
 
-    rt = g.key_runtime[pool.refs[idx]["key_id"]]
+    rt = _rt(gw, pool, idx)
     assert rt["rate_limited_until"] is None, rt
     assert rt["circuit_state"] == "closed", rt  # 不阻塞，保持原状态
 
@@ -363,8 +363,52 @@ def test_rate_limited_without_retry_after_does_not_block():
 
 # ── 4. 引用语义模型 ─────────────────────────────────────────
 
-def test_runtime_state_is_global_across_pools():
-    """同一 key 被多个 pool 引用时，运行时状态全局共享。"""
+def test_runtime_state_is_per_pool_independent():
+    """同一 key 被多个 pool 引用时，运行时状态 per-pool 独立：sentence 池
+    熔断不影响 title 池/word 池使用同一 key。"""
+    keys = {"k1": _kdef("k1", "sk-shared")}
+    data = {"keys": keys, "tier_keys": {"free": {
+        "title": {"configs": [_ref("k1")], "active_index": 0},
+        "sentence": {"configs": [_ref("k1")], "active_index": 0},
+        "word": {"configs": [_ref("k1")], "active_index": 0},
+    }}}
+    gw = _setup(data)
+    g = gw.gateway
+    p_sent = g.pools["free"]["sentence"]
+    p_title = g.pools["free"]["title"]
+    p_word = g.pools["free"]["word"]
+
+    # sentence 池标记 k1 invalid
+    cfg, idx = p_sent.get_current(g)
+    assert cfg["api_key"] == "sk-shared"
+    p_sent.mark_invalid(g, idx)
+
+    # sentence 池 per-ref 状态：is_valid=False / circuit open
+    rt_sent = _rt(gw, p_sent, 0)
+    assert rt_sent["is_valid"] is False
+    assert rt_sent["circuit_state"] == "open"
+    assert rt_sent["last_error"] == "401 Unauthorized"
+
+    # title 池里的 k1 不受影响（per-pool 独立）→ 仍可用
+    rt_title = _rt(gw, p_title, 0)
+    assert rt_title["circuit_state"] == "closed", rt_title
+    cfg2, idx2 = p_title.get_current(g)
+    assert cfg2 is not None and cfg2["api_key"] == "sk-shared"
+    p_title.mark_complete(g, idx2)
+
+    # word 池里的 k1 也不受影响 → 仍可用
+    rt_word = _rt(gw, p_word, 0)
+    assert rt_word["circuit_state"] == "closed", rt_word
+    cfg3, idx3 = p_word.get_current(g)
+    assert cfg3 is not None and cfg3["api_key"] == "sk-shared"
+    p_word.mark_complete(g, idx3)
+
+    # 但 sentence 池的 k1 仍被阻塞
+    assert p_sent.get_current(g) is None
+
+
+def test_reset_key_runtime_clears_circuit_across_pools():
+    """reset_key_runtime 清除指定 key_id 在所有 pool 的熔断状态。"""
     keys = {"k1": _kdef("k1", "sk-shared")}
     data = {"keys": keys, "tier_keys": {"free": {
         "title": {"configs": [_ref("k1")], "active_index": 0},
@@ -376,19 +420,20 @@ def test_runtime_state_is_global_across_pools():
     p_sent = g.pools["free"]["sentence"]
     p_title = g.pools["free"]["title"]
 
-    # sentence 池标记 k1 invalid
-    cfg, idx = p_sent.get_current(g)
-    assert cfg["api_key"] == "sk-shared"
-    p_sent.mark_invalid(g, idx)
-
-    # k1 全局状态：is_valid=False / circuit open
-    rt = g.key_runtime["k1"]
-    assert rt["is_valid"] is False
-    assert rt["circuit_state"] == "open"
-    assert rt["last_error"] == "401 Unauthorized"
-
-    # title 池里的 k1 也被阻塞（rate_limited_until 全局共享）
+    # 两个池都把 k1 熔断
+    cfg, idx = p_sent.get_current(g); p_sent.mark_invalid(g, idx)
+    cfg, idx = p_title.get_current(g); p_title.mark_invalid(g, idx)
+    assert _rt(gw, p_sent, 0)["circuit_state"] == "open"
+    assert _rt(gw, p_title, 0)["circuit_state"] == "open"
+    assert p_sent.get_current(g) is None
     assert p_title.get_current(g) is None
+
+    # 重置 k1 运行时 → 两个池都恢复
+    g.reset_key_runtime("k1")
+    assert _rt(gw, p_sent, 0)["circuit_state"] == "closed"
+    assert _rt(gw, p_title, 0)["circuit_state"] == "closed"
+    assert p_sent.get_current(g) is not None
+    assert p_title.get_current(g) is not None
 
 
 def test_per_pool_disabled_is_independent():

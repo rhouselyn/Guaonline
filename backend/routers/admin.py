@@ -261,7 +261,7 @@ async def update_api_keys(tier: str, req: TierKeyUpdate, admin: AdminTokenData =
 
 
 async def _test_key(gateway, key_id: str) -> dict:
-    """按 key_id 测试一个全局 key，结果回写 gateway 全局运行时状态。
+    """按 key_id 测试一个全局 key，结果回写所有 pool 中该 key 的 per-ref 运行时状态。
 
     测试只更新 key 的 is_valid/last_error/circuit_state（200 时复位），
     不切换 active_index，避免干扰真实流量。返回 {key_id, status, message}。
@@ -272,12 +272,22 @@ async def _test_key(gateway, key_id: str) -> dict:
     kdef = gateway.key_defs.get(key_id, {})
     api_key = kdef.get("api_key", "")
     now_iso = datetime.now(timezone.utc).isoformat()
-    rt = gateway._ensure_runtime(key_id)
+
+    def _apply_to_refs(update_fn):
+        """把测试结果同步到所有 pool 中该 key_id 的 per-ref 运行时状态。"""
+        for tier_pools in gateway.pools.values():
+            for pool in tier_pools.values():
+                with pool.lock:
+                    pool._sync_runtime()
+                    for i, ref in enumerate(pool.refs):
+                        if ref.get("key_id") == key_id:
+                            update_fn(pool.ref_runtime[i])
+
     if not api_key:
-        rt["is_valid"] = True
-        rt["last_error"] = None
-        rt["last_error_time"] = None
-        rt["rate_limited_until"] = None
+        _apply_to_refs(lambda rt: rt.update({
+            "is_valid": True, "last_error": None, "last_error_time": None,
+            "rate_limited_until": None,
+        }))
         return {"key_id": key_id, "status": "empty", "message": "未配置 Key"}
     base_url = kdef.get("base_url", "https://api.openai.com/v1")
     url = f"{base_url.rstrip('/')}/chat/completions"
@@ -289,45 +299,42 @@ async def _test_key(gateway, key_id: str) -> dict:
             resp = await client.post(url, headers=headers, json=payload)
         body = resp.text[:160]
         if resp.status_code == 200:
-            rt["is_valid"] = True
-            rt["last_error"] = None
-            rt["last_error_time"] = None
-            rt["rate_limited_until"] = None
-            rt["circuit_state"] = "closed"
-            rt["fail_count"] = 0
-            rt["half_open_probed"] = False
-            rt["invalid_streak"] = 0
+            _apply_to_refs(lambda rt: rt.update({
+                "is_valid": True, "last_error": None, "last_error_time": None,
+                "rate_limited_until": None, "circuit_state": "closed",
+                "fail_count": 0, "half_open_probed": False, "invalid_streak": 0,
+            }))
             return {"key_id": key_id, "status": "ok", "message": "API Key 可用"}
         if resp.status_code == 401:
-            rt["is_valid"] = False
-            rt["last_error"] = "401 Unauthorized"
-            rt["last_error_time"] = now_iso
-            rt["rate_limited_until"] = None
+            _apply_to_refs(lambda rt: rt.update({
+                "is_valid": False, "last_error": "401 Unauthorized",
+                "last_error_time": now_iso, "rate_limited_until": None,
+            }))
             return {"key_id": key_id, "status": "invalid", "message": f"Key 无效/欠费: {body}"}
         if resp.status_code == 429:
-            rt["is_valid"] = True
-            rt["last_error"] = "429 Rate Limited"
-            rt["last_error_time"] = now_iso
-            rt["rate_limited_until"] = None
+            _apply_to_refs(lambda rt: rt.update({
+                "is_valid": True, "last_error": "429 Rate Limited",
+                "last_error_time": now_iso, "rate_limited_until": None,
+            }))
             return {"key_id": key_id, "status": "rate_limited", "message": f"限速中: {body}"}
-        rt["is_valid"] = True
-        rt["last_error"] = f"{resp.status_code} {body}"
-        rt["last_error_time"] = now_iso
-        rt["rate_limited_until"] = None
+        _apply_to_refs(lambda rt: rt.update({
+            "is_valid": True, "last_error": f"{resp.status_code} {body}",
+            "last_error_time": now_iso, "rate_limited_until": None,
+        }))
         return {"key_id": key_id, "status": "error",
                 "message": f"API 返回 {resp.status_code}: {body}"}
     except httpx.TimeoutException:
-        rt["is_valid"] = True
-        rt["last_error"] = "network: timeout"
-        rt["last_error_time"] = now_iso
-        rt["rate_limited_until"] = None
+        _apply_to_refs(lambda rt: rt.update({
+            "is_valid": True, "last_error": "network: timeout",
+            "last_error_time": now_iso, "rate_limited_until": None,
+        }))
         return {"key_id": key_id, "status": "error", "message": "请求超时（30s）"}
     except Exception as e:
         msg = str(e)[:160]
-        rt["is_valid"] = True
-        rt["last_error"] = f"network: {msg}"
-        rt["last_error_time"] = now_iso
-        rt["rate_limited_until"] = None
+        _apply_to_refs(lambda rt: rt.update({
+            "is_valid": True, "last_error": f"network: {msg}",
+            "last_error_time": now_iso, "rate_limited_until": None,
+        }))
         return {"key_id": key_id, "status": "error", "message": f"请求失败: {msg}"}
 
 
@@ -404,58 +411,60 @@ async def test_api_key(tier: str, sub: str = "sentence", admin: AdminTokenData =
 
 
 def _build_key_statuses(pool, gateway) -> list:
-    """构建 pool 内每个引用的状态：per-pool disabled/weight + key 全局熔断/运行时状态。"""
-    statuses = []
-    for i, ref in enumerate(pool.refs):
-        key_id = ref.get("key_id")
-        kdef = gateway.key_defs.get(key_id, {})
-        rt = gateway.key_runtime.get(key_id) or {}
-        api_key = kdef.get("api_key", "")
-        is_valid = rt.get("is_valid", True)
-        last_error = rt.get("last_error")
-        status_info = {
-            "index": i,
-            "key_id": key_id,
-            "title": kdef.get("title", ""),
-            "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
-            "model": kdef.get("model", ""),
-            "max_tokens": ref.get("max_tokens"),
-            "weight": ref.get("weight", 1),  # per-pool
-            "disabled": ref.get("disabled", False),  # per-pool
-            "is_valid": is_valid,  # 全局
-            "is_busy": gateway.is_key_busy(key_id),  # 全局
-            "circuit_state": rt.get("circuit_state", "closed"),  # 全局熔断状态
-            "fail_count": rt.get("fail_count", 0),  # 全局连续失败次数
-            "last_error": last_error,  # 全局
-            "last_error_time": rt.get("last_error_time"),
-            "total_calls": rt.get("total_calls", 0),  # 全局
-        }
-        if ref.get("disabled"):
-            status_info["status"] = "disabled"
-            status_info["status_text"] = "已禁用"
-        elif not api_key:
-            status_info["status"] = "empty"
-            status_info["status_text"] = "未配置"
-        elif not is_valid:
-            status_info["status"] = "invalid"
-            status_info["status_text"] = "无效/欠费"
-        elif rt.get("circuit_state") == "open":
-            status_info["status"] = "circuit_open"
-            status_info["status_text"] = "熔断中"
-        elif rt.get("circuit_state") == "half_open":
-            status_info["status"] = "circuit_half_open"
-            status_info["status_text"] = "探测中"
-        elif last_error and "429" in str(last_error):
-            status_info["status"] = "rate_limited"
-            status_info["status_text"] = "限速中"
-        elif last_error:
-            status_info["status"] = "error"
-            status_info["status_text"] = "异常"
-        else:
-            status_info["status"] = "normal"
-            status_info["status_text"] = "正常"
-        statuses.append(status_info)
-    return statuses
+    """构建 pool 内每个引用的状态：per-pool per-ref 熔断/运行时状态。"""
+    with pool.lock:
+        pool._sync_runtime()
+        statuses = []
+        for i, ref in enumerate(pool.refs):
+            key_id = ref.get("key_id")
+            kdef = gateway.key_defs.get(key_id, {})
+            rt = pool.ref_runtime[i] if i < len(pool.ref_runtime) else {}
+            api_key = kdef.get("api_key", "")
+            is_valid = rt.get("is_valid", True)
+            last_error = rt.get("last_error")
+            status_info = {
+                "index": i,
+                "key_id": key_id,
+                "title": kdef.get("title", ""),
+                "api_key_preview": api_key[:8] + "..." if api_key else "未配置",
+                "model": kdef.get("model", ""),
+                "max_tokens": ref.get("max_tokens"),
+                "weight": ref.get("weight", 1),  # per-pool
+                "disabled": ref.get("disabled", False),  # per-pool
+                "is_valid": is_valid,  # per-ref
+                "is_busy": gateway.is_key_busy(key_id),  # 全局在途
+                "circuit_state": rt.get("circuit_state", "closed"),  # per-ref 熔断状态
+                "fail_count": rt.get("fail_count", 0),  # per-ref 连续失败次数
+                "last_error": last_error,  # per-ref
+                "last_error_time": rt.get("last_error_time"),
+                "total_calls": rt.get("total_calls", 0),  # per-ref
+            }
+            if ref.get("disabled"):
+                status_info["status"] = "disabled"
+                status_info["status_text"] = "已禁用"
+            elif not api_key:
+                status_info["status"] = "empty"
+                status_info["status_text"] = "未配置"
+            elif not is_valid:
+                status_info["status"] = "invalid"
+                status_info["status_text"] = "无效/欠费"
+            elif rt.get("circuit_state") == "open":
+                status_info["status"] = "circuit_open"
+                status_info["status_text"] = "熔断中"
+            elif rt.get("circuit_state") == "half_open":
+                status_info["status"] = "circuit_half_open"
+                status_info["status_text"] = "探测中"
+            elif last_error and "429" in str(last_error):
+                status_info["status"] = "rate_limited"
+                status_info["status_text"] = "限速中"
+            elif last_error:
+                status_info["status"] = "error"
+                status_info["status_text"] = "异常"
+            else:
+                status_info["status"] = "normal"
+                status_info["status_text"] = "正常"
+            statuses.append(status_info)
+        return statuses
 
 
 @router.get("/api-keys/{tier}/status")

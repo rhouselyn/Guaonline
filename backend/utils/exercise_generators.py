@@ -894,6 +894,9 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
     processing.add(word_to_gen)
     try:
         max_retries = 3
+        # 不完整重试时逐步提高 temperature 以探索更多可能：
+        # attempt 0 → base temperature, attempt 1 → +0.3, attempt 2 → +0.7
+        _retry_temp_boosts = [0.0, 0.3, 0.7]
         for attempt in range(max_retries):
             try:
                 existing = storage.load_word_cache(file_id, word_to_gen)
@@ -948,14 +951,16 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                     return
                 # --- 缓存未命中，走 LLM ---
 
-                print(f"[DEBUG] Background word gen: {word_to_gen} (attempt {attempt + 1})")
+                # 重试时提高 temperature 探索更多可能（attempt 0=base, 1=+0.3, 2=+0.7）
+                eff_temperature = temperature + _retry_temp_boosts[attempt]
+                print(f"[DEBUG] Background word gen: {word_to_gen} (attempt {attempt + 1}, temp={eff_temperature})")
                 options_result = await _gateway_generate_multiple_choice(
                     user_id, tier, word_to_gen,
                     correct_meaning,
                     context,
                     target_lang,
                     source_lang,
-                    temperature
+                    eff_temperature
                 )
 
                 placeholder_pattern = re.compile(r'(释义|含义|意思|meaning|definition)\s*\d', re.IGNORECASE)
@@ -968,7 +973,7 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                         context,
                         target_lang,
                         source_lang,
-                        temperature
+                        eff_temperature
                     )
                     enriched = options_result.get("enriched_meaning", "")
                     if placeholder_pattern.search(enriched):
@@ -994,7 +999,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 # ponytail: 生成完整性检查——不完整且非最后一轮则重试，最后一轮仍不完整则 save 残缺兜底
                 # （用户打开时 is_word_cache_complete 会再 delete + 重新生成）
                 if attempt < max_retries - 1 and not is_word_cache_complete(cache_data):
-                    print(f"[WARN] 生成不完整，重试 ({attempt + 2}/{max_retries}): {word_to_gen}")
+                    next_temp = temperature + _retry_temp_boosts[attempt + 1]
+                    print(f"[WARN] 生成不完整，重试 ({attempt + 2}/{max_retries}): {word_to_gen} (temp {eff_temperature} → {next_temp})")
                     continue
                 storage.save_word_cache(file_id, word_to_gen, cache_data)
                 # 同时更新 global_vocab 和 user_vocab 缓存
@@ -1049,17 +1055,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
         processing.discard(word_to_gen)
 
 
-async def background_word_gen(file_id: str):
-    state = word_gen_state.get(file_id)
-    if not state:
-        return
-    language_settings = storage.load_language_settings(file_id)
-    target_lang = language_settings["target_lang"]
-    source_lang = language_settings.get("source_lang", "en")
-    vocab = state["vocab"]
-    uid = state.get("user_id")
-    tier = state.get("tier", "free")
-
+def _build_plan_word_order(file_id: str, vocab: list) -> list:
+    """根据 learning plan 构建 word 生成顺序（按 plan 的 unit/item 顺序）。"""
     plan = storage.load_learning_plan(file_id)
     plan_word_order = []
     if plan:
@@ -1074,25 +1071,50 @@ async def background_word_gen(file_id: str):
         for i in range(len(vocab)):
             if i not in seen_vocab_indices:
                 plan_word_order.append(i)
-
     if not plan_word_order:
         plan_word_order = list(range(len(vocab)))
+    return plan_word_order
 
-    first_uncached = None
+
+def find_first_incomplete_word(file_id: str, vocab: list, plan_word_order: list = None) -> int:
+    """扫描 plan_word_order 找到第一个未生成/不完整的单词位置（plan index）。
+
+    返回 plan_word_order 中的 index，若全部完整则返回 None。
+    """
+    if plan_word_order is None:
+        plan_word_order = _build_plan_word_order(file_id, vocab)
     for pi, vi in enumerate(plan_word_order):
         if vi < len(vocab):
             w = vocab[vi].get("word", "")
             if w:
                 existing = storage.load_word_cache(file_id, w)
                 if not existing or not is_word_cache_complete(existing):
-                    first_uncached = pi
-                    break
+                    return pi
+    return None
+
+
+async def background_word_gen(file_id: str):
+    state = word_gen_state.get(file_id)
+    if not state:
+        return
+    language_settings = storage.load_language_settings(file_id)
+    target_lang = language_settings["target_lang"]
+    source_lang = language_settings.get("source_lang", "en")
+    vocab = state["vocab"]
+    uid = state.get("user_id")
+    tier = state.get("tier", "free")
+
+    plan_word_order = _build_plan_word_order(file_id, vocab)
+
+    # 启动时扫描第一个未完成单词，确保从 plan 顺序最早的不完整处开始
+    first_uncached = find_first_incomplete_word(file_id, vocab, plan_word_order)
     if first_uncached is not None:
         state["plan_position"] = min(state.get("plan_position", 0), first_uncached)
     elif "plan_position" not in state:
         state["plan_position"] = len(plan_word_order)
 
     idle_scans = 0
+    words_since_rescan = 0
     while state["running"]:
         word_to_gen = None
         if state["priority_queue"]:
@@ -1181,6 +1203,29 @@ async def background_word_gen(file_id: str):
         if _time.time() < unhealthy_until:
             await asyncio.sleep(30)
             continue
+
+        # 周期性回扫：每派发 15 个单词后，检查已跳过的（plan_position 之前的）单词是否有不完整的。
+        # 如果有（例如某单词 3 次重试后仍残缺被 save），回退 plan_position 重新生成，确保按
+        # plan 顺序逐个单元补全，而不是一直冲到第 80+ 个才回头补第 1 单元。
+        words_since_rescan += 1
+        if words_since_rescan >= 15:
+            words_since_rescan = 0
+            cur_pos = state.get("plan_position", 0)
+            if cur_pos > 1:
+                earlier_incomplete = None
+                for pi in range(cur_pos):
+                    vi = plan_word_order[pi]
+                    if vi < len(vocab):
+                        w = vocab[vi].get("word", "")
+                        if w:
+                            ex = storage.load_word_cache(file_id, w)
+                            if not ex or not is_word_cache_complete(ex):
+                                earlier_incomplete = pi
+                                break
+                if earlier_incomplete is not None:
+                    print(f"[RESCAN] 发现 plan 位置 {earlier_incomplete} 不完整，回退 plan_position {cur_pos} → {earlier_incomplete}")
+                    state["plan_position"] = earlier_incomplete
+                    continue
 
         asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid, tier=tier))
         await asyncio.sleep(0.1)

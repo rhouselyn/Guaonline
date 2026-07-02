@@ -1,10 +1,10 @@
-"""验证 admin API Key 测试/状态端点（引用语义模型 + 熔断器 + weight）：
+"""验证 admin API Key 测试/状态端点（引用语义模型 + per-pool per-ref 熔断器 + weight）：
 
-1. test 端点按 key_id 测试，结果回写到 gateway 全局 key_runtime。
+1. test 端点按 key_id 测试，结果回写到所有 pool 中该 key 的 per-ref 运行时状态。
 2. status 端点暴露 circuit_state（open/half_open）。
 3. status 端点暴露 per-pool weight。
 4. is_busy 反映全局 active_in_flight。
-5. 运行时状态跨 pool 一致。
+5. test 端点跨 pool 同步状态（admin 诊断工具行为）。
 6. SSE 鉴权（无 token 401 / 无效 token 401 / 有效 token 放行）。
 7. 未知 tier 400。
 """
@@ -70,19 +70,25 @@ def _build(keys, sentence_refs, title_refs=None):
 
 
 def _setup(data):
-    """写入新格式数据并重载 gateway（重建单例 + 清空 key_runtime）。返回 gateway 实例。
+    """写入新格式数据并让 gateway 重新加载。返回 gateway 实例。
 
-    不重载 admin_mod（避免 router 引用失效）；admin 端点在调用时 import gateway，能拿到最新单例。
+    不重载 gw_mod 模块（避免破坏 TestClient portal）；admin 端点在调用时
+    import gateway，能拿到同一单例。per-pool per-ref 运行时状态由 _reload_all 重建。
     """
     os.environ["DATA_DIR"] = _tmp
     importlib.reload(config)
     importlib.reload(llm_api)
     with open(llm_api.TIER_KEYS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
-    importlib.reload(gw_mod)
-    gw_mod.gateway.key_runtime.clear()
     gw_mod.gateway._reload_all()
     return gw_mod.gateway
+
+
+def _rt(pool, idx):
+    """取 pool 第 idx 个引用的 per-ref 运行时状态（先确保已 sync）。"""
+    with pool.lock:
+        pool._sync_runtime()
+        return pool.ref_runtime[idx]
 
 
 class _FakeResp:
@@ -136,11 +142,16 @@ def test_test_endpoint_writes_back_per_key_runtime():
     assert by_idx[2]["status"] == "invalid", by_idx[2]
     assert by_idx[3]["status"] == "error", by_idx[3]
 
-    # 回写到全局 key_runtime（按 key_id）
-    assert g.key_runtime["k_good"]["last_error"] is None
-    assert g.key_runtime["k_good"]["is_valid"] is True
-    assert g.key_runtime["k_bad"]["is_valid"] is False
-    assert "500" in g.key_runtime["k_500"]["last_error"], g.key_runtime["k_500"]
+    # 回写到 sentence pool 的 per-ref 运行时状态（_test_key 经 _apply_to_refs 同步到所有 pool）
+    sent_pool = g.pools["free"]["sentence"]
+    # idx: 0=k_empty, 1=k_good, 2=k_bad, 3=k_500
+    rt_good = _rt(sent_pool, 1)
+    assert rt_good["last_error"] is None, rt_good
+    assert rt_good["is_valid"] is True, rt_good
+    rt_bad = _rt(sent_pool, 2)
+    assert rt_bad["is_valid"] is False, rt_bad
+    rt_500 = _rt(sent_pool, 3)
+    assert "500" in rt_500["last_error"], rt_500
 
 
 # ── 2. status 端点暴露 circuit_state ─────────────────────────
@@ -149,10 +160,12 @@ def test_status_exposes_circuit_state():
     keys = {"k1": _kdef("k1", "sk-1"), "k2": _kdef("k2", "sk-2")}
     data = _build(keys, [_ref("k1"), _ref("k2")])
     g = _setup(data)
-    # k1 设为 open，k2 设为 half_open
-    g._ensure_runtime("k1")["circuit_state"] = "open"
-    g.key_runtime["k1"]["rate_limited_until"] = time.time() + 60
-    rt2 = g._ensure_runtime("k2")
+    sent_pool = g.pools["free"]["sentence"]
+    # k1(idx=0) 设为 open，k2(idx=1) 设为 half_open
+    rt1 = _rt(sent_pool, 0)
+    rt1["circuit_state"] = "open"
+    rt1["rate_limited_until"] = time.time() + 60
+    rt2 = _rt(sent_pool, 1)
     rt2["circuit_state"] = "half_open"
     rt2["half_open_probed"] = False
 
@@ -202,9 +215,16 @@ def test_status_is_busy_reflects_global_active():
     assert s2[busy_id]["is_busy"] is False
 
 
-# ── 5. 运行时状态跨 pool 一致 ───────────────────────────────
+# ── 5. test 端点跨 pool 同步状态 ───────────────────────────
 
-def test_runtime_state_cross_pool_consistent():
+def test_test_endpoint_syncs_state_across_pools():
+    """admin test 端点对同一 key_id 的测试结果会同步到所有引用它的 pool。
+
+    k_good 同时被 free:title 和 free:sentence 引用。测 title 时 _test_key 经
+    _apply_to_refs 把结果回写到所有 pool 的 per-ref 运行时，故 sentence 池也能
+    拿到 is_valid=True。注意：这是 admin 诊断工具的跨 pool 同步行为，与运行时
+    熔断器 per-pool 独立（test_runtime_state_is_per_pool_independent）互不矛盾。
+    """
     keys = {"k_good": _kdef("k_good", "sk-good")}
     data = _build(keys, [_ref("k_good")], title_refs=[_ref("k_good")])
     g = _setup(data)

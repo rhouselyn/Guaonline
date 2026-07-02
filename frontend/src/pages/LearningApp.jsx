@@ -272,7 +272,8 @@ function App() {
 
   // 轮询处理状态
   useEffect(() => {
-    if (!currentFileId || skipPolling) return
+    // 退出条目（回到 input 步骤）时不轮询：只有当前条目内才继续 LLM 生成标题/语言/句子/单词等
+    if (!currentFileId || skipPolling || step === 'input') return
 
     console.log('开始轮询，文件ID:', currentFileId)
 
@@ -425,7 +426,7 @@ function App() {
         clearInterval(pollingInterval)
       }
     }
-  }, [currentFileId, skipPolling])
+  }, [currentFileId, skipPolling, step])
 
   const sortVocab = () => {
     const sorted = [...vocab].sort((a, b) => {

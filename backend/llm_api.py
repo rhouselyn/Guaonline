@@ -184,14 +184,25 @@ def update_key_def(key_id: str, **fields):
     if key_id not in keys:
         raise ValueError(f"key {key_id} not found")
     kdef = keys[key_id]
+    api_key_changed = False
     for f in ("title", "api_key", "base_url", "model", "input_price_per_million", "output_price_per_million"):
         if f in fields and fields[f] is not None:
             # 脱敏形式（带 *）的 api_key 视为未修改，保留原值
             if f == "api_key" and "*" in str(fields[f]):
                 continue
+            if f == "api_key" and kdef.get("api_key", "") != fields[f]:
+                api_key_changed = True
             kdef[f] = fields[f]
     _save_data(data)
     _reload_gateway()
+    # 粘贴新 api_key 后重置该 key 的 per-ref 运行时状态，使新 key 立即可用，
+    # 旧 key 的熔断/限速状态不会卡住轮询。
+    if api_key_changed:
+        try:
+            from utils.llm_gateway import gateway
+            gateway.reset_key_runtime(key_id)
+        except Exception:
+            pass
 
 
 def delete_key_def(key_id: str) -> bool:
