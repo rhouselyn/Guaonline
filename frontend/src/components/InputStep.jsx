@@ -59,6 +59,7 @@ function LangIcon({ langCode, size = 'md' }) {
 }
 
 const LANGUAGES = [
+  // ── 印欧语系 Indo-European ──
   { value: 'en', native: 'English', en: 'English', zh: '英语', family: 'indo-european', flag: '🇬🇧' },
   { value: 'fr', native: 'Français', en: 'French', zh: '法语', family: 'indo-european', flag: '🇫🇷' },
   { value: 'pt', native: 'Português', en: 'Portuguese', zh: '葡萄牙语', family: 'indo-european', flag: '🇵🇹' },
@@ -77,7 +78,7 @@ const LANGUAGES = [
   { value: 'hr', native: 'Hrvatski', en: 'Croatian', zh: '克罗地亚语', family: 'indo-european', flag: '🇭🇷' },
   { value: 'pl', native: 'Polski', en: 'Polish', zh: '波兰语', family: 'indo-european', flag: '🇵🇱' },
   { value: 'lt', native: 'Lietuvių', en: 'Lithuanian', zh: '立陶宛语', family: 'indo-european', flag: '🇱🇹' },
-  { value: 'nb', native: 'Norsk Bokmål', en: 'Norwegian Bokmål', zh: '挪威布克莫尔语', family: 'indo-european', flag: '🇳🇴' },
+  { value: 'nb', native: 'Norsk Bokmål', en: 'Norwegian Bokmål', zh: '挪威语（博克马尔语）', family: 'indo-european', flag: '🇳🇴' },
   { value: 'nn', native: 'Norsk Nynorsk', en: 'Norwegian Nynorsk', zh: '挪威尼诺斯克语', family: 'indo-european', flag: '🇳🇴' },
   { value: 'fa', native: 'فارسی', en: 'Persian', zh: '波斯语', family: 'indo-european', flag: '🇮🇷' },
   { value: 'sl', native: 'Slovenščina', en: 'Slovenian', zh: '斯洛文尼亚语', family: 'indo-european', flag: '🇸🇮' },
@@ -94,9 +95,9 @@ const LANGUAGES = [
   { value: 'as', native: 'অসমীয়া', en: 'Assamese', zh: '阿萨姆语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'cy', native: 'Cymraeg', en: 'Welsh', zh: '威尔士语', family: 'indo-european', flag: '🇬🇧' },
   { value: 'szl', native: 'Ślōnski', en: 'Silesian', zh: '西里西亚语', family: 'indo-european', flag: '🇵🇱' },
-  { value: 'ast', native: 'Asturianu', en: 'Asturian', zh: '阿斯图里亚斯语', family: 'indo-european', flag: '🇪🇸' },
+  { value: 'ast', native: 'Asturianu', en: 'Asturian', zh: '阿斯图里亚语', family: 'indo-european', flag: '🇪🇸' },
   { value: 'hne', native: 'छत्तीसगढ़ी', en: 'Chhattisgarhi', zh: '恰蒂斯加尔语', family: 'indo-european', flag: '🇮🇳' },
-  { value: 'awa', native: 'अवधी', en: 'Awadhi', zh: '阿瓦迪语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'awa', native: 'अवधी', en: 'Awadhi', zh: '阿瓦德语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'mai', native: 'मैथिली', en: 'Maithili', zh: '迈蒂利语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'bho', native: 'भोजपुरी', en: 'Bhojpuri', zh: '博杰普尔语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'sd', native: 'سنڌي', en: 'Sindhi', zh: '信德语', family: 'indo-european', flag: '🇵🇰' },
@@ -107,15 +108,16 @@ const LANGUAGES = [
   { value: 'bn', native: 'বাংলা', en: 'Bengali', zh: '孟加拉语', family: 'indo-european', flag: '🇧🇩' },
   { value: 'or', native: 'ଓଡ଼ିଆ', en: 'Odia', zh: '奥里亚语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'tg', native: 'Тоҷикӣ', en: 'Tajik', zh: '塔吉克语', family: 'indo-european', flag: '🇹🇯' },
-  { value: 'yi', native: 'ייִדיש', en: 'Yiddish', zh: '意第绪语', family: 'indo-european', flag: '🇮🇱' },
+  { value: 'yi', native: 'ייִדיש', en: 'Yiddish (Eastern)', zh: '东意第绪语', family: 'indo-european', flag: '🇮🇱' },
   { value: 'lmo', native: 'Lombard', en: 'Lombard', zh: '伦巴第语', family: 'indo-european', flag: '🇮🇹' },
   { value: 'lij', native: 'Lìgure', en: 'Ligurian', zh: '利古里亚语', family: 'indo-european', flag: '🇮🇹' },
   { value: 'scn', native: 'Sicilianu', en: 'Sicilian', zh: '西西里语', family: 'indo-european', flag: '🇮🇹' },
   { value: 'fur', native: 'Furlan', en: 'Friulian', zh: '弗留利语', family: 'indo-european', flag: '🇮🇹' },
-  { value: 'sc', native: 'Sardu', en: 'Sardinian', zh: '撒丁语', family: 'indo-european', flag: '🇮🇹' },
+  { value: 'sc', native: 'Sardu', en: 'Sardinian', zh: '撒丁岛语', family: 'indo-european', flag: '🇮🇹' },
   { value: 'gl', native: 'Galego', en: 'Galician', zh: '加利西亚语', family: 'indo-european', flag: '🇪🇸' },
   { value: 'ca', native: 'Català', en: 'Catalan', zh: '加泰罗尼亚语', family: 'indo-european', flag: '🇪🇸' },
   { value: 'is', native: 'Íslenska', en: 'Icelandic', zh: '冰岛语', family: 'indo-european', flag: '🇮🇸' },
+  { value: 'als', native: 'Toskërisht', en: 'Tosk', zh: '托斯克语', family: 'indo-european', flag: '🇦🇱' },
   { value: 'sq', native: 'Shqip', en: 'Albanian', zh: '阿尔巴尼亚语', family: 'indo-european', flag: '🇦🇱' },
   { value: 'li', native: 'Limburgs', en: 'Limburgish', zh: '林堡语', family: 'indo-european', flag: '🇳🇱' },
   { value: 'prs', native: 'دری', en: 'Dari', zh: '达里语', family: 'indo-european', flag: '🇦🇫' },
@@ -123,66 +125,171 @@ const LANGUAGES = [
   { value: 'mk', native: 'Македонски', en: 'Macedonian', zh: '马其顿语', family: 'indo-european', flag: '🇲🇰' },
   { value: 'si', native: 'සිංහල', en: 'Sinhala', zh: '僧伽罗语', family: 'indo-european', flag: '🇱🇰' },
   { value: 'ur', native: 'اردو', en: 'Urdu', zh: '乌尔都语', family: 'indo-european', flag: '🇵🇰' },
-  { value: 'mag', native: 'मगही', en: 'Magahi', zh: '马加伊语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'mag', native: 'मगही', en: 'Magahi', zh: '马加希语', family: 'indo-european', flag: '🇮🇳' },
   { value: 'bs', native: 'Bosanski', en: 'Bosnian', zh: '波斯尼亚语', family: 'indo-european', flag: '🇧🇦' },
   { value: 'hy', native: 'Հայերեն', en: 'Armenian', zh: '亚美尼亚语', family: 'indo-european', flag: '🇦🇲' },
+  { value: 'ltg', native: 'latgalīšu', en: 'Latgalian', zh: '拉特加利亚语', family: 'indo-european', flag: '🇱🇻' },
+  { value: 'gd', native: 'Gàidhlig', en: 'Scottish Gaelic', zh: '苏格兰盖尔语', family: 'indo-european', flag: '🇬🇧' },
+  { value: 'ckb', native: 'کوردی ناوەندی', en: 'Central Kurdish', zh: '中库尔德语', family: 'indo-european', flag: '🇮🇶' },
+  { value: 'kmr', native: 'Kurmancî', en: 'Northern Kurdish', zh: '北库尔德语', family: 'indo-european', flag: '🇹🇷' },
+  { value: 'pbt', native: 'پښتو', en: 'Southern Pashto', zh: '南普什图语', family: 'indo-european', flag: '🇦🇫' },
+  { value: 'sa', native: 'संस्कृतम्', en: 'Sanskrit', zh: '梵语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'dnd', native: 'ढूंढाड़ी', en: 'Dhundari', zh: '敦达里语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'mwr', native: 'मारवाड़ी', en: 'Marwari', zh: '马尔瓦里语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'ahr', native: 'अहिराणी', en: 'Ahirani', zh: '阿希拉尼语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'bfy', native: 'बाघेली', en: 'Bagheli', zh: '巴盖利语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'bgq', native: 'बागड़ी', en: 'Bagri', zh: '巴格里语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'bns', native: 'बुंदेली', en: 'Bundeli', zh: '本德利语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'bra', native: 'ब्रज भाषा', en: 'Braj', zh: '布拉吉语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'kfy', native: 'कुमाऊंनी', en: 'Kumaoni', zh: '库马翁语', family: 'indo-european', flag: '🇮🇳' },
+  { value: 'ks', native: 'कॉशुर', en: 'Kashmiri', zh: '克什米尔语', family: 'indo-european', flag: '🇮🇳' },
+
+  // ── 汉藏语系 Sino-Tibetan ──
   { value: 'zh', native: '简体中文', en: 'Chinese (Simplified)', zh: '简体中文', family: 'sino-tibetan', flag: '🇨🇳' },
   { value: 'zh-TW', native: '繁體中文', en: 'Chinese (Traditional)', zh: '繁体中文', family: 'sino-tibetan', flag: '🇹🇼' },
   { value: 'yue', native: '粵語', en: 'Cantonese', zh: '粤语', family: 'sino-tibetan', flag: '🇭🇰' },
   { value: 'my', native: 'မြန်မာ', en: 'Burmese', zh: '缅甸语', family: 'sino-tibetan', flag: '🇲🇲' },
-  { value: 'ar', native: 'العربية', en: 'Arabic (Standard)', zh: '标准阿拉伯语', family: 'afro-asiatic', flag: '🇸🇦' },
-  { value: 'ars', native: 'نجدي', en: 'Arabic (Najdi)', zh: '内志阿拉伯语', family: 'afro-asiatic', flag: '🇸🇦' },
-  { value: 'apc', native: 'شامي', en: 'Arabic (Levantine)', zh: '黎凡特阿拉伯语', family: 'afro-asiatic', flag: '🇱🇧' },
-  { value: 'arz', native: 'مصري', en: 'Arabic (Egyptian)', zh: '埃及阿拉伯语', family: 'afro-asiatic', flag: '🇪🇬' },
-  { value: 'ary', native: 'الدارجة', en: 'Arabic (Moroccan)', zh: '摩洛哥阿拉伯语', family: 'afro-asiatic', flag: '🇲🇦' },
-  { value: 'acm', native: 'العراقية', en: 'Arabic (Mesopotamian)', zh: '美索不达米亚阿拉伯语', family: 'afro-asiatic', flag: '🇮🇶' },
-  { value: 'acq', native: 'يمني', en: 'Arabic (Ta\'izzi-Adeni)', zh: '塔伊兹-亚丁阿拉伯语', family: 'afro-asiatic', flag: '🇾🇪' },
-  { value: 'aeb', native: 'تونسي', en: 'Arabic (Tunisian)', zh: '突尼斯阿拉伯语', family: 'afro-asiatic', flag: '🇹🇳' },
+  { value: 'bo', native: 'བོད་སྐད', en: 'Tibetan', zh: '藏语', family: 'sino-tibetan', flag: '🇨🇳' },
+  { value: 'mni', native: 'ꯃꯩꯇꯩꯂꯣꯟ', en: 'Meitei', zh: '梅泰语', family: 'sino-tibetan', flag: '🇮🇳' },
+
+  // ── 亚非语系 Afro-Asiatic ──
+  { value: 'ar', native: 'العربية', en: 'Arabic (Standard)', zh: '阿拉伯语（标准语）', family: 'afro-asiatic', flag: '🇸🇦' },
+  { value: 'ars', native: 'نجدي', en: 'Arabic (Najdi)', zh: '阿拉伯语（内志语）', family: 'afro-asiatic', flag: '🇸🇦' },
+  { value: 'apc', native: 'شامي', en: 'Arabic (Levantine)', zh: '阿拉伯语（黎凡特语）', family: 'afro-asiatic', flag: '🇱🇧' },
+  { value: 'arz', native: 'مصري', en: 'Arabic (Egyptian)', zh: '阿拉伯语（埃及语）', family: 'afro-asiatic', flag: '🇪🇬' },
+  { value: 'ary', native: 'الدارجة', en: 'Arabic (Moroccan)', zh: '阿拉伯语（摩洛哥语）', family: 'afro-asiatic', flag: '🇲🇦' },
+  { value: 'acm', native: 'العراقية', en: 'Arabic (Mesopotamian)', zh: '阿拉伯语（美索不达米亚语）', family: 'afro-asiatic', flag: '🇮🇶' },
+  { value: 'acq', native: 'يمني', en: "Arabic (Ta'izzi-Adeni)", zh: '阿拉伯语（塔伊兹-阿德尼语）', family: 'afro-asiatic', flag: '🇾🇪' },
+  { value: 'aeb', native: 'تونسي', en: 'Arabic (Tunisian)', zh: '阿拉伯语（突尼斯语）', family: 'afro-asiatic', flag: '🇹🇳' },
+  { value: 'afb', native: 'خليجي', en: 'Arabic (Gulf)', zh: '阿拉伯语（海湾语）', family: 'afro-asiatic', flag: '🇦🇪' },
+  { value: 'arq', native: 'جزائري', en: 'Arabic (Algerian)', zh: '阿拉伯语（阿尔及利亚语）', family: 'afro-asiatic', flag: '🇩🇿' },
+  { value: 'apd', native: 'سوداني', en: 'Arabic (Sudanese)', zh: '阿拉伯语（苏丹语）', family: 'afro-asiatic', flag: '🇸🇩' },
+  { value: 'ayl', native: 'ليبي', en: 'Arabic (Libyan)', zh: '阿拉伯语（利比亚语）', family: 'afro-asiatic', flag: '🇱🇾' },
   { value: 'he', native: 'עברית', en: 'Hebrew', zh: '希伯来语', family: 'afro-asiatic', flag: '🇮🇱' },
   { value: 'mt', native: 'Malti', en: 'Maltese', zh: '马耳他语', family: 'afro-asiatic', flag: '🇲🇹' },
-  { value: 'id', native: 'Bahasa Indonesia', en: 'Indonesian', zh: '印尼语', family: 'austronesian', flag: '🇮🇩' },
+  { value: 'am', native: 'አማርኛ', en: 'Amharic', zh: '阿姆哈拉语', family: 'afro-asiatic', flag: '🇪🇹' },
+  { value: 'ti', native: 'ትግርኛ', en: 'Tigrinya', zh: '提格里尼亚语', family: 'afro-asiatic', flag: '🇪🇷' },
+  { value: 'kab', native: 'ⵜⴰⵇⴱⴰⵢⵍⵉⵜ', en: 'Kabyle', zh: '卡比尔语', family: 'afro-asiatic', flag: '🇩🇿' },
+  { value: 'so', native: 'Soomaali', en: 'Somali', zh: '索马里语', family: 'afro-asiatic', flag: '🇸🇴' },
+  { value: 'gaz', native: 'Afaan Oromoo', en: 'West Central Oromo', zh: '西中奥罗莫语', family: 'afro-asiatic', flag: '🇪🇹' },
+  { value: 'ha', native: 'Hausa', en: 'Hausa', zh: '豪萨语', family: 'afro-asiatic', flag: '🇳🇬' },
+
+  // ── 南岛语系 Austronesian ──
+  { value: 'id', native: 'Bahasa Indonesia', en: 'Indonesian', zh: '印度尼西亚语', family: 'austronesian', flag: '🇮🇩' },
   { value: 'ms', native: 'Bahasa Melayu', en: 'Malay', zh: '马来语', family: 'austronesian', flag: '🇲🇾' },
   { value: 'tl', native: 'Tagalog', en: 'Tagalog', zh: '他加禄语', family: 'austronesian', flag: '🇵🇭' },
   { value: 'ceb', native: 'Cebuano', en: 'Cebuano', zh: '宿务语', family: 'austronesian', flag: '🇵🇭' },
   { value: 'jv', native: 'Basa Jawa', en: 'Javanese', zh: '爪哇语', family: 'austronesian', flag: '🇮🇩' },
   { value: 'su', native: 'Basa Sunda', en: 'Sundanese', zh: '巽他语', family: 'austronesian', flag: '🇮🇩' },
   { value: 'min', native: 'Baso Minangkabau', en: 'Minangkabau', zh: '米南加保语', family: 'austronesian', flag: '🇮🇩' },
-  { value: 'ban', native: 'Basa Bali', en: 'Balinese', zh: '巴厘语', family: 'austronesian', flag: '🇮🇩' },
-  { value: 'bjn', native: 'Bahasa Banjar', en: 'Banjar', zh: '班加尔语', family: 'austronesian', flag: '🇮🇩' },
+  { value: 'ban', native: 'Basa Bali', en: 'Balinese', zh: '巴厘岛语', family: 'austronesian', flag: '🇮🇩' },
+  { value: 'bjn', native: 'Bahasa Banjar', en: 'Banjar', zh: '班加语', family: 'austronesian', flag: '🇮🇩' },
   { value: 'pag', native: 'Pangasinan', en: 'Pangasinan', zh: '邦阿西楠语', family: 'austronesian', flag: '🇵🇭' },
-  { value: 'ilo', native: 'Ilokano', en: 'Ilokano', zh: '伊洛卡诺语', family: 'austronesian', flag: '🇵🇭' },
-  { value: 'war', native: 'Waray', en: 'Waray', zh: '瓦瑞语', family: 'austronesian', flag: '🇵🇭' },
+  { value: 'ilo', native: 'Ilokano', en: 'Ilokano', zh: '伊洛科语', family: 'austronesian', flag: '🇵🇭' },
+  { value: 'war', native: 'Waray', en: 'Waray (Philippines)', zh: '瓦雷语（菲律宾）', family: 'austronesian', flag: '🇵🇭' },
+  { value: 'plt', native: 'Malagasy', en: 'Plateau Malagasy', zh: '高原马达加斯加语', family: 'austronesian', flag: '🇲🇬' },
+  { value: 'mg', native: 'Malagasy', en: 'Malagasy', zh: '马达加斯加语', family: 'austronesian', flag: '🇲🇬' },
+  { value: 'bug', native: 'Basa Ugi', en: 'Buginese', zh: '布吉语', family: 'austronesian', flag: '🇮🇩' },
+  { value: 'mi', native: 'Te Reo Māori', en: 'Maori', zh: '毛利语', family: 'austronesian', flag: '🇳🇿' },
+  { value: 'sm', native: 'Gagana Sāmoa', en: 'Samoan', zh: '萨摩亚语', family: 'austronesian', flag: '🇼🇸' },
+  { value: 'haw', native: 'ʻŌlelo Hawaiʻi', en: 'Hawaiian', zh: '夏威夷语', family: 'austronesian', flag: '🇺🇸' },
+  { value: 'fj', native: 'Vosa Vakaviti', en: 'Fijian', zh: '斐济语', family: 'austronesian', flag: '🇫🇯' },
+
+  // ── 德拉威语 Dravidian ──
   { value: 'ta', native: 'தமிழ்', en: 'Tamil', zh: '泰米尔语', family: 'dravidian', flag: '🇮🇳' },
   { value: 'te', native: 'తెలుగు', en: 'Telugu', zh: '泰卢固语', family: 'dravidian', flag: '🇮🇳' },
   { value: 'kn', native: 'ಕನ್ನಡ', en: 'Kannada', zh: '卡纳达语', family: 'dravidian', flag: '🇮🇳' },
   { value: 'ml', native: 'മലയാളം', en: 'Malayalam', zh: '马拉雅拉姆语', family: 'dravidian', flag: '🇮🇳' },
+
+  // ── 突厥语系 Turkic ──
   { value: 'tr', native: 'Türkçe', en: 'Turkish', zh: '土耳其语', family: 'turkic', flag: '🇹🇷' },
-  { value: 'az', native: 'Azərbaycan', en: 'Azerbaijani', zh: '阿塞拜疆语', family: 'turkic', flag: '🇦🇿' },
-  { value: 'uz', native: 'Oʻzbek', en: 'Uzbek', zh: '乌兹别克语', family: 'turkic', flag: '🇺🇿' },
+  { value: 'az', native: 'Azərbaycan', en: 'North Azerbaijani', zh: '北阿塞拜疆语', family: 'turkic', flag: '🇦🇿' },
+  { value: 'uz', native: 'Oʻzbek', en: 'North Uzbek', zh: '北乌兹别克语', family: 'turkic', flag: '🇺🇿' },
   { value: 'kk', native: 'Қазақ', en: 'Kazakh', zh: '哈萨克语', family: 'turkic', flag: '🇰🇿' },
   { value: 'ba', native: 'Башҡорт', en: 'Bashkir', zh: '巴什基尔语', family: 'turkic', flag: '🇷🇺' },
   { value: 'tt', native: 'Татар', en: 'Tatar', zh: '鞑靼语', family: 'turkic', flag: '🇷🇺' },
+  { value: 'crh', native: 'Qırımtatarca', en: 'Crimean Tatar', zh: '克里米亚鞑靼语', family: 'turkic', flag: '🇺🇦' },
+  { value: 'ky', native: 'Кыргызча', en: 'Kyrgyz', zh: '吉尔吉斯语', family: 'turkic', flag: '🇰🇬' },
+  { value: 'tk', native: 'Türkmen', en: 'Turkmen', zh: '土库曼语', family: 'turkic', flag: '🇹🇲' },
+  { value: 'ug', native: 'ئۇيغۇر', en: 'Uyghur', zh: '维吾尔语', family: 'turkic', flag: '🇨🇳' },
+
+  // ── 壮侗语系 Tai-Kadai ──
   { value: 'th', native: 'ไทย', en: 'Thai', zh: '泰语', family: 'tai-kadai', flag: '🇹🇭' },
   { value: 'lo', native: 'ລາວ', en: 'Lao', zh: '老挝语', family: 'tai-kadai', flag: '🇱🇦' },
+  { value: 'shn', native: 'ၵႂၢမ်းတႆး', en: 'Shan', zh: '掸语', family: 'tai-kadai', flag: '🇲🇲' },
+
+  // ── 乌拉尔语系 Uralic ──
   { value: 'fi', native: 'Suomi', en: 'Finnish', zh: '芬兰语', family: 'uralic', flag: '🇫🇮' },
   { value: 'et', native: 'Eesti', en: 'Estonian', zh: '爱沙尼亚语', family: 'uralic', flag: '🇪🇪' },
   { value: 'hu', native: 'Magyar', en: 'Hungarian', zh: '匈牙利语', family: 'uralic', flag: '🇭🇺' },
+  { value: 'mhr', native: 'олык марий', en: 'Eastern Meadow Mari', zh: '草原马里语', family: 'uralic', flag: '🇷🇺' },
+
+  // ── 南亚语系 Austroasiatic ──
   { value: 'vi', native: 'Tiếng Việt', en: 'Vietnamese', zh: '越南语', family: 'austroasiatic', flag: '🇻🇳' },
   { value: 'km', native: 'ភាសាខ្មែរ', en: 'Khmer', zh: '高棉语', family: 'austroasiatic', flag: '🇰🇭' },
+
+  // ── 尼日尔-刚果语系 Niger-Congo ──
+  { value: 'yo', native: 'Èdè Yorùbá', en: 'Yoruba', zh: '约鲁巴语', family: 'niger-congo', flag: '🇳🇬' },
+  { value: 'ee', native: 'Eʋegbe', en: 'Ewe', zh: '埃维语', family: 'niger-congo', flag: '🇬🇭' },
+  { value: 'rw', native: 'Kinyarwanda', en: 'Kinyarwanda', zh: '卢旺达语', family: 'niger-congo', flag: '🇷🇼' },
+  { value: 'ln', native: 'Lingála', en: 'Lingala', zh: '林加拉语', family: 'niger-congo', flag: '🇨🇩' },
+  { value: 'nso', native: 'Sepedi', en: 'Northern Sotho', zh: '北索托语', family: 'niger-congo', flag: '🇿🇦' },
+  { value: 'ny', native: 'Chichewa', en: 'Nyanja', zh: '尼扬贾语', family: 'niger-congo', flag: '🇲🇼' },
+  { value: 'sn', native: 'chiShona', en: 'Shona', zh: '绍纳语', family: 'niger-congo', flag: '🇿🇼' },
+  { value: 'st', native: 'Sesotho', en: 'Southern Sotho', zh: '南索托语', family: 'niger-congo', flag: '🇱🇸' },
+  { value: 'tn', native: 'Setswana', en: 'Tswana', zh: '茨瓦纳语', family: 'niger-congo', flag: '🇧🇼' },
+  { value: 'xh', native: 'isiXhosa', en: 'Xhosa', zh: '科萨语', family: 'niger-congo', flag: '🇿🇦' },
+  { value: 'zu', native: 'isiZulu', en: 'Zulu', zh: '祖鲁语', family: 'niger-congo', flag: '🇿🇦' },
+  { value: 'lg', native: 'Luganda', en: 'Luganda', zh: '卢干达语', family: 'niger-congo', flag: '🇺🇬' },
+  { value: 'ss', native: 'siSwati', en: 'Swati', zh: '斯瓦蒂语', family: 'niger-congo', flag: '🇸🇿' },
+  { value: 'ts', native: 'Xitsonga', en: 'Tsonga', zh: '聪加语', family: 'niger-congo', flag: '🇲🇿' },
+  { value: 'tum', native: 'chiTumbuka', en: 'Tumbuka', zh: '通布卡语', family: 'niger-congo', flag: '🇲🇼' },
+  { value: 've', native: 'Tshivenḓa', en: 'Venda', zh: '文达语', family: 'niger-congo', flag: '🇿🇦' },
+  { value: 'cjk', native: 'Cokwe', en: 'Chokwe', zh: '乔奎语', family: 'niger-congo', flag: '🇦🇴' },
+  { value: 'lua', native: 'Tshiluba', en: 'Luba-Kasai', zh: '卢巴-卡赛语', family: 'niger-congo', flag: '🇨🇩' },
+  { value: 'rn', native: 'Ikirundi', en: 'Kirundi', zh: '隆迪语', family: 'niger-congo', flag: '🇧🇮' },
+  { value: 'kmb', native: 'Kimbundu', en: 'Kimbundu', zh: '姆本杜语', family: 'niger-congo', flag: '🇦🇴' },
+  { value: 'ki', native: 'Gĩkũyũ', en: 'Kikuyu', zh: '基库尤语', family: 'niger-congo', flag: '🇰🇪' },
+  { value: 'kg', native: 'Kikongo', en: 'Kongo', zh: '刚果语', family: 'niger-congo', flag: '🇨🇩' },
+  { value: 'fuv', native: 'Fulfulde', en: 'Nigerian Fulfulde', zh: '尼日利亚富拉语', family: 'niger-congo', flag: '🇳🇬' },
+  { value: 'wo', native: 'Wolof', en: 'Wolof', zh: '沃洛夫语', family: 'niger-congo', flag: '🇸🇳' },
+  { value: 'fon', native: 'Fɔngbè', en: 'Fon', zh: '丰语', family: 'niger-congo', flag: '🇧🇯' },
+  { value: 'kbp', native: 'Kabɩyɩ', en: 'Kabiye', zh: '卡比耶语', family: 'niger-congo', flag: '🇹🇬' },
+  { value: 'mos', native: 'Mõoré', en: 'Mossi', zh: '莫西语', family: 'niger-congo', flag: '🇧🇫' },
+  { value: 'ak', native: 'Akan', en: 'Akan', zh: '阿坎语', family: 'niger-congo', flag: '🇬🇭' },
+  { value: 'tw', native: 'Twi', en: 'Twi', zh: '特维语', family: 'niger-congo', flag: '🇬🇭' },
+  { value: 'bm', native: 'Bamanankan', en: 'Bambara', zh: '班巴拉语', family: 'niger-congo', flag: '🇲🇱' },
+  { value: 'ig', native: 'Asụsụ Igbo', en: 'Igbo', zh: '伊博语', family: 'niger-congo', flag: '🇳🇬' },
+
+  // ── 其他 Other ──
   { value: 'ja', native: '日本語', en: 'Japanese', zh: '日语', family: 'other', flag: '🇯🇵' },
   { value: 'ko', native: '한국어', en: 'Korean', zh: '韩语', family: 'other', flag: '🇰🇷' },
   { value: 'ka', native: 'ქართული', en: 'Georgian', zh: '格鲁吉亚语', family: 'other', flag: '🇬🇪' },
   { value: 'eu', native: 'Euskara', en: 'Basque', zh: '巴斯克语', family: 'other', flag: '🇪🇸' },
   { value: 'ht', native: 'Kreyòl Ayisyen', en: 'Haitian Creole', zh: '海地语', family: 'other', flag: '🇭🇹' },
   { value: 'pap', native: 'Papiamentu', en: 'Papiamento', zh: '帕皮阿门托语', family: 'other', flag: '🇦🇼' },
-  { value: 'kea', native: 'Kabuverdianu', en: 'Kabuverdianu', zh: '佛得角语', family: 'other', flag: '🇨🇻' },
+  { value: 'kea', native: 'Kabuverdianu', en: 'Kabuverdianu', zh: '卡布维尔迪亚努语', family: 'other', flag: '🇨🇻' },
   { value: 'tpi', native: 'Tok Pisin', en: 'Tok Pisin', zh: '托克皮辛语', family: 'other', flag: '🇵🇬' },
   { value: 'sw', native: 'Kiswahili', en: 'Swahili', zh: '斯瓦希里语', family: 'other', flag: '🇰🇪' },
+  { value: 'ayr', native: 'Aymar aru', en: 'Central Aymara', zh: '中部艾马拉语', family: 'other', flag: '🇧🇴' },
+  { value: 'tcy', native: 'ತುಳು ಬಾಸೆ', en: 'Tulu', zh: '图卢语', family: 'other', flag: '🇮🇳' },
+  { value: 'nag', native: 'Naga', en: 'Nagamese', zh: '那加语', family: 'other', flag: '🇮🇳' },
+  { value: 'pcm', native: 'Naijá', en: 'Nigerian Pidgin', zh: '尼日利亚皮钦语', family: 'other', flag: '🇳🇬' },
+  { value: 'mfe', native: 'Morisyen', en: 'Mauritian Creole', zh: '毛里求斯克里奥尔语', family: 'other', flag: '🇲🇺' },
+  { value: 'sg', native: 'Sängö', en: 'Sango', zh: '桑戈语', family: 'other', flag: '🇨🇫' },
+  { value: 'quy', native: 'Runa Simi', en: 'Ayacucho Quechua', zh: '阿亚库乔克丘亚语', family: 'other', flag: '🇵🇪' },
+  { value: 'khk', native: 'Монгол хэл', en: 'Halh Mongolian', zh: '喀尔喀蒙古语', family: 'other', flag: '🇲🇳' },
+  { value: 'dik', native: 'Thuɔŋjäŋ', en: 'Southwestern Dinka', zh: '西南丁卡语', family: 'other', flag: '🇸🇸' },
+  { value: 'nus', native: 'Naath', en: 'Nuer', zh: '努埃尔语', family: 'other', flag: '🇸🇸' },
+  { value: 'gn', native: "Avañe'ẽ", en: 'Guarani', zh: '瓜拉尼语', family: 'other', flag: '🇵🇾' },
 ]
 
+// 顶端常用语言（显示在「最近使用」下方）
+const COMMON_LANGUAGES = ['zh', 'en', 'yue', 'fr', 'de']
+
 const FAMILIES = {
-  'indo-european': 'Indo-European',
   'sino-tibetan': 'Sino-Tibetan',
+  'indo-european': 'Indo-European',
   'afro-asiatic': 'Afro-Asiatic',
   'austronesian': 'Austronesian',
   'dravidian': 'Dravidian',
@@ -190,6 +297,7 @@ const FAMILIES = {
   'tai-kadai': 'Tai-Kadai',
   'uralic': 'Uralic',
   'austroasiatic': 'Austroasiatic',
+  'niger-congo': 'Niger-Congo',
   'other': 'Other',
 }
 
@@ -203,6 +311,7 @@ const FAMILY_ORDER = [
   'tai-kadai',
   'uralic',
   'austroasiatic',
+  'niger-congo',
   'other',
 ]
 
@@ -248,6 +357,13 @@ function LanguageSelector({ value, onChange, uiLang, inputMode, recentLanguages,
     .map(code => LANGUAGES.find(l => l.value === code))
     .filter(Boolean)
     .slice(0, recentLimit)
+
+  // 顶端常用语言：排除已在「最近使用」中出现的，避免重复
+  const recentCodes = new Set((recentLanguages || []).filter(c => c !== 'auto'))
+  const commonLangs = COMMON_LANGUAGES
+    .map(code => LANGUAGES.find(l => l.value === code))
+    .filter(Boolean)
+    .filter(l => !recentCodes.has(l.value))
 
   const filteredLanguages = LANGUAGES.filter((l) => {
     if (!search) return true
@@ -371,6 +487,28 @@ function LanguageSelector({ value, onChange, uiLang, inputMode, recentLanguages,
                   {recentLangs.map((lang) => (
                     <button
                       key={`recent-${lang.value}`}
+                      type="button"
+                      onClick={() => handleSelect(lang.value)}
+                      className={`w-full flex items-center gap-2.5 px-5 py-1.5 text-sm transition-colors ${
+                        value === lang.value ? 'bg-amber-50 text-amber-500' : 'text-ink-600 hover:bg-parchment-50'
+                      }`}
+                    >
+                      <LangIcon langCode={lang.value} size="sm" />
+                      <span className={value === lang.value ? 'font-bold' : ''}>{getLabel(lang)}</span>
+                      {getSecondary(lang) && <span className="text-xs text-ink-400">{getSecondary(lang)}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!search && commonLangs.length > 0 && (
+                <div className="border-b border-parchment-100">
+                  <div className="px-5 pt-2 pb-1 text-[11px] font-bold text-ink-500 uppercase tracking-wider">
+                    {t.commonLanguages || '常用语言'}
+                  </div>
+                  {commonLangs.map((lang) => (
+                    <button
+                      key={`common-${lang.value}`}
                       type="button"
                       onClick={() => handleSelect(lang.value)}
                       className={`w-full flex items-center gap-2.5 px-5 py-1.5 text-sm transition-colors ${
