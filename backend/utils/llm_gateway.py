@@ -2,7 +2,8 @@
 
 key 是全局对象（有 id），不同 tier/sub 通过引用复用同一个 key。
 - key 核心属性（api_key/base_url/model/价格）全局共享
-- 运行时状态（熔断状态/限速/调用计数/is_busy）按 key_id 全局共享
+- 运行时状态（熔断状态/限速/调用计数/is_busy）按 per-pool per-ref 独立，同一 key_id 在不同
+  sub-pool（title/sentence/word）中互不影响——句子处理的熔断不会拖累单词详情生成。
 - per-pool 独立：max_tokens / disabled / weight / 顺序 / active_index / consecutive_fail_start
 
 调度算法：平滑加权轮询 SWRR（Nginx 经典算法），不可用的 key（disabled/熔断 open）不参与本轮。
@@ -64,7 +65,7 @@ def _parse_retry_after(header_value: Optional[str]) -> Optional[int]:
 
 
 class TierKeyPool:
-    """单个 tier/sub 的引用池。只持有引用 + per-pool 配置，不持有 key 定义。"""
+    """单个 tier/sub 的引用池。持有引用 + per-pool 配置 + per-ref 运行时状态（熔断器）。"""
 
     FAIL_DEADLINE = 600  # 连续失败 10 分钟才放弃
 
@@ -73,7 +74,7 @@ class TierKeyPool:
         self.sub = sub
         self.refs = refs  # [{key_id, max_tokens, disabled, weight}]
         self.current_index = 0
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()  # RLock: admin status 端点持锁调用 is_key_busy 会再次获取同池锁
         self.batch_size = batch_size
         self.interval = interval
         self.active_count = 0  # per-pool 在途并发（用于 batch 切换判断）
@@ -81,6 +82,37 @@ class TierKeyPool:
         self.consecutive_fail_start = None  # per-pool 连续失败起点
         # SWRR 状态：每个 ref 的 current_weight
         self.swrr_weights: List[int] = []
+        # per-ref 运行时状态（与 refs 平行，不持久化）
+        self.ref_runtime: List[dict] = []
+
+    def _new_runtime(self) -> dict:
+        return {
+            "is_valid": True,
+            "last_error": None,
+            "last_error_time": None,
+            "total_calls": 0,
+            "active_in_flight": 0,
+            "rate_limited_until": None,
+            "circuit_state": "closed",   # closed | open | half_open
+            "fail_count": 0,              # 连续失败次数（成功清零）
+            "half_open_probed": False,    # half-open 阶段是否已放过探测请求
+            "invalid_streak": 0,          # 连续 401 次数（成功清零，用于升级封禁时长）
+        }
+
+    def _sync_runtime(self):
+        """保持 ref_runtime 与 refs 长度一致。"""
+        while len(self.ref_runtime) < len(self.refs):
+            self.ref_runtime.append(self._new_runtime())
+        while len(self.ref_runtime) > len(self.refs):
+            self.ref_runtime.pop()
+
+    def reset_ref_runtime(self, key_id: str = None):
+        """重置 per-ref 运行时状态。指定 key_id 时只重置该 key 的所有 ref。"""
+        with self.lock:
+            self._sync_runtime()
+            for i, ref in enumerate(self.refs):
+                if key_id is None or ref.get("key_id") == key_id:
+                    self.ref_runtime[i] = self._new_runtime()
 
     def _ref_weight(self, ref) -> int:
         w = ref.get("weight")
@@ -95,11 +127,22 @@ class TierKeyPool:
         if len(self.swrr_weights) != len(self.refs):
             self.swrr_weights = [0] * len(self.refs)
 
-    def _key_def(self, gateway, key_id) -> dict:
-        return gateway.key_defs.get(key_id, {})
-
-    def _runtime(self, gateway, key_id) -> dict:
-        return gateway.key_runtime.get(key_id) or gateway._ensure_runtime(key_id)
+    def _is_ref_available(self, idx, now) -> bool:
+        """per-ref 熔断器判断：closed 可用 / open 未到期不可用 / half_open 只放 1 个探测。"""
+        rt = self.ref_runtime[idx]
+        state = rt.get("circuit_state", "closed")
+        if state == "closed":
+            return True
+        if state == "open":
+            rlu = rt.get("rate_limited_until")
+            if rlu and now < rlu:
+                return False
+            rt["circuit_state"] = "half_open"
+            rt["half_open_probed"] = False
+            return True
+        if state == "half_open":
+            return not rt.get("half_open_probed", False)
+        return True
 
     def get_current(self, gateway) -> Optional[tuple]:
         """SWRR 选一个可用 key，返回 (resolved_config, idx) 或 None。
@@ -108,14 +151,14 @@ class TierKeyPool:
         """
         with self.lock:
             self._sync_swrr()
+            self._sync_runtime()
             now = time.time()
             # 收集可用 idx（带 weight）
             usable = []
             for i, ref in enumerate(self.refs):
                 if ref.get("disabled"):
                     continue
-                key_id = ref.get("key_id")
-                if not gateway._is_key_available_for_pick(key_id, now):
+                if not self._is_ref_available(i, now):
                     continue
                 usable.append(i)
             if not usable:
@@ -135,10 +178,12 @@ class TierKeyPool:
             idx = best
             ref = self.refs[idx]
             key_id = ref.get("key_id")
+            rt = self.ref_runtime[idx]
             # 占用
             self.active_count += 1
-            gateway._inc_active(key_id)
-            gateway._mark_key_picked(key_id)  # half-open 时记录"已放过探测"
+            rt["active_in_flight"] += 1
+            if rt.get("circuit_state") == "half_open":
+                rt["half_open_probed"] = True  # half-open 时记录"已放过探测"
             kdef = gateway.key_defs.get(key_id, {})
             config = {
                 "id": key_id,
@@ -152,37 +197,94 @@ class TierKeyPool:
             return config, idx
 
     def mark_complete(self, gateway, idx):
-        """成功：per-pool 释放占用 + 该 key 熔断器复位为 closed。"""
-        key_id = self.refs[idx].get("key_id")
+        """成功：per-pool 释放占用 + 该 ref 熔断器复位为 closed。"""
         with self.lock:
+            self._sync_runtime()
             self.active_count -= 1
             self.consecutive_fail_start = None
             if self.active_count <= 0:
                 self.active_count = 0
                 self.last_switch_time = time.time()
                 self.current_index += 1
-        gateway._mark_key_complete(key_id)
+            if idx < len(self.ref_runtime):
+                rt = self.ref_runtime[idx]
+                rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
+                rt["total_calls"] += 1
+                rt["is_valid"] = True
+                rt["last_error"] = None
+                rt["last_error_time"] = None
+                rt["rate_limited_until"] = None
+                rt["circuit_state"] = "closed"
+                rt["fail_count"] = 0
+                rt["half_open_probed"] = False
+                rt["invalid_streak"] = 0
+        gateway._notify()
 
     def _mark_fail(self, gateway, idx, fail_type: str, retry_after: Optional[int] = None):
-        """失败：per-pool 切换 + 该 key 熔断器状态推进。"""
-        key_id = self.refs[idx].get("key_id")
+        """失败：per-pool 切换 + 该 ref 熔断器状态推进。"""
         with self.lock:
+            self._sync_runtime()
             self.active_count -= 1
             if self.active_count < 0:
                 self.active_count = 0
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
             self.current_index += 1
-        # 失败也要释放 key 级 in-flight 占用，否则 is_busy 永远为 true
-        gateway._dec_active(key_id)
-        if fail_type == "rate_limited":
-            gateway._mark_key_rate_limited(key_id, retry_after=retry_after)
-        elif fail_type == "invalid":
-            gateway._mark_key_invalid(key_id)
-        elif fail_type == "server_error":
-            gateway._mark_key_server_error(key_id)
-        elif fail_type == "network":
-            gateway._mark_key_network_error(key_id)
+            if idx < len(self.ref_runtime):
+                rt = self.ref_runtime[idx]
+                rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
+                now_iso = datetime.now(timezone.utc).isoformat()
+                if fail_type == "rate_limited":
+                    rt["is_valid"] = True
+                    rt["last_error"] = "429 Rate Limited"
+                    rt["last_error_time"] = now_iso
+                    if retry_after is not None and retry_after > 0:
+                        rt["rate_limited_until"] = time.time() + retry_after
+                        rt["circuit_state"] = "open"
+                        rt["fail_count"] = 0
+                        rt["half_open_probed"] = False
+                elif fail_type == "invalid":
+                    rt["invalid_streak"] = rt.get("invalid_streak", 0) + 1
+                    cooldown = CIRCUIT_COOLDOWN_401 * (2 ** (rt["invalid_streak"] - 1))
+                    cooldown = min(cooldown, CIRCUIT_COOLDOWN_401_MAX)
+                    rt["rate_limited_until"] = time.time() + cooldown
+                    rt["is_valid"] = False
+                    rt["last_error"] = "401 Unauthorized"
+                    rt["last_error_time"] = now_iso
+                    rt["circuit_state"] = "open"
+                    rt["fail_count"] = 0
+                    rt["half_open_probed"] = False
+                elif fail_type == "server_error":
+                    rt["is_valid"] = True
+                    rt["last_error"] = "5xx Server Error"
+                    rt["last_error_time"] = now_iso
+                    rt["fail_count"] = rt.get("fail_count", 0) + 1
+                    if rt["circuit_state"] == "half_open":
+                        rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_5XX
+                        rt["circuit_state"] = "open"
+                        rt["fail_count"] = 0
+                        rt["half_open_probed"] = False
+                    elif rt["fail_count"] >= CIRCUIT_FAIL_THRESHOLD:
+                        rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_5XX
+                        rt["circuit_state"] = "open"
+                        rt["fail_count"] = 0
+                        rt["half_open_probed"] = False
+                elif fail_type == "network":
+                    rt["is_valid"] = True
+                    rt["last_error"] = "network error"
+                    rt["last_error_time"] = now_iso
+                    rt["fail_count"] = rt.get("fail_count", 0) + 1
+                    if rt["circuit_state"] == "half_open":
+                        rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_NET
+                        rt["circuit_state"] = "open"
+                        rt["fail_count"] = 0
+                        rt["half_open_probed"] = False
+                    elif rt["fail_count"] >= CIRCUIT_FAIL_THRESHOLD:
+                        rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_NET
+                        rt["circuit_state"] = "open"
+                        rt["fail_count"] = 0
+                        rt["half_open_probed"] = False
+        gateway._notify()
 
     def mark_rate_limited(self, gateway, idx, retry_after: Optional[int] = None):
         self._mark_fail(gateway, idx, "rate_limited", retry_after=retry_after)
@@ -211,15 +313,17 @@ class TierKeyPool:
             )
 
     def next_available_time(self, gateway) -> Optional[float]:
-        """最近一个被阻塞 key 的恢复时间戳。"""
+        """最近一个被阻塞 ref 的恢复时间戳。"""
         now = time.time()
         candidates = []
-        for ref in self.refs:
+        for i, ref in enumerate(self.refs):
             if ref.get("disabled"):
                 continue
-            rt = gateway.key_runtime.get(ref.get("key_id"))
-            if rt and rt.get("rate_limited_until") and rt["rate_limited_until"] > now:
-                candidates.append(rt["rate_limited_until"])
+            if i < len(self.ref_runtime):
+                rt = self.ref_runtime[i]
+                rlu = rt.get("rate_limited_until")
+                if rlu and rlu > now:
+                    candidates.append(rlu)
         return min(candidates) if candidates else None
 
     async def wait_for_interval(self):
@@ -265,52 +369,8 @@ class LLMGateway:
         self._initialized = True
         self.pools: Dict[str, Dict[str, TierKeyPool]] = {}
         self.key_defs: Dict[str, dict] = {}
-        self.key_runtime: Dict[str, dict] = {}
-        self._runtime_lock = threading.RLock()  # 可重入
         self._status_event = None
         self._reload_all()
-
-    def _ensure_runtime(self, key_id) -> dict:
-        """懒创建某 key 的运行时状态（含熔断器字段）。"""
-        with self._runtime_lock:
-            rt = self.key_runtime.get(key_id)
-            if rt is None:
-                rt = {
-                    "is_valid": True,
-                    "last_error": None,
-                    "last_error_time": None,
-                    "total_calls": 0,
-                    "active_in_flight": 0,
-                    "rate_limited_until": None,
-                    # 熔断器
-                    "circuit_state": "closed",   # closed | open | half_open
-                    "fail_count": 0,              # 连续失败次数（成功清零）
-                    "half_open_probed": False,    # half-open 阶段是否已放过探测请求
-                    "invalid_streak": 0,          # 连续 401 次数（成功清零，用于升级封禁时长）
-                }
-                self.key_runtime[key_id] = rt
-            return rt
-
-    def _inc_active(self, key_id):
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["active_in_flight"] += 1
-
-    def _dec_active(self, key_id):
-        """递减 key 级 in-flight 计数。
-        失败路径（429/401/5xx/网络错）也必须调用，否则 is_busy 永远为 true，
-        前端"占用中"徽章卡死不消失。"""
-        with self._runtime_lock:
-            rt = self.key_runtime.get(key_id)
-            if rt:
-                rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
-
-    def _mark_key_picked(self, key_id):
-        """key 被选中时：half_open 状态标记已放过探测。"""
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            if rt.get("circuit_state") == "half_open":
-                rt["half_open_probed"] = True
 
     def _notify(self):
         if self._status_event is not None:
@@ -324,133 +384,27 @@ class LLMGateway:
             self._status_event = asyncio.Event()
         return self._status_event
 
-    # ── key 可用性判断（熔断器核心） ──────────────────────
-
-    def _is_key_available_for_pick(self, key_id, now) -> bool:
-        """选 key 时判断是否可用：考虑 disabled / 熔断 open / half-open 探测中。"""
-        rt = self.key_runtime.get(key_id)
-        if not rt:
-            return True  # 无运行时状态 = 全新 key，可用
-        state = rt.get("circuit_state", "closed")
-        if state == "closed":
-            return True
-        if state == "open":
-            rlu = rt.get("rate_limited_until")
-            if rlu and now < rlu:
-                return False  # 仍在阻塞期
-            # 到期 → 转 half_open，允许探测
-            with self._runtime_lock:
-                rt["circuit_state"] = "half_open"
-                rt["half_open_probed"] = False
-            return True
-        if state == "half_open":
-            # 只允许 1 个探测请求
-            return not rt.get("half_open_probed", False)
-        return True
-
-    # ── key 全局状态操作（熔断器推进） ─────────────────────
-
-    def _mark_key_complete(self, key_id):
-        """成功：熔断器复位 closed，清错误。"""
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["active_in_flight"] = max(0, rt["active_in_flight"] - 1)
-            rt["total_calls"] += 1
-            rt["is_valid"] = True
-            rt["last_error"] = None
-            rt["last_error_time"] = None
-            rt["rate_limited_until"] = None
-            rt["circuit_state"] = "closed"
-            rt["fail_count"] = 0
-            rt["half_open_probed"] = False
-            rt["invalid_streak"] = 0
-        self._notify()
-
-    def _mark_key_rate_limited(self, key_id, retry_after: Optional[int] = None):
-        """429：有 Retry-After 则阻塞（熔断 open），否则只切 key。"""
-        now_iso = datetime.now(timezone.utc).isoformat()
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["is_valid"] = True
-            rt["last_error"] = "429 Rate Limited"
-            rt["last_error_time"] = now_iso
-            if retry_after is not None and retry_after > 0:
-                # provider 明确告诉要等多久 → 阻塞
-                rt["rate_limited_until"] = time.time() + retry_after
-                rt["circuit_state"] = "open"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-            # 否则不阻塞，只切 key（保持 closed/原状态）
-        self._notify()
-
-    def _mark_key_invalid(self, key_id):
-        """401：key 失效/欠费，熔断 open 并升级封禁。
-
-        欠费 key 不会自愈，反复每 5min 探测一次是浪费：按连续 401 次数逐次翻倍
-        cooldown（5min→10min→20min→40min→…），封顶 1h，避免死 key 被高频探测。
-        """
-        now_iso = datetime.now(timezone.utc).isoformat()
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["invalid_streak"] = rt.get("invalid_streak", 0) + 1
-            cooldown = CIRCUIT_COOLDOWN_401 * (2 ** (rt["invalid_streak"] - 1))
-            cooldown = min(cooldown, CIRCUIT_COOLDOWN_401_MAX)
-            rt["rate_limited_until"] = time.time() + cooldown
-            rt["is_valid"] = False
-            rt["last_error"] = "401 Unauthorized"
-            rt["last_error_time"] = now_iso
-            rt["circuit_state"] = "open"
-            rt["fail_count"] = 0
-            rt["half_open_probed"] = False
-        self._notify()
-
-    def _mark_key_server_error(self, key_id):
-        """5xx：连续失败计数，达阈值才熔断 open 阻塞 60s。"""
-        now_iso = datetime.now(timezone.utc).isoformat()
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["is_valid"] = True
-            rt["last_error"] = "5xx Server Error"
-            rt["last_error_time"] = now_iso
-            rt["fail_count"] = rt.get("fail_count", 0) + 1
-            if rt["circuit_state"] == "half_open":
-                # 探测失败 → 重新 open
-                rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_5XX
-                rt["circuit_state"] = "open"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-            elif rt["fail_count"] >= CIRCUIT_FAIL_THRESHOLD:
-                rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_5XX
-                rt["circuit_state"] = "open"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-        self._notify()
-
-    def _mark_key_network_error(self, key_id):
-        """网络错：连续失败计数，达阈值熔断 open 阻塞 30s。"""
-        now_iso = datetime.now(timezone.utc).isoformat()
-        with self._runtime_lock:
-            rt = self._ensure_runtime(key_id)
-            rt["is_valid"] = True
-            rt["last_error"] = "network error"
-            rt["last_error_time"] = now_iso
-            rt["fail_count"] = rt.get("fail_count", 0) + 1
-            if rt["circuit_state"] == "half_open":
-                rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_NET
-                rt["circuit_state"] = "open"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-            elif rt["fail_count"] >= CIRCUIT_FAIL_THRESHOLD:
-                rt["rate_limited_until"] = time.time() + CIRCUIT_COOLDOWN_NET
-                rt["circuit_state"] = "open"
-                rt["fail_count"] = 0
-                rt["half_open_probed"] = False
-        self._notify()
-
     def is_key_busy(self, key_id) -> bool:
-        with self._runtime_lock:
-            rt = self.key_runtime.get(key_id)
-            return bool(rt and rt.get("active_in_flight", 0) > 0)
+        """该 key_id 是否在任意 pool 中有在途请求。用于 admin "占用中"徽章。"""
+        for tier_pools in self.pools.values():
+            for pool in tier_pools.values():
+                with pool.lock:
+                    pool._sync_runtime()
+                    for i, ref in enumerate(pool.refs):
+                        if ref.get("key_id") == key_id:
+                            if pool.ref_runtime[i].get("active_in_flight", 0) > 0:
+                                return True
+        return False
+
+    def reset_key_runtime(self, key_id: str = None):
+        """重置所有 pool 中指定 key_id（或全部）的 per-ref 运行时状态。
+
+        当 admin 更新了 api_key 或测试 key 后调用，使新 key 立即可用。
+        """
+        for tier_pools in self.pools.values():
+            for pool in tier_pools.values():
+                pool.reset_ref_runtime(key_id)
+        self._notify()
 
     # ── 加载/重载 ─────────────────────────────────────────
 

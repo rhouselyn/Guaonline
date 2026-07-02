@@ -19,7 +19,7 @@ from utils.helpers import (
 )
 from utils.exercise_generators import (
     background_word_gen, process_single_word_gen, pre_generate_next_word,
-    generate_and_save_learning_plan,
+    generate_and_save_learning_plan, find_first_incomplete_word,
 )
 
 router = APIRouter(prefix="/api/learn", tags=["learning"])
@@ -50,6 +50,14 @@ async def start_word_gen(file_id: str):
             state["plan_position"] = 0
 
         if state["running"]:
+            # 已在运行：重置 plan_position 到第一个不完整单词，确保按 plan 顺序
+            # 补全早期单元的不完整缓存，而不是一直往后冲到 80+ 才回头补第 1 单元。
+            first_incomplete = find_first_incomplete_word(file_id, vocab)
+            if first_incomplete is not None:
+                cur = state.get("plan_position", 0)
+                if first_incomplete < cur:
+                    print(f"[START] 重进条目，回退 plan_position {cur} → {first_incomplete}")
+                    state["plan_position"] = first_incomplete
             return {"status": "already_running"}
 
         state["running"] = True
