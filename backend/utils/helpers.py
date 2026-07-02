@@ -119,9 +119,10 @@ def is_word_cache_complete(cached: dict) -> bool:
     if not isinstance(hint, str) or not hint.strip():
         return False
 
-    # variants_detail: 非空列表
+    # variants_detail: 必须是列表（可为空——虚词/副词/连词/感叹词等无词形变化，
+    # LLM prompt 明确要求"只包含确实存在的词形变化，如果没有则返回空数组"）
     variants = cached.get("variants_detail")
-    if not isinstance(variants, list) or len(variants) == 0:
+    if not isinstance(variants, list):
         return False
 
     # examples: 非空列表，每项有 sentence 和 translation
