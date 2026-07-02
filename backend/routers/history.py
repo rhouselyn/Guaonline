@@ -78,6 +78,19 @@ async def get_history(current_user: TokenData = Depends(require_auth)):
             file_id = record.get("file_id", "")
             if file_id:
                 record["progress"] = compute_file_progress(file_id)
+                # 修复历史遗留：source_lang 仍为 "auto"（标题生成失败时未更新），
+                # 从 language_settings 取回检测到的真实语言并回写 DB + 返回值，
+                # 使 HistorySidebar 语言分组和单词总表过滤恢复正常。
+                if record.get("source_lang", "") in ("", "auto"):
+                    settings = storage.load_language_settings(file_id)
+                    detected = settings.get("source_lang") if settings else None
+                    if detected and detected not in ("", "auto"):
+                        storage.add_history_record(
+                            file_id, record.get("title", ""), detected,
+                            record.get("target_lang", "zh"), record.get("text_preview", ""),
+                            user_id=current_user.user_id
+                        )
+                        record["source_lang"] = detected
             else:
                 record["progress"] = {"phase1": {"completed": 0, "total": 0}, "phase2": {"completed": 0, "total": 0}}
         return {"records": records}
