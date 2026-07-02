@@ -166,22 +166,23 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const poll = async () => {
       try {
         const data = await api.getWordGenProgress(currentFileId)
-        if (!cancelled) {
-          setWordGenProgress(data)
-          if (data.completed >= data.total && data.total > 0) {
-            if (interval) clearInterval(interval)
-            interval = null
-            return
-          }
+        if (cancelled) return
+        setWordGenProgress(data)
+        // 完成则停止轮询
+        if (data.completed >= data.total && data.total > 0) {
+          if (interval) { clearInterval(interval); interval = null }
         }
-      } catch {}
-      if (!cancelled && !interval) {
-        interval = setInterval(poll, 3000)
+      } catch {
+        // 网络错误：保持原 interval 继续重试，不重复创建
       }
     }
-    poll()
+    // 单一 interval：原代码 poll() + setInterval 同时启动两个，导致每 3 秒发 2 次请求
+    poll()  // 立即首次拉取
     interval = setInterval(poll, 3000)
-    return () => { cancelled = true; if (interval) clearInterval(interval) }
+    return () => {
+      cancelled = true
+      if (interval) clearInterval(interval)
+    }
   }, [currentFileId])
 
   const safeSentenceTranslations = Array.isArray(sentenceTranslations) ? sentenceTranslations : []

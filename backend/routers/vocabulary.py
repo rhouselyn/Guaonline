@@ -12,6 +12,36 @@ from utils.exercise_generators import _gateway_generate_multiple_choice
 router = APIRouter(prefix="/api", tags=["vocabulary"])
 
 
+def _mc_options_already_valid(cached: dict) -> bool:
+    """检查缓存中的 multiple_choice.options 是否已经合法（4 个有效选项、≥1 个 is_correct、无占位符）。
+    合法则跳过 fix_llm_options_result（后者可能触发 storage.load_vocab 全量反序列化）。
+    与 helpers.is_word_cache_complete 中的判定保持一致，避免不一致。"""
+    if not isinstance(cached, dict):
+        return False
+    mc = cached.get("multiple_choice")
+    if not isinstance(mc, dict):
+        return False
+    options = mc.get("options")
+    if not isinstance(options, list) or len(options) < 4:
+        return False
+    import re
+    placeholder_pat = re.compile(r'^(释义|含义|meaning|sense|definition)\s*\d+$', re.IGNORECASE)
+    valid = 0
+    has_correct = False
+    for opt in options:
+        if not isinstance(opt, dict):
+            return False
+        text = opt.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return False
+        if placeholder_pat.match(text.strip()):
+            return False
+        valid += 1
+        if opt.get("is_correct"):
+            has_correct = True
+    return valid >= 4 and has_correct
+
+
 @router.get("/vocab/{file_id}")
 async def get_vocab(file_id: str):
     try:
@@ -96,7 +126,11 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 storage.delete_word_cache(file_id, word)
             else:
                 print(f"[DEBUG] 从缓存中获取单词信息: {word}")
-                cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
+                # ponytail: 仅在 multiple_choice.options 已损坏或不足时才跑 fix_llm_options_result
+                # （后者可能触发 storage.load_vocab 的 DB 全量反序列化）。完整缓存直接走 extract_mc_options
+                # 做按请求重新打乱——纯 Python，零 DB 开销。这是缓存命中路径慢的主因。
+                if not _mc_options_already_valid(cached_word):
+                    cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
                 if "options" not in cached_word:
                     options, correct_index = extract_mc_options(cached_word)
                     if options:

@@ -1025,7 +1025,19 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                 print(f"[DEBUG] Cached word gen: {word_to_gen}")
                 return
             except Exception as e:
+                err_msg = str(e)
                 print(f"[ERROR] Word gen failed for {word_to_gen} (attempt {attempt + 1}/{max_retries}): {e}")
+                # gateway 已在内部按 key 切换 + 10min 截止兜底；若是 gateway 级别的整体不可用
+                # （所有 key 熔断/限速/欠费），不应再外层重试同一单词——会重复占用 LLM 配额
+                # 并卡住 plan_position。直接放弃，由下次进入条目时 background_word_gen 的 first_uncached
+                # 扫描重置 plan_position 重新拾取。
+                if ("服务暂时不可用" in err_msg or "No API Key" in err_msg
+                        or "all keys" in err_msg.lower() or "所有 Key" in err_msg):
+                    print(f"[ERROR] Gateway 整体不可用，跳过 {word_to_gen} 的剩余重试，等待下次进入条目重试")
+                    # 通知 background_word_gen 暂停派发 60s，避免把所有剩余单词快速失败扫一遍
+                    import time as _time
+                    state["gateway_unhealthy_until"] = _time.time() + 60
+                    return
                 if attempt < max_retries - 1:
                     app_prefs = storage.load_user_preferences()
                     retry_delay = app_prefs.get("retry_interval", 1.0)
@@ -1080,6 +1092,7 @@ async def background_word_gen(file_id: str):
     elif "plan_position" not in state:
         state["plan_position"] = len(plan_word_order)
 
+    idle_scans = 0
     while state["running"]:
         word_to_gen = None
         if state["priority_queue"]:
@@ -1091,6 +1104,28 @@ async def background_word_gen(file_id: str):
                 word_to_gen = vocab[vocab_idx].get("word", "")
 
         if not word_to_gen:
+            # plan_position 走完且 priority_queue 为空：全量重扫一次，
+            # 看是否有因失败/重生成导致的遗漏或不完整缓存（最多每 10 次空闲循环扫一次）
+            idle_scans += 1
+            if idle_scans % 10 == 1:
+                rescanned = None
+                for pi, vi in enumerate(plan_word_order):
+                    if vi < len(vocab):
+                        w = vocab[vi].get("word", "")
+                        if w:
+                            ex = storage.load_word_cache(file_id, w)
+                            if not ex or not is_word_cache_complete(ex):
+                                rescanned = pi
+                                break
+                if rescanned is not None:
+                    state["plan_position"] = rescanned
+                    continue
+                # 全部完整：退出循环，让 start_word_gen 在下次进入条目时能重启
+                # （修复"重进条目不自动续生成"：之前 running 永远 True，新 task 无法启动）
+                print(f"[DEBUG] background_word_gen: 所有单词已完整，退出循环 file_id={file_id}")
+                state["running"] = False
+                state["task"] = None
+                return
             await asyncio.sleep(1)
             continue
 
@@ -1137,6 +1172,14 @@ async def background_word_gen(file_id: str):
 
         processing = state.get("processing_words", set())
         if word_to_gen.lower() in {w.lower() for w in processing}:
+            continue
+
+        # gateway 退避：若最近一次 process_single_word_gen 检测到 gateway 整体不可用，
+        # 暂停派发新任务，避免在限速/熔断期间把所有剩余单词都"快速失败"扫一遍
+        import time as _time
+        unhealthy_until = state.get("gateway_unhealthy_until", 0)
+        if _time.time() < unhealthy_until:
+            await asyncio.sleep(30)
             continue
 
         asyncio.create_task(process_single_word_gen(file_id, word_to_gen, vocab, source_lang, target_lang, user_id=uid, tier=tier))
@@ -1459,60 +1502,73 @@ async def pre_generate_next_word(file_id: str, vocab, next_index: int):
         random_word = vocab[vocab_idx]
         word = random_word["word"]
 
-        existing = storage.load_word_cache(file_id, word)
-        if existing:
-            # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词重新生成后再写入
-            if is_word_cache_complete(existing):
-                print(f"[DEBUG] 预生成单词已缓存: {word}")
-                return
-            print(f"[CACHE] 预生成单词缓存不完整，删除后重新生成: {word}")
-            storage.delete_word_cache(file_id, word)
-
-        sentences = storage.load_pipeline_data(file_id)
-        context_sentences = build_context_sentences(sentences, word)
-        context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
-
-        correct_meaning = random_word.get("meaning", "")
-
-        if not correct_meaning:
-            if "context_meaning" in random_word:
-                correct_meaning = random_word["context_meaning"]
-            elif "translation" in random_word:
-                correct_meaning = random_word["translation"]
-
-        print(f"[DEBUG] 后台预生成单词信息: {word}")
-
-        options_result = await _gateway_generate_multiple_choice(
-            uid, tier, word,
-            correct_meaning,
-            context,
-            target_lang,
-            source_lang,
-            0
-        )
-        options_result = fix_llm_options_result(options_result, source_lang, file_id)
-
-        cache_data = dict(options_result)
-        cache_data["word"] = options_result.get("word", word)
-        cache_data["ipa"] = random_word.get("ipa", "")
-        cache_data["meaning"] = correct_meaning
-        cache_data["examples"] = options_result.get("examples", [])
-        cache_data["context"] = context
-        cache_data["context_sentences"] = context_sentences
-        cache_data["morphology"] = random_word.get("morphology", "")
-        cache_data["variants_detail"] = options_result.get("variants_detail", [])
-        cache_data["memory_hint"] = options_result.get("memory_hint", "")
-        cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
-        cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
-        if "context_translations" in cache_data:
-            del cache_data["context_translations"]
-
-        # ponytail: 预生成不完整则不写入，避免污染缓存；用户打开时会触发重新生成
-        if not is_word_cache_complete(cache_data):
-            print(f"[WARN] 预生成不完整，跳过写入: {word}")
+        # 并发去重：与 background_word_gen / process_single_word_gen 共享 processing_words，
+        # 避免同一单词被并发派发两次 LLM 请求（用户报告的"重复生成"根因）
+        processing = state.get("processing_words", set())
+        if word.lower() in {w.lower() for w in processing}:
             return
-        storage.save_word_cache(file_id, word, cache_data)
-        print(f"[DEBUG] 缓存预生成单词信息: {word}")
+        if "processing_words" not in state:
+            state["processing_words"] = set()
+        state["processing_words"].add(word)
+        try:
+            # 二次缓存检查：进入临界区后再次确认缓存未在竞态窗口内被填好
+            existing = storage.load_word_cache(file_id, word)
+            if existing:
+                # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词重新生成后再写入
+                if is_word_cache_complete(existing):
+                    print(f"[DEBUG] 预生成单词已缓存: {word}")
+                    return
+                print(f"[CACHE] 预生成单词缓存不完整，删除后重新生成: {word}")
+                storage.delete_word_cache(file_id, word)
 
+            sentences = storage.load_pipeline_data(file_id)
+            context_sentences = build_context_sentences(sentences, word)
+            context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
+
+            correct_meaning = random_word.get("meaning", "")
+
+            if not correct_meaning:
+                if "context_meaning" in random_word:
+                    correct_meaning = random_word["context_meaning"]
+                elif "translation" in random_word:
+                    correct_meaning = random_word["translation"]
+
+            print(f"[DEBUG] 后台预生成单词信息: {word}")
+
+            options_result = await _gateway_generate_multiple_choice(
+                uid, tier, word,
+                correct_meaning,
+                context,
+                target_lang,
+                source_lang,
+                0
+            )
+            options_result = fix_llm_options_result(options_result, source_lang, file_id)
+
+            cache_data = dict(options_result)
+            cache_data["word"] = options_result.get("word", word)
+            cache_data["ipa"] = random_word.get("ipa", "")
+            cache_data["meaning"] = correct_meaning
+            cache_data["examples"] = options_result.get("examples", [])
+            cache_data["context"] = context
+            cache_data["context_sentences"] = context_sentences
+            cache_data["morphology"] = random_word.get("morphology", "")
+            cache_data["variants_detail"] = options_result.get("variants_detail", [])
+            cache_data["memory_hint"] = options_result.get("memory_hint", "")
+            cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
+            cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
+            if "context_translations" in cache_data:
+                del cache_data["context_translations"]
+
+            # ponytail: 预生成不完整则不写入，避免污染缓存；用户打开时会触发重新生成
+            if not is_word_cache_complete(cache_data):
+                print(f"[WARN] 预生成不完整，跳过写入: {word}")
+                return
+            storage.save_word_cache(file_id, word, cache_data)
+            print(f"[DEBUG] 缓存预生成单词信息: {word}")
+        finally:
+            # 释放并发占用，无论成功失败
+            processing = state.get("processing_words", set())
+            processing.discard(word)
     except Exception as e:
         print(f"[ERROR] 预生成单词信息失败: {str(e)}")
