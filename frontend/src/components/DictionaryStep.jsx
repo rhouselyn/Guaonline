@@ -116,19 +116,19 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       } else if (dictStateRef) {
         dictStateRef.current._lastFileId = currentFileId
       }
-      // sourceLang='auto' 时，不从此 API 设置语言，避免默认值 "en" 闪现
-      // 等轮询状态返回检测到的语言后通过 detectedLang prop 更新
-      if (sourceLang !== 'auto') {
-        fetch(`/api/file/${currentFileId}/info`)
-          .then(r => r.json())
-          .then(data => {
-            const lang = data.source_lang
-            if (lang && lang !== 'auto') {
-              setActualSourceLang(lang)
-            }
-          })
-          .catch(() => {})
-      }
+      // 始终拉取 file info 设置 actualSourceLang。
+      // 即使 sourceLang='auto'（从历史记录进入已处理完的条目），language_settings 里
+      // 也已保存检测到的真实语言，必须取回否则 FavoriteButton 收到 sourceLang=null，
+      // 导致收藏写入因 NOT NULL 约束静默失败、无法取消收藏。
+      fetch(`/api/file/${currentFileId}/info`)
+        .then(r => r.json())
+        .then(data => {
+          const lang = data.source_lang
+          if (lang && lang !== 'auto') {
+            setActualSourceLang(lang)
+          }
+        })
+        .catch(() => {})
     }
     if (sourceLang && sourceLang !== 'auto') {
       setActualSourceLang(sourceLang)

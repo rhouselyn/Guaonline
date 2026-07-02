@@ -124,10 +124,11 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         if file_id in processing_status:
             processing_status[file_id]["title"] = title
 
-        # 5. 更新历史记录标题（记录已在 process-text API 中创建）
-        if title:
-            text_preview = text.strip()[:100]
-            storage.add_history_record(file_id, title, source_lang, target_lang, text_preview, user_id=user_id)
+        # 5. 更新历史记录（记录已在 process-text API 中创建，source_lang 初始为 "auto"）。
+        # 必须用检测到的 source_lang 更新历史记录，否则标题生成失败时记录会永远停留在 "auto"，
+        # 导致 HistorySidebar 语言分组错乱、单词总表按语言过滤时取不到 vocab。
+        text_preview = text.strip()[:100]
+        storage.add_history_record(file_id, title or "", source_lang, target_lang, text_preview, user_id=user_id)
 
         # 6. 执行文本处理
         await process_text_background(file_id, text, source_lang, target_lang, user_id=user_id, tier=tier)

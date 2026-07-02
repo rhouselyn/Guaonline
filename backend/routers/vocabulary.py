@@ -485,7 +485,14 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
             vocab = storage.load_vocab(file_id)
             if not vocab:
                 continue
+            # 防御：vocab 可能是 {"vocab": [...]} 包装或非 list，统一成 list
+            if isinstance(vocab, dict) and "vocab" in vocab:
+                vocab = vocab["vocab"]
+            if not isinstance(vocab, list):
+                continue
             for entry in vocab:
+                if not isinstance(entry, dict):
+                    continue
                 word_key = entry.get("word", "").lower()
                 if not word_key:
                     continue
