@@ -105,43 +105,58 @@ def split_translation_to_phrases(translation, max_phrases=8):
 
 
 def is_word_cache_complete(cached: dict) -> bool:
-    """检查单词缓存是否完整。任一必需字段缺失或无效则返回 False。"""
+    """检查单词缓存是否完整。任一必需字段缺失或无效则返回 False。
+
+    variants_detail 允许为空列表：虚词/副词/连词（not, of, by, up 等）没有词形变化，
+    LLM 按要求返回 [] 是正确的，不应判为不完整。
+    """
     if not isinstance(cached, dict):
         return False
+
+    word = cached.get("word", "?")
 
     # enriched_meaning: 非空字符串
     enriched = cached.get("enriched_meaning")
     if not isinstance(enriched, str) or not enriched.strip():
+        print(f"[CACHE-INCOMPLETE] {word}: enriched_meaning missing/empty")
         return False
 
     # memory_hint: 非空字符串
     hint = cached.get("memory_hint")
     if not isinstance(hint, str) or not hint.strip():
+        print(f"[CACHE-INCOMPLETE] {word}: memory_hint missing/empty")
         return False
 
-    # variants_detail: 非空列表
+    # variants_detail: 列表即可，允许为空（虚词无词形变化）
     variants = cached.get("variants_detail")
-    if not isinstance(variants, list) or len(variants) == 0:
+    if not isinstance(variants, list):
+        print(f"[CACHE-INCOMPLETE] {word}: variants_detail not a list")
         return False
 
     # examples: 非空列表，每项有 sentence 和 translation
     examples = cached.get("examples")
     if not isinstance(examples, list) or len(examples) == 0:
+        print(f"[CACHE-INCOMPLETE] {word}: examples missing/empty")
         return False
     for ex in examples:
         if not isinstance(ex, dict):
+            print(f"[CACHE-INCOMPLETE] {word}: example not a dict")
             return False
         if not isinstance(ex.get("sentence"), str) or not ex["sentence"].strip():
+            print(f"[CACHE-INCOMPLETE] {word}: example sentence missing/empty")
             return False
         if not isinstance(ex.get("translation"), str) or not ex["translation"].strip():
+            print(f"[CACHE-INCOMPLETE] {word}: example translation missing/empty")
             return False
 
     # multiple_choice: 有 options 列表，至少2个有效选项
     mc = cached.get("multiple_choice")
     if not isinstance(mc, dict):
+        print(f"[CACHE-INCOMPLETE] {word}: multiple_choice not a dict")
         return False
     options = mc.get("options")
     if not isinstance(options, list) or len(options) < 2:
+        print(f"[CACHE-INCOMPLETE] {word}: options missing/too few")
         return False
     valid_opts = 0
     has_correct = False
@@ -155,6 +170,7 @@ def is_word_cache_complete(cached: dict) -> bool:
         if opt.get("is_correct"):
             has_correct = True
     if valid_opts < 2 or not has_correct:
+        print(f"[CACHE-INCOMPLETE] {word}: valid_opts={valid_opts} has_correct={has_correct}")
         return False
 
     return True

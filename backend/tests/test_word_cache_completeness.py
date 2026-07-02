@@ -39,10 +39,13 @@ def _complete_cache(word="apple"):
 
 
 def _incomplete_cache(word="apple"):
-    """缺 memory_hint / variants_detail / examples，is_word_cache_complete 应返回 False。"""
+    """缺 memory_hint / examples，is_word_cache_complete 应返回 False。
+
+    注意：variants_detail 不再 pop——空列表对于虚词是合法的，
+    不应判为不完整。改为 pop examples 和 memory_hint 来制造不完整。
+    """
     c = _complete_cache(word)
     c.pop("memory_hint")
-    c.pop("variants_detail")
     c.pop("examples")
     return c
 
@@ -180,6 +183,19 @@ def test_background_word_gen_skips_incomplete_vocab_hit():
     )
 
 
+def test_empty_variants_detail_is_complete():
+    """虚词（not, of, by, up 等）没有词形变化，variants_detail=[] 是合法的，
+    is_word_cache_complete 应返回 True。
+
+    这是导致单词生成无限循环白费 token 的 bug 根因：完整性检查要求
+    variants_detail 非空，但 LLM 按 prompt 要求正确返回 [] 却被判为不完整。
+    """
+    from utils.helpers import is_word_cache_complete
+    c = _complete_cache("not")
+    c["variants_detail"] = []
+    assert is_word_cache_complete(c), "空 variants_detail 对虚词是合法的，应判为完整"
+
+
 if __name__ == "__main__":
     test_process_single_word_gen_keeps_complete_cache()
     print("✅ 完整缓存保留测试通过")
@@ -187,4 +203,6 @@ if __name__ == "__main__":
     print("✅ 不完整缓存删除+重新生成测试通过")
     test_background_word_gen_skips_incomplete_vocab_hit()
     print("✅ background_word_gen 不完整 vocab_hit 不命中测试通过")
+    test_empty_variants_detail_is_complete()
+    print("✅ 空 variants_detail 完整性测试通过")
     print("\n全部测试通过 ✅")
