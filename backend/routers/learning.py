@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from text_processor import BACKUP_VOCAB_BY_LANG, is_punctuation_only, is_source_lang_text, strip_edge_punctuation, NO_SPACE_LANGUAGES
 from utils.state import llm_api, storage, word_gen_state
 from utils.helpers import (
-    RateLimiter, vocab_sort_key, is_speaker_label,
+    RateLimiter, vocab_sort_key,
     fix_llm_options_result, get_fallback_options, get_listening_correct_words,
     get_listening_distractors_from_sentences, filter_eligible_sentences,
     find_item_in_plan, get_unit_flat_range, _is_word_item_learned,
@@ -315,7 +315,6 @@ async def get_random_word(file_id: str):
                         "type": "listening_quiz",
                         "flat_index": current_index,
                         "original_sentence": correct_sentence,
-                        "clean_sentence": re.sub(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]\s*', '', correct_sentence),
                         "correct_words": sentence_words_display,
                         "options": options,
                         "unit_end_index": unit_end_index,
@@ -635,7 +634,6 @@ async def next_word(file_id: str):
                         "listening_quiz": {
                             "flat_index": new_index,
                             "original_sentence": correct_sentence,
-                            "clean_sentence": re.sub(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]\s*', '', correct_sentence),
                             "correct_words": sentence_words_display,
                             "options": options,
                             "step_in_unit": get_filtered_step_in_unit(items, vocab, learned_words, only_new_words, step_in_unit),

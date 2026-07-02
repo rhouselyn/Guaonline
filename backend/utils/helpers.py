@@ -35,13 +35,6 @@ ZH_FUNCTION_WORDS = {'的', '了', '地', '得', '着', '过', '吗', '呢', '�
 MAX_SENTENCE_WORDS_FOR_QUIZ = 8
 
 
-def is_speaker_label(text):
-    if not text or not isinstance(text, str):
-        return False
-    stripped = text.strip()
-    return bool(re.match(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]$', stripped))
-
-
 def vocab_sort_key(entry):
     """按索引顺序排序：先按 sentence_index，再按 token_index"""
     si = entry.get("sentence_index", 9999)
@@ -390,12 +383,10 @@ def fix_llm_options_result(result: dict, source_lang="en", file_id=None) -> dict
 
 
 def get_listening_correct_words(sentence, sentence_data):
-    clean_sentence = re.sub(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]\s*', '', sentence)
-
     def normalize_for_compare(text):
         return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
 
-    sentence_normalized = normalize_for_compare(clean_sentence)
+    sentence_normalized = normalize_for_compare(sentence)
 
     tr = sentence_data.get("translation_result", {})
     translation_tokens = tr.get("translation", [])
@@ -405,9 +396,9 @@ def get_listening_correct_words(sentence, sentence_data):
         for token in translation_tokens:
             if isinstance(token, dict) and "text" in token:
                 t = token["text"].strip()
-                if t and not is_punctuation_only(t) and not is_speaker_label(t):
+                if t and not is_punctuation_only(t):
                     cleaned = strip_edge_punctuation(t)
-                    if cleaned and not is_speaker_label(cleaned):
+                    if cleaned:
                         raw_words.append(cleaned)
 
         if raw_words:
@@ -427,7 +418,7 @@ def get_listening_correct_words(sentence, sentence_data):
             if deduped_normalized == sentence_normalized:
                 return deduped_words
 
-            words_from_sentence = [w for w in clean_sentence.split() if w.strip()]
+            words_from_sentence = [w for w in sentence.split() if w.strip()]
             words_cleaned = []
             for w in words_from_sentence:
                 w_clean = strip_edge_punctuation(w)
@@ -440,9 +431,9 @@ def get_listening_correct_words(sentence, sentence_data):
 
     source_lang = sentence_data.get("source_lang", "en")
     if source_lang in NO_SPACE_LANGUAGES:
-        return [c for c in clean_sentence if c.strip() and not is_punctuation_only(c)]
+        return [c for c in sentence if c.strip() and not is_punctuation_only(c)]
 
-    words = [w for w in clean_sentence.split() if w.strip()]
+    words = [w for w in sentence.split() if w.strip()]
     filtered = []
     for w in words:
         w_clean = strip_edge_punctuation(w)
