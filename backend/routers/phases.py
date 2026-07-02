@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from text_processor import BACKUP_VOCAB_BY_LANG, is_punctuation_only, is_source_lang_text, strip_edge_punctuation, NO_SPACE_LANGUAGES
 from utils.state import text_processor, storage
 from utils.helpers import (
-    is_speaker_label, filter_eligible_sentences,
+    filter_eligible_sentences,
     fix_llm_options_result, get_translation_phrases,
 )
 from utils.exercise_generators import generate_and_save_learning_plan
@@ -259,7 +259,7 @@ async def get_phase_unit_exercise(file_id: str, phase_number: int, unit_id: int)
                 for token in translation_result["translation"]:
                     if isinstance(token, dict) and "text" in token:
                         token_text = token["text"]
-                        if not is_punctuation_only(token_text) and not is_speaker_label(token_text):
+                        if not is_punctuation_only(token_text):
                             translation_tokens.append(token_text)
 
             exercise_index_in_unit = current_exercise_index - exercise_start
@@ -305,7 +305,7 @@ async def get_phase_unit_exercise(file_id: str, phase_number: int, unit_id: int)
                     for token in translation_result["translation"]:
                         if isinstance(token, dict) and "text" in token:
                             token_text = strip_edge_punctuation(token["text"].strip())
-                            if token_text and not is_punctuation_only(token_text) and not is_speaker_label(token_text):
+                            if token_text and not is_punctuation_only(token_text):
                                 original_tokens.append(token_text)
 
                 if not original_tokens:

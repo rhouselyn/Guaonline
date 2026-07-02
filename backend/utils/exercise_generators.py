@@ -12,7 +12,7 @@ from utils.llm_gateway import gateway
 from utils.state import text_processor, storage, processing_status, word_gen_state
 from vocab import global_vocab, user_vocab
 from utils.helpers import (
-    RateLimiter, vocab_sort_key, is_speaker_label, is_punctuation_only as _is_punct,
+    RateLimiter, vocab_sort_key, is_punctuation_only as _is_punct,
     get_translation_phrases, split_translation_to_phrases, select_key_tokens,
     fix_llm_options_result, get_fallback_options, get_listening_correct_words,
     get_listening_distractors_from_sentences, filter_eligible_sentences,
@@ -101,6 +101,7 @@ async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang
    - n (名词), v (动词), adj (形容词), adv (副词), pron (代词), prep (介词), conj (连词), interj (感叹词), det (限定词)
 4. morphology 字段必须只包含缩写，不要有其他内容！
 5. 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可。
+6. 【极其重要·保留说话人标签】如果原文以说话人标签开头（如 "A:" "B:" "John:" 等），tokenized_translation 必须在开头保留同样的说话人标签，冒号使用目标语言习惯的全角或半角形式，不得省略。
 
 ═══════════════════════════════════════════════════════════
 【最最最重要！！！translation 数组的分词原则！！！】
@@ -1438,7 +1439,6 @@ def generate_and_save_learning_plan(file_id: str, vocab, sentences):
                     unit_quiz_items.append({
                         "type": "listening_quiz",
                         "sentence": sentence,
-                        "clean_sentence": re.sub(r'^[A-Za-z\u0410-\u042F\u0430-\u044F]\s*[:：]\s*', '', sentence),
                         "correct_words": sentence_words_display,
                         "distractor_words": distractor_words,
                         "_last_covering_shuffled_pos": last_pos
