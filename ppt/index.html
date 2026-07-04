@@ -114,17 +114,28 @@ background:radial-gradient(ellipse at center,transparent 50%,rgba(245,240,232,.3
 .grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;
 background-image:linear-gradient(rgba(82,77,60,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(82,77,60,.06) 1px,transparent 1px);
 background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%)}
-.slide>*:not(canvas):not(.vignette):not(.grid-bg){position:relative;z-index:2}
+
+/* 竖条纹渐变背景（QQ 主页风格 · 发布会质感） */
+.stripes-bg{position:absolute;inset:0;pointer-events:none;z-index:0;
+background:repeating-linear-gradient(90deg,
+  rgba(107,138,94,0.42) 0px,
+  rgba(150,138,94,0.36) 90px,
+  rgba(200,138,44,0.46) 180px,
+  rgba(184,85,48,0.40) 270px,
+  rgba(140,110,70,0.38) 360px,
+  rgba(107,138,94,0.42) 450px);
+background-size:450px 100%}
+.slide>*:not(canvas):not(.vignette):not(.grid-bg):not(.stripes-bg){position:relative;z-index:2}
  
 /* ════════ Slide 1 · 封面 ════════ */
 #s1{justify-content:center;align-items:center;text-align:center}
 #s1 .lockup{position:relative;z-index:3;max-width:900px;padding:48px 56px;
-background:rgba(253,251,245,0.5);
-backdrop-filter:blur(20px) saturate(1.5);
--webkit-backdrop-filter:blur(20px) saturate(1.5);
-border:1px solid rgba(255,255,255,0.55);
+background:rgba(253,251,245,0.22);
+backdrop-filter:blur(24px) saturate(1.6);
+-webkit-backdrop-filter:blur(24px) saturate(1.6);
+border:1px solid rgba(255,255,255,0.45);
 border-radius:10px;
-box-shadow:0 16px 50px rgba(82,77,60,0.2),inset 0 1px 0 rgba(255,255,255,0.7)}
+box-shadow:0 16px 50px rgba(82,77,60,0.18),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s1 .brand-big{font-family:'Noto Serif SC',serif;font-weight:900;
 font-size:clamp(80px,13vw,200px);line-height:.95;color:var(--ink);
 letter-spacing:.02em;text-shadow:2px 2px 0 var(--amber-light)}
@@ -150,19 +161,19 @@ letter-spacing:.2em;margin-bottom:24px;text-transform:uppercase}
 #s2 .me-left .tg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);
 background:var(--parchment-2);border:1px solid var(--line);padding:4px 10px;border-radius:3px}
 #s2 .me-right{display:flex;flex-direction:column;gap:14px}
-#s2 .cred{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:18px;
+#s2 .cred{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:18px;
 border-left:3px solid var(--olive)}
 #s2 .cred .n{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--amber);line-height:1}
 #s2 .cred .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);margin-top:6px}
 #s2 .cred .d{font-size:12px;color:var(--ink-muted);margin-top:4px;line-height:1.5}
 #s2 .why{margin-top:20px;padding:20px;border:1px solid var(--line-strong);border-radius:4px;
-background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
+background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
 #s2 .why .q{font-family:'Noto Serif SC',serif;font-style:italic;font-size:17px;color:var(--ink);line-height:1.6}
 #s2 .why .a{font-size:13.5px;color:var(--ink-2);margin-top:10px;line-height:1.65}
  
 /* ════════ Slide 3 · 痛点 + 多邻国 ════════ */
 #s3 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-#s3 .col{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:26px}
+#s3 .col{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:26px}
 #s3 .col.pro{border-top:4px solid var(--olive)}
 #s3 .col.con{border-top:4px solid var(--rust)}
 #s3 .col h3{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;margin-bottom:6px}
@@ -179,7 +190,7 @@ justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
 #s3 .item .t{color:var(--ink);font-weight:500}
 #s3 .item .t b{color:var(--amber);font-weight:700}
 #s3 .scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:6px}
-#s3 .scene{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px;
+#s3 .scene{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px;
 border-left:3px solid var(--amber)}
 #s3 .scene .ic{font-size:22px;margin-bottom:8px}
 #s3 .scene h4{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px}
@@ -189,7 +200,7 @@ margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
  
 /* ════════ Slide 4 · 有道对比 ════════ */
 #s4 .price-table{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;border:1.5px solid var(--line-strong);
-border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
+border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
 #s4 .pt-head{display:contents}
 #s4 .pt-head>div{background:var(--parchment-2);padding:14px 18px;font-family:'JetBrains Mono',monospace;
 font-size:11px;color:var(--ink-muted);letter-spacing:.2em;text-transform:uppercase}
@@ -213,7 +224,7 @@ border-radius:0 4px 4px 0;font-size:14.5px;line-height:1.7;color:var(--ink)}
 #s5 .arch-left{display:flex;flex-direction:column;gap:14px}
 #s5 .arch-left .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
 letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
-#s5 .mode{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px;
+#s5 .mode{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px;
 border-left:4px solid var(--olive);display:flex;gap:14px;align-items:flex-start}
 #s5 .mode .pn{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--amber);
 line-height:1;flex-shrink:0;width:34px}
@@ -224,7 +235,7 @@ line-height:1;flex-shrink:0;width:34px}
 #s5 .arch-right .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
 letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
 #s5 .flow-v{display:flex;flex-direction:column;gap:8px;flex:1}
-#s5 .fv-step{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:13px 16px;
+#s5 .fv-step{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:13px 16px;
 display:flex;gap:12px;align-items:center;position:relative}
 #s5 .fv-step .n{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);font-weight:700;
 letter-spacing:.15em;flex-shrink:0;width:28px}
@@ -235,7 +246,7 @@ letter-spacing:.15em;flex-shrink:0;width:28px}
 #s5 .fv-step:not(:last-child)::after{content:'↓';position:absolute;left:21px;bottom:-13px;
 color:var(--olive);font-size:14px;font-weight:700;z-index:2}
 #s5 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
-#s5 .cmp-col{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
+#s5 .cmp-col{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
 #s5 .cmp-col.bad{border-top:3px solid var(--rust)}
 #s5 .cmp-col.good{border-top:3px solid var(--olive)}
 #s5 .cmp-col .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;margin-bottom:10px}
@@ -279,7 +290,7 @@ background:var(--parchment);border:1px solid var(--line);padding:4px 10px;border
 /* ════════ Slide 7 · 工具调用 ════════ */
 #s7 .tc-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:28px;align-items:start}
 #s7 .tc-left{display:flex;flex-direction:column;gap:18px}
-#s7 .tc-card{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:20px;
+#s7 .tc-card{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:20px;
 border-left:4px solid var(--olive)}
 #s7 .tc-card .ic{font-family:'Playfair Display',serif;font-weight:900;font-size:24px;color:var(--amber);margin-bottom:6px}
 #s7 .tc-card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
@@ -298,7 +309,7 @@ background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,2
  
 /* ════════ Slide 8 · SaaS 价值 ════════ */
 #s8 .val-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-#s8 .val{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:22px;
+#s8 .val{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:22px;
 border-top:4px solid var(--olive)}
 #s8 .val .ic{font-size:26px;margin-bottom:10px}
 #s8 .val h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
@@ -308,8 +319,8 @@ border-top:4px solid var(--olive)}
 #s8 .val li::before{content:'▸';position:absolute;left:0;color:var(--amber)}
 #s8 .val li b{color:var(--ink);font-weight:700}
 #s8 .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1.5px solid var(--line-strong);
-border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s8 .sp{padding:18px;text-align:center;border-right:1px solid var(--line);background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
+border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
+#s8 .sp{padding:18px;text-align:center;border-right:1px solid var(--line);background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
 #s8 .sp:last-child{border-right:none}
 #s8 .sp .n{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--rust);line-height:1}
 #s8 .sp .l{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-muted);
@@ -317,7 +328,7 @@ letter-spacing:.18em;margin-top:6px;text-transform:uppercase}
  
 /* ════════ Slide 9 · 订阅变现 ════════ */
 #s9 .tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:880px;margin:0 auto;width:100%}
-#s9 .tier{background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:24px;position:relative}
+#s9 .tier{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:24px;position:relative}
 #s9 .tier.feat{border-color:var(--amber);border-width:2px;box-shadow:0 6px 24px rgba(200,138,44,.12)}
 #s9 .tier .badge{position:absolute;top:-10px;left:24px;background:var(--rust);color:var(--cream);
 font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 10px;
@@ -335,7 +346,7 @@ letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px}
 background:rgba(184,85,48,.06);font-size:15px;line-height:1.7;color:var(--ink)}
 #s9 .hook b{color:var(--rust)}
 #s9 .roadmap{display:flex;gap:14px}
-#s9 .rm{flex:1;padding:16px 18px;border:1px solid var(--line);border-radius:4px;background:rgba(253,251,245,0.42);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
+#s9 .rm{flex:1;padding:16px 18px;border:1px solid var(--line);border-radius:4px;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
 #s9 .rm .stage{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--rust);
 letter-spacing:.2em;margin-bottom:6px}
 #s9 .rm .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;color:var(--ink)}
@@ -344,12 +355,12 @@ letter-spacing:.2em;margin-bottom:6px}
 /* ════════ Slide 10 · CTA ════════ */
 #s10{justify-content:center;align-items:center;text-align:center}
 #s10 .lockup{position:relative;z-index:3;padding:48px 56px;
-background:rgba(253,251,245,0.5);
-backdrop-filter:blur(20px) saturate(1.5);
--webkit-backdrop-filter:blur(20px) saturate(1.5);
-border:1px solid rgba(255,255,255,0.55);
+background:rgba(253,251,245,0.22);
+backdrop-filter:blur(24px) saturate(1.6);
+-webkit-backdrop-filter:blur(24px) saturate(1.6);
+border:1px solid rgba(255,255,255,0.45);
 border-radius:10px;
-box-shadow:0 16px 50px rgba(82,77,60,0.2),inset 0 1px 0 rgba(255,255,255,0.7)}
+box-shadow:0 16px 50px rgba(82,77,60,0.18),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s10 .term{font-family:'JetBrains Mono',monospace;font-size:clamp(15px,1.7vw,20px);color:var(--olive-deep);
 margin-bottom:28px}
 #s10 .term .p{color:var(--rust)}
@@ -380,7 +391,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 
 /* 通用毛玻璃卡片 */
 .glass{
-  background:rgba(253,251,245,0.42);
+  background:rgba(253,251,245,0.20);
   backdrop-filter:blur(22px) saturate(1.6);
   -webkit-backdrop-filter:blur(22px) saturate(1.6);
   border:1px solid rgba(255,255,255,0.5);
@@ -413,10 +424,10 @@ color:var(--ink-muted);letter-spacing:.2em}
 <div id="stage">
  
 <!-- ═══ 1 · 封面 ═══ -->
-<section class="slide" id="s1" data-effect="cover">
-<canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.5,"dir":"down","speed":0.1,"vertical":true}'></canvas>
-<div class="grid-bg"></div>
-<div class="vignette"></div>
+  <section class="slide" id="s1" data-effect="cover">
+    <div class="stripes-bg"></div>
+    <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.45,"dir":"down","speed":0.1,"vertical":true}'></canvas>
+    <div class="vignette"></div>
 <div class="lockup">
 <div class="label fade-up d1">AI-NATIVE · ALL LANGUAGES · ONE TEXTBOX</div>
 <h1 class="brand-big fade-up d2">呱邻国</h1>
@@ -970,12 +981,18 @@ if(dir==='down'){vy=sp;}
 else if(dir==='up'){vy=-sp;}
 else if(dir==='left'){vx=-sp;}
 else if(dir==='right'){vx=sp;}
-if(init){x=Math.random()*this.w;y=Math.random()*this.h;}
-else{
-if(dir==='down'){x=Math.random()*this.w;y=-vh;}
-else if(dir==='up'){x=Math.random()*this.w;y=this.h+vh;}
-else if(dir==='left'){x=this.w+tw;y=Math.random()*this.h;}
-else if(dir==='right'){x=-tw;y=Math.random()*this.h;}
+if(init){
+  // 初始：分散在整个屏幕 + 屏幕外，保证持续有粒子流动
+  x=Math.random()*this.w;
+  if(dir==='down'){y=Math.random()*(this.h+vh)-vh;}
+  else if(dir==='up'){y=Math.random()*(this.h+vh);}
+  else{y=Math.random()*this.h;}
+}else{
+  // 重生：在屏幕外重新进入，加随机偏移避免同时到达
+  if(dir==='down'){x=Math.random()*this.w;y=-vh-Math.random()*this.h*0.6;}
+  else if(dir==='up'){x=Math.random()*this.w;y=this.h+vh+Math.random()*this.h*0.6;}
+  else if(dir==='left'){x=this.w+tw+Math.random()*this.w*0.6;y=Math.random()*this.h;}
+  else if(dir==='right'){x=-tw-Math.random()*this.w*0.6;y=Math.random()*this.h;}
 }
 return {x,y,vx,vy,dir,txt,tw,vh,c,gradFlip,
 alpha:(this.opts.mode==='twinkle')?0.15:(0.22+Math.random()*0.22),
@@ -1021,7 +1038,13 @@ if(Math.random()<0.003){p.txt=this.pickPhrase();}
 }else{
 p.x+=p.vx;p.y+=p.vy;
 const bound=this.opts.vertical?p.vh:p.tw;
-if(p.y>h+fontSize||p.y<-bound-fontSize||p.x<-bound-fontSize||p.x>w+fontSize){
+// 仅按粒子运动方向判断是否完全出界，避免入屏侧误触发重生
+let out=false;
+if(p.dir==='up'){out=p.y<-bound-fontSize;}
+else if(p.dir==='down'){out=p.y>h+fontSize;}
+else if(p.dir==='left'){out=p.x<-bound-fontSize;}
+else if(p.dir==='right'){out=p.x>w+fontSize;}
+if(out){
 // 重生：保留原色，避免颜色跳变
 const keepC=p.c,keepFlip=p.gradFlip;
 Object.assign(p,this.spawn(false));
