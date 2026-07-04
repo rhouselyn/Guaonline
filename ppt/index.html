@@ -6,16 +6,22 @@
 <title>呱邻国 Gualingo · 任意文本，全语种学习 · Pitch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..900,0..100;1,9..144,300..900,0..100&family=DM+Sans:opsz,wght@9..40,400..700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/base.css">
 <link rel="stylesheet" href="assets/css/slides.css">
 </head>
 <body>
 
+<!-- 角标 · 编辑感装饰 -->
+<div class="corner tl">+</div>
+<div class="corner tr">+</div>
+<div class="corner bl">+</div>
+<div class="corner br">+</div>
+
 <div class="hud">
 <div class="brand"><span class="dot"></span>GUALINGO · 呱邻国</div>
 <div class="right">
-<span>PITCH v1.1</span>
+<span>PITCH v2.0</span>
 <span id="hudSlide">01 / 10</span>
 <span id="hudClock">--:--:--</span>
 </div>
@@ -25,59 +31,58 @@
 
 <!-- ═══ 1 · 封面 ═══ -->
 <section class="slide" id="s1" data-effect="cover">
-  <div class="stripes-bg"></div>
-  <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.45,"dir":"down","speed":0.1,"vertical":true}'></canvas>
+  <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#B8E835","size":38,"density":0.42,"dir":"down","speed":0.09,"vertical":true}'></canvas>
+  <div class="grid-bg"></div>
   <div class="vignette"></div>
-<div class="lockup">
+<div class="lockup cover-lockup">
+<div class="lockup-mark fade-up d1">GUALINGO · PITCH DECK · 2026</div>
 <div class="label fade-up d1">AI-NATIVE · ALL LANGUAGES · ONE TEXTBOX</div>
-<h1 class="brand-big fade-up d2">呱邻国</h1>
+<h1 class="brand-big fade-up d2">呱<span class="amp">·</span>邻<span class="amp">·</span>国</h1>
 <div class="brand-en fade-up d3">G U A L I N G O</div>
-<p class="tag fade-up d4">扔进去<b>任意一段文字</b>，AI 自动拆词、翻译、生成例句与题目。<br>200+ 种语言，用<b>任意语种学任意语种</b>，界面也能自由切换 —— 一套架构，全球传播。</p>
+<p class="tag fade-up d4">扔进去<b>任意一段文字</b>，AI 自动拆词、翻译、生成例句与题目。<br>200+ 种语言，用<b>任意语种学任意语种</b> —— 一套架构，全球传播。</p>
 <div class="meta fade-up d5">任意文本 · 全语种 · 零预制 · LLM 即内容引擎</div>
 </div>
 </section>
 
-<!-- ═══ 2 · 自我介绍 ═══ -->
-<section class="slide" id="s2" data-effect="intro">
+<!-- ═══ 2 · 从身边出发 ═══ -->
+<section class="slide" id="s2" data-effect="within">
 <div class="wrap">
 <div class="fade-up d1">
-<div class="label">关于我 · ABOUT</div>
+<div class="label">从身边出发 · START FROM WITHIN</div>
+<h2 class="title" style="margin-top:14px">大家都做 agent、做 ToB；<br>我刚毕业，<em>只能从身边观察切入 ToC</em>。</h2>
 </div>
-<div class="me-grid">
-<div class="me-left">
-<div class="who fade-up d1">半 AI 原生人类，<br><em>算法 × 全栈</em> 双修。</div>
-<div class="role fade-up d2">// CV & LLM RESEARCHER · FULL-STACK BUILDER</div>
-<p class="bio fade-up d2">主业是 <b>CV 与 LLM 算法研究</b>，曾为<b>商汤</b>开发<b>世界模型架构</b>；业余爱好<b>全栈开发</b>，把研究成果直接落到产品。这是我从研究到工程的一次完整闭环。</p>
-<p class="bio fade-up d3">做 ToB 我刚毕业，没那么多经验，所以选择从身边观察切入 <b>ToC</b>——同学留学德、法、瑞士，<b>只有多邻国</b>能覆盖这么多语种，但它的痛点又太明显。这就是呱邻国的起点。</p>
-<div class="tags fade-up d3">
-<span class="tg">CV Research</span>
-<span class="tg">LLM Architecture</span>
-<span class="tg">商汤 · 世界模型</span>
-<span class="tg">Full-Stack</span>
-<span class="tg">AI-Native</span>
+<div class="within-grid">
+<div class="within-left fade-up d2">
+<div class="blk-head">// WHY TOC, NOT TOB</div>
+<p class="blk-body">同期都在做 agent、做 ToB—— 那条赛道太挤，<b>我也没有积累</b>。刚毕业、没接触那么多，所以选择从身边能看见的痛点切入。</p>
+<div class="blk-head" style="margin-top:18px">// 身边的真实需求</div>
+<p class="blk-body">同学留学 <b>德国、法国、瑞士</b>，多语种需求真实存在；全市场只有 <b>多邻国</b> 能学这么多语种 —— 但它的痛点又太明显。</p>
 </div>
+<div class="within-right fade-up d3">
+<div class="gap-head">语言学习市场 · 覆盖率断层</div>
+<div class="gap-bars">
+<div class="bar-row">
+<div class="bar-lbl"><b>多邻国</b><span>40+ 语种</span></div>
+<div class="bar-track"><div class="bar bar-1" style="--w:28%"><span>大众主流</span></div></div>
 </div>
-<div class="me-right">
-<div class="cred fade-up d2">
-<div class="n">01</div>
-<div class="t">算法研究背景</div>
-<div class="d">CV + LLM 双线，世界模型架构开发经验</div>
+<div class="bar-row">
+<div class="bar-lbl"><b>专门 App</b><span>日语 / 韩语</span></div>
+<div class="bar-track"><div class="bar bar-2" style="--w:14%"><span>单一语种</span></div></div>
 </div>
-<div class="cred fade-up d3">
-<div class="n">02</div>
-<div class="t">全栈交付能力</div>
-<div class="d">从 prompt 设计到 Electron 打包，独立完成</div>
+<div class="bar-row">
+<div class="bar-lbl"><b>小语种</b><span>德 / 法 / 瑞 / 俄 / 阿</span></div>
+<div class="bar-track"><div class="bar bar-3" style="--w:6%"><span>几乎空白</span></div></div>
 </div>
-<div class="cred fade-up d4">
-<div class="n">03</div>
-<div class="t">真实痛点驱动</div>
-<div class="d">不是凭空想需求，是身边同学的切身痛点</div>
+<div class="bar-row">
+<div class="bar-lbl"><b class="rust">长尾 200+</b><span>非洲 / 印太 / 部落语</span></div>
+<div class="bar-track"><div class="bar bar-4" style="--w:2%"><span></span></div></div>
 </div>
 </div>
+<div class="gap-note"><b class="rust">市场缺口巨大</b> —— 且这个缺口注定要靠 <b>LLM 灵活性</b>而非预制数据库来填。</div>
 </div>
-<div class="why fade-up d4">
-<div class="q">"为什么做这个？因为身边留学德、法、瑞士的同学，<br>学小语种时只有多邻国一个选项，而它学不到他们想学的内容。"</div>
-<div class="a">// 大众语种如日语只有专门 App 能学，小语种几乎无人覆盖 —— <b class="rust">市场缺口巨大</b>，且这个缺口注定要靠 LLM 灵活性而非预制数据库来填。</div>
+</div>
+<div class="within-quote fade-up d4">
+<span class="qmark">"</span>大家都是 agent、ToB；我刚毕业，没接触那么多 —— 所以只能基于身边观察，做一个 ToC 的语言学习产品。
 </div>
 </div>
 </section>
@@ -274,8 +279,8 @@
 
 <!-- ═══ 6 · 200 语言 ═══ -->
 <section class="slide" id="s6" data-effect="languages">
-<div class="stripes-bg"></div>
-<canvas class="flow" data-flow='{"mode":"phrases","phrases":"all","color":"#6B8A5E","size":32,"density":0.55,"dir":"up","speed":0.1,"vertical":true}'></canvas>
+<canvas class="flow" data-flow='{"mode":"phrases","phrases":"all","color":"#B8E835","size":34,"density":0.5,"dir":"up","speed":0.09,"vertical":true}'></canvas>
+<div class="grid-bg"></div>
 <div class="vignette"></div>
 <div class="center">
 <div class="num"><span id="s6Count">0</span><span class="plus">+</span></div>
@@ -435,12 +440,13 @@
 </div>
 </section>
 
-<!-- ═══ 10 · CTA ═══ -->
+<!-- ═══ 10 · CTA（与封面同模式） ═══ -->
 <section class="slide" id="s10" data-effect="cta">
-<canvas class="flow" data-flow='{"mode":"twinkle","phrases":"world","color":"#B85530","size":44,"density":0.6,"dir":"down","speed":0,"vertical":true}'></canvas>
+<canvas class="flow" data-flow='{"mode":"twinkle","phrases":"world","color":"#E8654A","size":46,"density":0.55,"dir":"up","speed":0,"vertical":true}'></canvas>
 <div class="grid-bg"></div>
 <div class="vignette"></div>
-<div class="lockup">
+<div class="lockup cover-lockup">
+<div class="lockup-mark fade-up d1">END · 让原文成为入口</div>
 <div class="term fade-up d1"><span class="p">user@gualingo:~$</span> <span id="s10Typed"></span><span class="cur">_</span></div>
 <h1 class="head fade-up d2">扔进去<em>一段文字</em>，<br>开始学一门语言。</h1>
 <p class="sub fade-up d3">200+ 种语言，任意文本，AI 现场拆解生成。<br>从你今天读到的一段原文开始。</p>

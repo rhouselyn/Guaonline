@@ -92,13 +92,13 @@ this.fontSize=this.opts.size;
 this.ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
 this.particles=[];
 const n=Math.max(6,Math.floor((this.w/this.fontSize)*this.opts.density));
-// 调色板：发布会风格高级渐变（蛙绿/琥珀/红土三色系）
+// 调色板：Midnight Botanical 深色版（亮色字浮于墨绿底）
 this.palette=[
-[107,138,94],   // 蛙绿
-[150,138,94],   // 蛙绿偏暖
-[200,138,44],   // 琥珀
-[184,85,48],    // 红土
-[140,110,70],   // 暖褐
+[184,232,53],   // chartreuse 鲜活蛙绿（主色）
+[212,240,112],  // soft chartreuse 柔和蛙绿
+[232,181,71],   // amber 暖琥珀金
+[232,101,74],   // coral 珊瑚红
+[244,239,224],  // cream 暖奶白
 ];
 for(let i=0;i<n;i++) this.particles.push(this.spawn(true,i));
 // 透明清屏，让 body 渐变透出
@@ -136,10 +136,10 @@ if(init){
   else if(dir==='right'){x=-tw-Math.random()*this.w*0.6;y=Math.random()*this.h;}
 }
 return {x,y,vx,vy,dir,txt,tw,vh,c,gradFlip,
-alpha:(this.opts.mode==='twinkle')?0.15:(0.22+Math.random()*0.22),
+alpha:(this.opts.mode==='twinkle')?0.22:(0.34+Math.random()*0.28),
 twPhase:Math.random()*Math.PI*2,
 twSpeed:0.012+Math.random()*0.02,
-twAmp:0.16+Math.random()*0.2,
+twAmp:0.18+Math.random()*0.22,
 isTwinkle:this.opts.mode==='twinkle'};
 }
 drawText(p){
@@ -149,10 +149,10 @@ if(this.opts.vertical){
 const chars=[...p.txt];
 // 居中 x 对齐到字宽
 const cw=this.fontSize;
-// 竖排逐字渐变：首字深、末字浅
+// 竖排逐字渐变：深色底用更亮的中段，避免末尾过暗
 for(let i=0;i<chars.length;i++){
 const t=i/(chars.length-1||1);
-const k=p.gradFlip?(1-t*0.7):(0.4+t*0.6); // 0.4~1.0 明度系数
+const k=p.gradFlip?(0.55+t*0.45):(0.7+t*0.3); // 0.55~1.0 明度系数
 this.ctx.fillStyle=`rgb(${Math.round(r*k)},${Math.round(g*k)},${Math.round(b*k)})`;
 this.ctx.fillText(chars[i],p.x,p.y+i*this.fontSize);
 }
