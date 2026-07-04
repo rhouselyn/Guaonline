@@ -110,7 +110,7 @@ margin-bottom:10px;line-height:1.25}
 /* 流动字符 canvas（更大、多方向） */
 canvas.flow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .vignette{position:absolute;inset:0;pointer-events:none;z-index:1;
-background:radial-gradient(ellipse at center,transparent 30%,rgba(245,240,232,.85) 100%)}
+background:radial-gradient(ellipse at center,transparent 50%,rgba(245,240,232,.35) 100%)}
 .grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;
 background-image:linear-gradient(rgba(82,77,60,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(82,77,60,.06) 1px,transparent 1px);
 background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%)}
@@ -1004,7 +1004,7 @@ this.ctx.fillStyle=`rgb(${r},${g},${b})`;
 this.ctx.fillText(p.txt,p.x,p.y);
 }
 }
-start(){if(this.running)return;this.running=true;this.loop();}
+start(){if(this.running)return;this.running=true;this.resize();this.loop();}
 stop(){this.running=false;if(this._raf)cancelAnimationFrame(this._raf);}
 loop(){
 if(!this.running)return;
