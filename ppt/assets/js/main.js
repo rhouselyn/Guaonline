@@ -40,12 +40,12 @@ if(eff==='languages')effLanguages();
 else if(eff==='cta')effCTA();
 }
 function effLanguages(){
-const el=document.getElementById('s6Count');const to=200;let v=0;
+const el=document.getElementById('s5Count');const to=200;let v=0;
 const tick=()=>{v+=Math.max(2,Math.ceil((to-v)/9));if(v>=to){el.textContent=to;return;}el.textContent=v;requestAnimationFrame(tick);};
 setTimeout(tick,400);
 }
 function effCTA(){
-const el=document.getElementById('s10Typed');const text='./gualingo --text "任意一段文字"';
+const el=document.getElementById('s9Typed');const text='./gualingo --text "任意一段文字"';
 el.textContent='';let i=0;
 const type=()=>{if(i<=text.length){el.textContent=text.slice(0,i);i++;setTimeout(type,55);}};
 setTimeout(type,600);
