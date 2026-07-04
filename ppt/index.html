@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>呱邻国 Gualingo · 任意文本，全语种学习 · Pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/slides.css">
+</head>
+<body>
+
+<div class="hud">
+<div class="brand"><span class="dot"></span>GUALINGO · 呱邻国</div>
+<div class="right">
+<span>PITCH v1.1</span>
+<span id="hudSlide">01 / 10</span>
+<span id="hudClock">--:--:--</span>
+</div>
+</div>
+
+<div id="stage">
+
+<!-- ═══ 1 · 封面 ═══ -->
+<section class="slide" id="s1" data-effect="cover">
+  <div class="stripes-bg"></div>
+  <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.45,"dir":"down","speed":0.1,"vertical":true}'></canvas>
+  <div class="vignette"></div>
+<div class="lockup">
+<div class="label fade-up d1">AI-NATIVE · ALL LANGUAGES · ONE TEXTBOX</div>
+<h1 class="brand-big fade-up d2">呱邻国</h1>
+<div class="brand-en fade-up d3">G U A L I N G O</div>
+<p class="tag fade-up d4">扔进去<b>任意一段文字</b>，AI 自动拆词、翻译、生成例句与题目。<br>200+ 种语言，用<b>任意语种学任意语种</b>，界面也能自由切换 —— 一套架构，全球传播。</p>
+<div class="meta fade-up d5">任意文本 · 全语种 · 零预制 · LLM 即内容引擎</div>
+</div>
+</section>
+
+<!-- ═══ 2 · 自我介绍 ═══ -->
+<section class="slide" id="s2" data-effect="intro">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">关于我 · ABOUT</div>
+</div>
+<div class="me-grid">
+<div class="me-left">
+<div class="who fade-up d1">半 AI 原生人类，<br><em>算法 × 全栈</em> 双修。</div>
+<div class="role fade-up d2">// CV & LLM RESEARCHER · FULL-STACK BUILDER</div>
+<p class="bio fade-up d2">主业是 <b>CV 与 LLM 算法研究</b>，曾为<b>商汤</b>开发<b>世界模型架构</b>；业余爱好<b>全栈开发</b>，把研究成果直接落到产品。这是我从研究到工程的一次完整闭环。</p>
+<p class="bio fade-up d3">做 ToB 我刚毕业，没那么多经验，所以选择从身边观察切入 <b>ToC</b>——同学留学德、法、瑞士，<b>只有多邻国</b>能覆盖这么多语种，但它的痛点又太明显。这就是呱邻国的起点。</p>
+<div class="tags fade-up d3">
+<span class="tg">CV Research</span>
+<span class="tg">LLM Architecture</span>
+<span class="tg">商汤 · 世界模型</span>
+<span class="tg">Full-Stack</span>
+<span class="tg">AI-Native</span>
+</div>
+</div>
+<div class="me-right">
+<div class="cred fade-up d2">
+<div class="n">01</div>
+<div class="t">算法研究背景</div>
+<div class="d">CV + LLM 双线，世界模型架构开发经验</div>
+</div>
+<div class="cred fade-up d3">
+<div class="n">02</div>
+<div class="t">全栈交付能力</div>
+<div class="d">从 prompt 设计到 Electron 打包，独立完成</div>
+</div>
+<div class="cred fade-up d4">
+<div class="n">03</div>
+<div class="t">真实痛点驱动</div>
+<div class="d">不是凭空想需求，是身边同学的切身痛点</div>
+</div>
+</div>
+</div>
+<div class="why fade-up d4">
+<div class="q">"为什么做这个？因为身边留学德、法、瑞士的同学，<br>学小语种时只有多邻国一个选项，而它学不到他们想学的内容。"</div>
+<div class="a">// 大众语种如日语只有专门 App 能学，小语种几乎无人覆盖 —— <b class="rust">市场缺口巨大</b>，且这个缺口注定要靠 LLM 灵活性而非预制数据库来填。</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 3 · 痛点 + 多邻国 ═══ -->
+<section class="slide" id="s3" data-effect="problem">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">市场观察 · MARKET GAP</div>
+<h2 class="title" style="margin-top:14px">多邻国很强，但它<b class="rust">学不到你想学的</b>。</h2>
+</div>
+<div class="cmp">
+<div class="col pro fade-up d2">
+<h3>它的优点，我承认</h3>
+<div class="sub">// WHAT THEY GOT RIGHT</div>
+<div class="item"><div class="mk">✓</div><div><span class="t"><b>游戏化机制</b>，连续打卡 + 排行榜，留存极高</span></div></div>
+<div class="item"><div class="mk">✓</div><div><span class="t"><b>5 亿+ 月活</b>，品牌认知碾压式领先</span></div></div>
+<div class="item"><div class="mk">✓</div><div><span class="t">题型丰富，<b>单元内体验打磨细致</b></span></div></div>
+<div class="item"><div class="mk">✓</div><div><span class="t">主流 40+ 语种覆盖，行业最广</span></div></div>
+<div class="item"><div class="mk">✓</div><div><span class="t">语音识别 + 角色 IP，门槛极低</span></div></div>
+</div>
+<div class="col con fade-up d3">
+<h3>它的盲区，我们的机会</h3>
+<div class="sub">// WHERE THEY FAIL</div>
+<div class="item"><div class="mk">✗</div><div><span class="t">只能按<b>特定轨迹</b>学，单元题目丰富但<b>针对性弱</b></span></div></div>
+<div class="item"><div class="mk">✗</div><div><span class="t"><b>学不到自己想学的</b>——内容被预制，不可自定义</span></div></div>
+<div class="item"><div class="mk">✗</div><div><span class="t"><b>小众语种不支持</b>，依赖自建数据库，迭代慢</span></div></div>
+<div class="item"><div class="mk">✗</div><div><span class="t">无法处理兴趣/专业场景（外文歌、攀岩、专业阅读）</span></div></div>
+<div class="item"><div class="mk">✗</div><div><span class="t">学到 B1 后词汇重复高，进阶乏力</span></div></div>
+</div>
+</div>
+<div class="scenes">
+<div class="scene fade-up d4">
+<div class="ic">🎵</div>
+<h4>兴趣驱动</h4>
+<p>想学会一首外文歌的每一句歌词、每一个生词的语境含义。</p>
+<div class="ex">// 多邻国：没有这条路径</div>
+</div>
+<div class="scene fade-up d4">
+<div class="ic">🧗</div>
+<h4>小众场景</h4>
+<p>攀岩、潜水、滑雪等运动的专业交流术语，主流 App 完全不覆盖。</p>
+<div class="ex">// 数据库预制永远追不上长尾</div>
+</div>
+<div class="scene fade-up d5">
+<div class="ic">📚</div>
+<h4>应试/实用</h4>
+<p>中学生完全学会一篇阅读理解；职场人吃透一份外文合同。</p>
+<div class="ex">// 这才是"针对性学习"</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 4 · 有道对比 ═══ -->
+<section class="slide" id="s4" data-effect="translate">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">替代方案 · ALTERNATIVE</div>
+<h2 class="title" style="margin-top:14px">为什么不直接用有道 / 翻译软件？</h2>
+<p class="lede" style="margin-top:10px">API 贵、语种少、且只翻译不学习。算一笔账：</p>
+</div>
+<div class="price-table fade-up d2">
+<div class="pt-head">
+<div>对比维度</div>
+<div>有道 / 通用翻译 API</div>
+<div>呱邻国（沉浸式 + 专用 LLM）</div>
+</div>
+<div class="pt-row">
+<div>Token 单价</div>
+<div><span class="price bad">$48</span> <span class="unit">/ 1M tokens</span></div>
+<div><span class="price good">$4.8</span> <span class="unit">/ 1M tokens</span></div>
+</div>
+<div class="pt-row">
+<div>支持语种</div>
+<div>有限，主流 30-50 种</div>
+<div>200+ 种，任意语种学任意语种</div>
+</div>
+<div class="pt-row">
+<div>词汇拆解</div>
+<div>✗ 只给整段翻译</div>
+<div>✓ 按语种风格自动拆分单词</div>
+</div>
+<div class="pt-row">
+<div>单词跳转</div>
+<div>✗ 翻译完就结束</div>
+<div>✓ 随时点单词跳转，0 等待</div>
+</div>
+<div class="pt-row">
+<div>例句生成</div>
+<div>✗ 无</div>
+<div>✓ 自动为每个单词生成语境例句</div>
+</div>
+<div class="pt-row">
+<div>语法解释</div>
+<div>✗ 无</div>
+<div>✓ 自动语法解释，释放 LLM 理解力</div>
+</div>
+<div class="pt-row">
+<div>题目生成</div>
+<div>✗ 无</div>
+<div>✓ 自动生成 5 种题型</div>
+</div>
+<div class="pt-row">
+<div>沉浸度</div>
+<div>复制 → 翻译 → 离开</div>
+<div>信息密度集中，想知道的马上跳转</div>
+</div>
+</div>
+<div class="conclusion fade-up d3">
+<b>结论：</b>同样能力的 LLM，通用翻译 API 收 <b>$48/1M</b>，而符合条件的能力只要 <b>$4.8/1M</b>——<b>10 倍价差</b>。我们用更便宜的能力，做更深的拆解，且<b class="rust">只在我们这里产生学习行为</b>。翻译软件是工具，呱邻国是学习系统。
+</div>
+</div>
+</section>
+
+<!-- ═══ 5 · 架构理念 ═══ -->
+<section class="slide" id="s5" data-effect="arch">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">架构理念 · ARCHITECTURE</div>
+<h2 class="title" style="margin-top:14px">程序只提供骨架，<b class="rust">内容全部交给 LLM</b>。</h2>
+</div>
+<div class="arch-main">
+<div class="arch-left fade-up d2">
+<div class="ttl">三种输入模式 · INPUT</div>
+<div class="mode">
+<div class="pn">01</div>
+<div class="body">
+<h3>直接输入原文</h3>
+<p>粘贴你正读的外文新闻、歌词、合同、论文…… <b>用户自带内容</b>，AI 当场拆解。</p>
+</div>
+</div>
+<div class="mode">
+<div class="pn">02</div>
+<div class="body">
+<h3>AI 翻译生成</h3>
+<p>输入母语，让 LLM 翻成目标语言再拆解。<b>没原文也能学</b>，门槛降到零。</p>
+</div>
+</div>
+<div class="mode">
+<div class="pn">03</div>
+<div class="body">
+<h3>AI 按主题生成</h3>
+<p>说一句"我要学攀岩相关法语"，LLM 直接产出对应文本。<b>长尾场景也能覆盖</b>。</p>
+</div>
+</div>
+</div>
+<div class="arch-right fade-up d3">
+<div class="ttl">处理流程 · PIPELINE</div>
+<div class="flow-v">
+<div class="fv-step">
+<div class="n">01</div><div class="ic">📥</div>
+<div class="body"><div class="t">接收文本</div><div class="d">三种模式之一，自动检测语种</div></div>
+</div>
+<div class="fv-step">
+<div class="n">02</div><div class="ic">🧠</div>
+<div class="body"><div class="t">LLM 工具调用</div><div class="d">分句、翻译、拆词、词性、音标、语法</div></div>
+</div>
+<div class="fv-step">
+<div class="n">03</div><div class="ic">🗂️</div>
+<div class="body"><div class="t">结构化存储</div><div class="d">JSON 字段化落库，单词可点击跳转</div></div>
+</div>
+<div class="fv-step">
+<div class="n">04</div><div class="ic">🎨</div>
+<div class="body"><div class="t">编排渲染</div><div class="d">卡片、释义、例句、收藏夹界面化</div></div>
+</div>
+<div class="fv-step">
+<div class="n">05</div><div class="ic">✍️</div>
+<div class="body"><div class="t">自动出题</div><div class="d">5 种题型从同一文本派生，闭环复习</div></div>
+</div>
+</div>
+</div>
+</div>
+<div class="compare fade-up d4">
+<div class="cmp-col bad">
+<div class="h">传统语言 App</div>
+<ul>
+<li>靠<b>预制内容库</b>驱动</li>
+<li>每加一语言 = 多建一整套数据库</li>
+<li>长尾需求永远追不上</li>
+</ul>
+</div>
+<div class="cmp-col good">
+<div class="h">呱邻国</div>
+<ul>
+<li>靠 <b>LLM 现场生成</b>驱动</li>
+<li>每加一语言 = <b>0 行代码</b></li>
+<li>只要模型会，用户就能学</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 6 · 200 语言 ═══ -->
+<section class="slide" id="s6" data-effect="languages">
+<div class="stripes-bg"></div>
+<canvas class="flow" data-flow='{"mode":"phrases","phrases":"all","color":"#6B8A5E","size":32,"density":0.55,"dir":"up","speed":0.1,"vertical":true}'></canvas>
+<div class="vignette"></div>
+<div class="center">
+<div class="num"><span id="s6Count">0</span><span class="plus">+</span></div>
+<div class="lbl">LANGUAGES · 任意语种学任意语种</div>
+<p class="sub">界面也能自由切换 —— 同一套架构，<b>天生全球传播</b>。</p>
+<div class="pairs">
+<span class="pr">中 → <b>德</b></span>
+<span class="pr">日 → <b>法</b></span>
+<span class="pr">阿拉伯 → <b>英</b></span>
+<span class="pr">韩 → <b>泰</b></span>
+<span class="pr">印地 → <b>俄</b></span>
+<span class="pr">任意 → <b>任意</b></span>
+</div>
+</div>
+</section>
+
+<!-- ═══ 7 · 工具调用 ═══ -->
+<section class="slide" id="s7" data-effect="toolcall">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">技术核心 · TOOL CALLING</div>
+<h2 class="title" style="margin-top:14px">用 LLM 自带的<b class="rust">工具调用</b>，<br>把非结构化文本变成结构化数据。</h2>
+</div>
+<div class="tc-grid">
+<div class="tc-left">
+<div class="tc-card fade-up d2">
+<div class="ic">⓵</div>
+<h3>工具调用 = 结构化输出</h3>
+<p>不靠正则解析 LLM 文本，而是用<b>模型原生 tool_calls</b> 能力，让 LLM 直接返回 <b>JSON 结构</b>——词、释义、音标、例句、题干、选项全部字段化，<b>零解析失败</b>。</p>
+</div>
+<div class="tc-card fade-up d3">
+<div class="ic">⓶</div>
+<h3>程序只做编排存储</h3>
+<p>拿到结构化结果后，程序负责<b>存储、跳转、收藏、组卷</b>。单词点击 0 等待跳转，信息密度高度集中。</p>
+</div>
+<div class="tc-card fade-up d4">
+<div class="ic">⓷</div>
+<h3>Token 利用率极致</h3>
+<p>工具调用 + 紧凑字段命名 + 自动分句切分，<b>token 消耗降至最低</b>。这也是能把单价压到 <b>$4.8/1M</b> 的关键。</p>
+</div>
+</div>
+<div class="tc-right fade-up d4">
+<div class="ttl">// LLM TOOL_CALL OUTPUT</div>
+<div><span class="cm">// 用户输入</span></div>
+<div><span class="st">"He abandoned the plan."</span></div>
+<div style="margin-top:10px"><span class="cm">// LLM 工具调用返回</span></div>
+<div><span class="hl">tool_call</span>: <span class="st">parse_sentence</span></div>
+<div><span class="hl">args</span>: {</div>
+<div>&nbsp;&nbsp;<span class="st">sentence</span>: <span class="str">"He abandoned the plan."</span>,</div>
+<div>&nbsp;&nbsp;<span class="st">translation</span>: <span class="str">"他放弃了这个计划。"</span>,</div>
+<div>&nbsp;&nbsp;<span class="st">words</span>: [</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="st">w</span>: <span class="str">"abandon"</span>,</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="st">pos</span>: <span class="str">"v."</span>,</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="st">phon</span>: <span class="str">"/əˈbændən/"</span>,</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="st">meaning</span>: <span class="str">"放弃；废弃"</span>,</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="st">example</span>: <span class="str">"She abandoned..."</span> },</div>
+<div>&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="st">w</span>: <span class="str">"plan"</span>, ... }</div>
+<div>&nbsp;&nbsp;],</div>
+<div>&nbsp;&nbsp;<span class="st">grammar</span>: <span class="str">"主谓宾结构..."</span></div>
+<div>}</div>
+<div style="margin-top:10px"><span class="cm">// 程序：存储 + 渲染 + 组卷</span></div>
+<div><span class="hl">store</span>(result) <span class="ar">→</span> <span class="hl">render</span>() <span class="ar">→</span> <span class="hl">generate_exercises</span>()</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 8 · SaaS 价值 ═══ -->
+<section class="slide" id="s8" data-effect="saas">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">SaaS 价值 · WHY SAAS</div>
+<h2 class="title" style="margin-top:14px">全平台通用，<b class="rust">信息密度高度集中</b>。</h2>
+<p class="lede" style="margin-top:10px">不是把功能堆满，而是让"想知道一个知识"的动作<b>0 等待</b>完成。这才是 SaaS 形态相对 App 的真正优势。</p>
+</div>
+<div class="strip fade-up d2">
+<div class="sp"><div class="n">0</div><div class="l">单词跳转等待</div></div>
+<div class="sp"><div class="n">∞</div><div class="l">自定义文本</div></div>
+<div class="sp"><div class="n">200+</div><div class="l">语言覆盖</div></div>
+<div class="sp"><div class="n">$4.8</div><div class="l">/ 1M TOKENS</div></div>
+</div>
+<div class="val-grid">
+<div class="val fade-up d3">
+<div class="ic">🔍</div>
+<h3>沉浸式查词</h3>
+<p>随时点单词跳转，<b>0 等待</b>看到释义、音标、例句、语法。不再复制到词典 App 来回切换。</p>
+<ul>
+<li><b>翻译更准确</b>：基于完整语境，非孤立词</li>
+<li><b>释放 LLM 理解力</b>：释义带语法解释</li>
+<li><b>自动拆词</b>：按语种风格智能切分</li>
+</ul>
+</div>
+<div class="val fade-up d3">
+<div class="ic">📖</div>
+<h3>自动内容生成</h3>
+<p>每个单词<b>自动生成例句</b>，每段文本<b>自动生成题目</b>，支持<b>收藏方便复习</b>。</p>
+<ul>
+<li><b>例句生成</b>：语境化，非词典模板</li>
+<li><b>5 种题型</b>：选择/排序/听力/完形/重组</li>
+<li><b>收藏夹</b>：薄弱点一键收，循环复习</li>
+</ul>
+</div>
+<div class="val fade-up d4">
+<div class="ic">🌐</div>
+<h3>全平台 SaaS</h3>
+<p>浏览器即用，<b>无需下载 App</b>。一套后端服务全平台，数据云端同步。</p>
+<ul>
+<li><b>跨端</b>：Web / 桌面 / 移动浏览器</li>
+<li><b>实时</b>：内容更新无需发版</li>
+<li><b>轻量</b>：按量付费，零基础设施门槛</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 9 · 订阅变现 ═══ -->
+<section class="slide" id="s9" data-effect="monetize">
+<div class="wrap">
+<div class="fade-up d1">
+<div class="label">变现 · MONETIZATION</div>
+<h2 class="title" style="margin-top:14px">订阅制 + 预生成，<b class="rust">每日打卡</b>留住用户。</h2>
+<p class="lede" style="margin-top:10px">核心机制：用户每日打卡，<b>系统提前生成好内容</b>，打开即学——既保证留存，又把 LLM 调用摊到闲时，成本可控。</p>
+</div>
+<div class="tiers">
+<div class="tier fade-up d2">
+<div class="who">入门</div>
+<h3>免费版</h3>
+<div class="price">¥0<span class="unit">/月</span></div>
+<ul>
+<li>每日 <b>50 句</b>生成额度</li>
+<li>200+ 语言基础学习</li>
+<li>5 种题型完整体验</li>
+<li><b>每日打卡</b>解锁奖励额度</li>
+</ul>
+</div>
+<div class="tier feat fade-up d3">
+<div class="badge">主推</div>
+<div class="who">沉浸学习</div>
+<h3>订阅制</h3>
+<div class="price">¥?<span class="unit">/月</span></div>
+<ul>
+<li>每日 <b>2000 句</b>生成额度</li>
+<li><b>预生成内容</b>：每日打卡即学</li>
+<li>200+ 语言全开放</li>
+</ul>
+</div>
+</div>
+<div class="hook fade-up d4">
+<b>留存逻辑：</b>每日打卡 → 系统闲时<b>提前生成</b>明日内容 → 用户打开即学（0 等待）→ 形成依赖 → 持续订阅。LLM 成本被摊薄到非高峰时段，<b>毛利可控</b>。
+</div>
+<div class="roadmap fade-up d5">
+<div class="rm"><div class="stage">PHASE 1 · 现在</div><div class="t">开源桌面版</div><div class="d">BYOK 跑通闭环，社区冷启动</div></div>
+<div class="rm"><div class="stage">PHASE 2 · 6 个月</div><div class="t">SaaS + 订阅上线</div><div class="d">每日打卡预生成，C 端留存</div></div>
+<div class="rm"><div class="stage">PHASE 3 · 12 个月</div><div class="t">开放 API + 生态</div><div class="d">接入更多模型，扩语种长尾</div></div>
+</div>
+</div>
+</section>
+
+<!-- ═══ 10 · CTA ═══ -->
+<section class="slide" id="s10" data-effect="cta">
+<canvas class="flow" data-flow='{"mode":"twinkle","phrases":"world","color":"#B85530","size":44,"density":0.6,"dir":"down","speed":0,"vertical":true}'></canvas>
+<div class="grid-bg"></div>
+<div class="vignette"></div>
+<div class="lockup">
+<div class="term fade-up d1"><span class="p">user@gualingo:~$</span> <span id="s10Typed"></span><span class="cur">_</span></div>
+<h1 class="head fade-up d2">扔进去<em>一段文字</em>，<br>开始学一门语言。</h1>
+<p class="sub fade-up d3">200+ 种语言，任意文本，AI 现场拆解生成。<br>从你今天读到的一段原文开始。</p>
+<a class="cta fade-up d4" href="https://gualingo.dpdns.org" target="_blank" rel="noopener">开始学习<span>→</span></a>
+</div>
+</section>
+
+</div>
+
+<div class="nav">
+<div class="hint">← / → / SPACE / 滚轮</div>
+<div class="dots" id="dots"></div>
+<div class="counter" id="counter">01 / 10</div>
+</div>
+
+<script src="assets/js/flow.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
