@@ -212,7 +212,7 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                         "maxItems": 2,
                         "description": "两个全新的例句（绝不能复用原文句子，必须是不同的句子。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同）",
                     },
-                    "memory_hint": {"type": "string", "description": "记忆辅助（联想/对比母语）"},
+                    "memory_hint": {"type": "string", "description": "记忆辅助（联想/对比母语）。【强制】必须使用用户当前选择的母语（target_lang_name）编写，绝不能使用学习语言（source_lang_name）"},
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
@@ -248,15 +248,15 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 
 1. enriched_meaning: 单词的完整释义，包含多个常见含义，用分号分隔。每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等）
 2. variants_detail: {source_lang_name} 词形变化列表，带类型说明。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
-3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户的母语）。绝不能反过来用母语写例句再用学习语言翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
-4. memory_hint: 记忆辅助（与用户母语的联想或对比）
+3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户当前选择的母语）。绝不能反过来用母语写例句再用学习语言翻译。【严禁】translation 字段输出与 sentence 相同的语言，必须是 {target_lang_name} 的自然翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
+4. memory_hint: 记忆辅助。【强制】必须使用用户当前选择的母语（{target_lang_name}）编写，通过联想/对比母语帮助记忆。【严禁】使用学习语言（{source_lang_name}）编写记忆辅助
 5. multiple_choice: 选择题。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。correct_option 的格式必须严格匹配 distractors 中各项的格式。
 
 要求：
 - 所有输出必须使用 {target_lang_name}
-- 【极其重要】例句必须使用 {source_lang_name} 编写，翻译使用 {target_lang_name}。绝不能用母语写例句再用学习语言翻译
+- 【极其重要】例句必须使用 {source_lang_name} 编写，翻译使用 {target_lang_name}（用户当前选择的母语）。绝不能用母语写例句再用学习语言翻译。【严禁】translation 与 sentence 使用同一种语言——translation 必须是 {target_lang_name} 的自然翻译
 - 例句要自然，尽量使用简单常见的词汇，不需要与原文中的意思相同
-- 记忆辅助对语言学习者要有帮助
+- 【强制】记忆辅助（memory_hint）必须使用用户当前选择的母语（{target_lang_name}）编写，对语言学习者有实际帮助。【严禁】使用学习语言（{source_lang_name}）编写
 - 选择题选项要清晰且合理
 - 【重要】正确答案必须是单词的常见、正常释义，不是上下文特定释义
 - 【重要】错误答案必须是该单词所没有的意思，而不是非句子中的意思
