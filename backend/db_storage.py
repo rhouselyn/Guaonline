@@ -268,6 +268,24 @@ class DatabaseStorage:
             return json.loads(row["word_info"])
         return None
 
+    def load_word_cache_batch(self, file_id: str) -> Dict[str, Dict]:
+        """一次取回指定 file_id 下所有 word_cache 条目，返回 {word_lower: word_info}。
+
+        ponytail: 替代 get_vocab 等端点里逐词 load_word_cache 的 N 次 DB 往返，
+        把 N 次同步 SQLite 压成 1 次。"""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT word, word_info FROM word_cache WHERE file_id = ?",
+            (file_id,)
+        ).fetchall()
+        result = {}
+        for row in rows:
+            try:
+                result[row["word"]] = json.loads(row["word_info"])
+            except (json.JSONDecodeError, KeyError):
+                continue
+        return result
+
     def delete_word_cache(self, file_id: str, word: str):
         conn = self._get_conn()
         conn.execute("DELETE FROM word_cache WHERE file_id = ? AND word = ?",

@@ -56,13 +56,18 @@ async def get_vocab(file_id: str):
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
 
+        # ponytail: 原实现 for entry in vocab_list: storage.load_word_cache(file_id, word)
+        # N 个词 = N 次同步 SQLite（外加未命中时再 N 次 find_global_word_cache JOIN），
+        # 全部阻塞事件循环。改为：一次 SQL 取回该 file 全部 word_cache，内存匹配。
+        cached_map = storage.load_word_cache_batch(file_id)
+
         enriched_list = []
         for entry in vocab_list:
             enriched_entry = dict(entry)
             word = entry.get("word", "")
-            cached = storage.load_word_cache(file_id, word)
+            cached = cached_map.get(word.lower()) if word else None
             if not cached and word:
-                # 当前文件无缓存，查全局缓存
+                # 当前文件无缓存，查全局缓存（少数词才会走到这里）
                 cached = storage.find_global_word_cache(word, source_lang)
             if cached:
                 if cached.get("enriched_meaning"):
@@ -150,90 +155,46 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
 
                 return cached_word
 
-        # 无缓存：判断是否所有单词已生成完
-        print(f"[DEBUG] 单词详情无缓存: {word}")
+        # 无缓存：触发后台生成（不 hold worker），立即返回 404 让前端轮询
+        # ponytail: 原实现里此处会 `await process_single_word_gen` 同步等 LLM 完成或
+        # `for _ in range(60): await asyncio.sleep(1)` 占住 worker 最长 60s，
+        # 在多用户场景下单个 worker 被独占会让其他所有用户请求全部排队。
+        # 改为：把 word 加入 priority_queue，启动后台 task，立即返回 404。
+        # 前端 DictionaryStep.fetchWordDetail 已实现 30 次 2s 轮询重试。
+        print(f"[DEBUG] 单词详情无缓存，触发后台生成并返回 404: {word}")
         from utils.state import word_gen_state
-        from utils.exercise_generators import process_single_word_gen, background_word_gen
+        from utils.exercise_generators import background_word_gen
         import asyncio
 
         vocab = storage.load_vocab(file_id)
         if isinstance(vocab, dict) and "vocab" in vocab:
             vocab = vocab["vocab"]
 
-        # 检查所有单词是否已生成完（含完整性检查）
-        all_completed = all(
-            (lambda c: c is not None and is_word_cache_complete(c))(storage.load_word_cache(file_id, w.get("word", "")))
-            for w in vocab if w.get("word")
-        )
-
-        if all_completed:
-            # 所有单词都已生成完，但这个单词缓存无效/被清除了，直接重新生成
-            print(f"[DEBUG] 所有单词已生成完，直接重新生成: {word}")
-            if file_id not in word_gen_state:
-                word_gen_state[file_id] = {
-                    "running": False,
-                    "vocab": vocab,
-                    "priority_queue": [],
-                    "task": None,
-                    "processing_words": set(),
-                    "user_id": current_user.user_id,
-                    "tier": current_user.tier.value,
-                }
-            state = word_gen_state[file_id]
+        state = word_gen_state.get(file_id)
+        if state:
             state["vocab"] = vocab
             if "processing_words" not in state:
                 state["processing_words"] = set()
             if "plan_position" not in state:
                 state["plan_position"] = 0
-
-            await process_single_word_gen(file_id, word, vocab, source_lang, target_lang, user_id=current_user.user_id, tier=current_user.tier.value)
-
-            cached_word = storage.load_word_cache(file_id, word)
-            if cached_word:
-                cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-                options, correct_index = extract_mc_options(cached_word)
-                if options:
-                    cached_word["options"] = options
-                    cached_word["correct_index"] = correct_index
-                    return cached_word
-
-            raise HTTPException(status_code=404, detail="Word detail generation failed")
+            # 去重后插入优先队列头部
+            state["priority_queue"] = [w for w in state.get("priority_queue", []) if w.lower() != word.lower()]
+            state["priority_queue"].insert(0, word)
+            if not state.get("running"):
+                state["running"] = True
+                state["task"] = asyncio.create_task(background_word_gen(file_id))
         else:
-            # 还有单词未生成完，加入优先队列等待后台任务处理
-            print(f"[DEBUG] 单词生成未完成，加入优先队列: {word}")
-            state = word_gen_state.get(file_id)
-            if state:
-                state["priority_queue"] = [w for w in state.get("priority_queue", []) if w.lower() != word.lower()]
-                state["priority_queue"].insert(0, word)
-                if not state.get("running"):
-                    state["running"] = True
-                    state["task"] = asyncio.create_task(background_word_gen(file_id))
-            else:
-                word_gen_state[file_id] = {
-                    "running": True,
-                    "vocab": vocab,
-                    "priority_queue": [word],
-                    "task": asyncio.create_task(background_word_gen(file_id)),
-                    "processing_words": set(),
-                    "user_id": current_user.user_id,
-                    "tier": current_user.tier.value,
-                }
+            word_gen_state[file_id] = {
+                "running": True,
+                "vocab": vocab,
+                "priority_queue": [word],
+                "task": asyncio.create_task(background_word_gen(file_id)),
+                "processing_words": set(),
+                "user_id": current_user.user_id,
+                "tier": current_user.tier.value,
+            }
 
-            for _ in range(60):
-                await asyncio.sleep(1)
-                cached_word = storage.load_word_cache(file_id, word)
-                if cached_word and is_word_cache_complete(cached_word):
-                    break
-
-            if cached_word and is_word_cache_complete(cached_word):
-                cached_word = fix_llm_options_result(cached_word, source_lang, file_id)
-                options, correct_index = extract_mc_options(cached_word)
-                if options:
-                    cached_word["options"] = options
-                    cached_word["correct_index"] = correct_index
-                    return cached_word
-
-            raise HTTPException(status_code=404, detail="Word detail generation timed out")
+        raise HTTPException(status_code=404, detail="Word detail not ready, generating in background")
     except HTTPException:
         raise
     except Exception as e:

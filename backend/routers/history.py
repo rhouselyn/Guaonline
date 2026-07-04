@@ -1,5 +1,7 @@
 """历史记录相关路由：history/*"""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Depends
 
 from utils.state import storage
@@ -74,25 +76,33 @@ async def get_history(current_user: TokenData = Depends(require_auth)):
     try:
         records = storage.load_history(user_id=current_user.user_id)
         records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        for record in records:
-            file_id = record.get("file_id", "")
-            if file_id:
-                record["progress"] = compute_file_progress(file_id)
-                # 修复历史遗留：source_lang 仍为 "auto"（标题生成失败时未更新），
-                # 从 language_settings 取回检测到的真实语言并回写 DB + 返回值，
-                # 使 HistorySidebar 语言分组和单词总表过滤恢复正常。
-                if record.get("source_lang", "") in ("", "auto"):
-                    settings = storage.load_language_settings(file_id)
-                    detected = settings.get("source_lang") if settings else None
-                    if detected and detected not in ("", "auto"):
-                        storage.add_history_record(
-                            file_id, record.get("title", ""), detected,
-                            record.get("target_lang", "zh"), record.get("text_preview", ""),
-                            user_id=current_user.user_id
-                        )
-                        record["source_lang"] = detected
-            else:
-                record["progress"] = {"phase1": {"completed": 0, "total": 0}, "phase2": {"completed": 0, "total": 0}}
+        # ponytail: 原实现在 async 端点里直接 for record: compute_file_progress(record)
+        # 每条记录跑 6+ 次同步 SQLite + 一次纯 Python 遍历，10 条记录就是 60+ 次同步 DB
+        # 调用全部串行阻塞事件循环——多用户场景下会把整个 worker 占死。
+        # 改为：把整段同步循环扔到线程池，async 端点立即释放事件循环。
+        # 注意 storage 的 _get_conn 用 threading.local()，线程池里调用会自动建独立连接。
+        def _build_response():
+            for record in records:
+                file_id = record.get("file_id", "")
+                if file_id:
+                    record["progress"] = compute_file_progress(file_id)
+                    # 修复历史遗留：source_lang 仍为 "auto"（标题生成失败时未更新），
+                    # 从 language_settings 取回检测到的真实语言并回写 DB + 返回值，
+                    # 使 HistorySidebar 语言分组和单词总表过滤恢复正常。
+                    if record.get("source_lang", "") in ("", "auto"):
+                        settings = storage.load_language_settings(file_id)
+                        detected = settings.get("source_lang") if settings else None
+                        if detected and detected not in ("", "auto"):
+                            storage.add_history_record(
+                                file_id, record.get("title", ""), detected,
+                                record.get("target_lang", "zh"), record.get("text_preview", ""),
+                                user_id=current_user.user_id
+                            )
+                            record["source_lang"] = detected
+                else:
+                    record["progress"] = {"phase1": {"completed": 0, "total": 0}, "phase2": {"completed": 0, "total": 0}}
+            return records
+        records = await asyncio.to_thread(_build_response)
         return {"records": records}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
