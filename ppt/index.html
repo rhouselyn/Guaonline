@@ -7,406 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-<style>
-:root{
-/* 复古纸感配色（落地页同源） */
---cream:#FDFBF5;
---parchment:#F5F0E8;
---parchment-2:#EDE5D2;
---parchment-3:#E0D6BC;
---ink:#2C2820;
---ink-2:#4A4538;
---ink-muted:#6B6560;
---ink-dim:#9B9590;
---olive:#6B8A5E;          /* 蛙绿 */
---olive-deep:#4A5F3E;
---olive-soft:#A8BA8E;
---amber:#C88A2C;          /* 复古琥珀（更沉） */
---amber-light:#E8C985;
---rust:#B85530;           /* 红土 */
---rust-light:#D88060;
---frog-dark:#524D3C;
---line:rgba(82,77,60,.18);
---line-strong:rgba(82,77,60,.38);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;color:var(--ink);
-font-family:'DM Sans','Noto Sans SC',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
-body{background:
-  radial-gradient(ellipse 80% 60% at 20% 15%,rgba(200,138,44,0.18),transparent 60%),
-  radial-gradient(ellipse 70% 50% at 85% 80%,rgba(107,138,94,0.22),transparent 60%),
-  radial-gradient(ellipse 60% 40% at 50% 50%,rgba(184,85,48,0.12),transparent 70%),
-  var(--parchment)}
- 
-/* 全局复古颗粒噪点 */
-body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.045;
-background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
- 
-#stage{position:fixed;inset:0;overflow:hidden}
-.slide{position:absolute;inset:0;display:flex;flex-direction:column;
-padding:7vh 5vw 9vh;opacity:0;visibility:hidden;transition:opacity .55s ease,visibility .55s;
-pointer-events:none;overflow:auto}
-.slide.active{opacity:1;visibility:visible;pointer-events:auto}
-.slide::-webkit-scrollbar{width:6px}
-.slide::-webkit-scrollbar-thumb{background:var(--olive-soft);border-radius:3px}
- 
-/* 顶部 HUD */
-.hud{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;justify-content:space-between;
-align-items:center;padding:14px 28px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
-letter-spacing:.18em;color:var(--ink-muted);text-transform:uppercase;pointer-events:none;
-background:linear-gradient(180deg,rgba(245,240,232,.94),transparent)}
-.hud .brand{color:var(--olive-deep);font-weight:700;letter-spacing:.22em}
-.hud .brand .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amber);
-margin-right:8px;box-shadow:0 0 6px var(--amber);animation:blink 2s infinite}
-.hud .right{display:flex;gap:22px}
-@keyframes blink{0%,55%{opacity:1}75%,100%{opacity:.25}}
- 
-/* 底部导航 */
-.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;padding:14px 28px;display:flex;
-justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;
-font-size:10.5px;color:var(--ink-muted);letter-spacing:.15em;
-background:linear-gradient(0deg,rgba(245,240,232,.94),transparent);pointer-events:none}
-.nav .dots{display:flex;gap:7px;pointer-events:auto}
-.nav .dots .dot{width:7px;height:7px;border-radius:50%;background:rgba(82,77,60,.22);
-cursor:pointer;transition:all .3s}
-.nav .dots .dot.active{background:var(--rust);box-shadow:0 0 8px var(--rust);transform:scale(1.4)}
-.nav .hint{opacity:.6}
-.nav .counter{color:var(--olive-deep);font-weight:700}
- 
-/* 排版 */
-.serif{font-family:'Noto Serif SC','Playfair Display',serif}
-.pf{font-family:'Playfair Display',serif}
-.mono{font-family:'JetBrains Mono',monospace}
-.label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.32em;
-color:var(--rust);text-transform:uppercase;display:inline-flex;align-items:center;gap:10px}
-.label::before{content:'';width:24px;height:1px;background:var(--rust)}
-h1.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(34px,5vw,68px);
-line-height:1.05;letter-spacing:-.01em;color:var(--ink)}
-h2.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(26px,3.4vw,44px);
-line-height:1.1;letter-spacing:-.01em;color:var(--ink)}
-.lede{font-size:clamp(14.5px,1.35vw,17px);line-height:1.75;color:var(--ink-2);max-width:64ch}
-.strong{color:var(--olive-deep);font-weight:700}
-.amber{color:var(--amber)}
-.rust{color:var(--rust)}
-.italic{font-style:italic}
- 
-/* 网格容器 */
-.wrap{max-width:1340px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;
-justify-content:center;gap:28px}
- 
-/* 卡片 */
-.card{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:22px;
-position:relative;transition:all .3s;box-shadow:0 1px 3px rgba(82,77,60,.05)}
-.card:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 6px 20px rgba(82,77,60,.1)}
-.card .idx{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--amber);
-letter-spacing:.25em;margin-bottom:10px}
-.card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:18px;color:var(--ink);
-margin-bottom:10px;line-height:1.25}
-.card p{font-size:13.5px;line-height:1.7;color:var(--ink-2)}
-.card.accent{border-left:3px solid var(--olive)}
-.card.warn{border-left:3px solid var(--rust)}
-.card.gold{border-left:3px solid var(--amber)}
- 
-/* 流动字符 canvas（更大、多方向） */
-canvas.flow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
-.vignette{position:absolute;inset:0;pointer-events:none;z-index:1;
-background:radial-gradient(ellipse at center,transparent 50%,rgba(245,240,232,.35) 100%)}
-.grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;
-background-image:linear-gradient(rgba(82,77,60,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(82,77,60,.06) 1px,transparent 1px);
-background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%)}
-
-/* 竖条纹渐变背景（QQ 主页风格 · 发布会质感） */
-.stripes-bg{position:absolute;inset:0;pointer-events:none;z-index:0;
-background:repeating-linear-gradient(90deg,
-  rgba(107,138,94,0.42) 0px,
-  rgba(150,138,94,0.36) 90px,
-  rgba(200,138,44,0.46) 180px,
-  rgba(184,85,48,0.40) 270px,
-  rgba(140,110,70,0.38) 360px,
-  rgba(107,138,94,0.42) 450px);
-background-size:450px 100%}
-.slide>*:not(canvas):not(.vignette):not(.grid-bg):not(.stripes-bg){position:relative;z-index:2}
- 
-/* ════════ Slide 1 · 封面 ════════ */
-#s1{justify-content:center;align-items:center;text-align:center}
-#s1 .lockup{position:relative;z-index:3;max-width:900px;padding:48px 56px;
-background:rgba(253,251,245,0.22);
-backdrop-filter:blur(24px) saturate(1.6);
--webkit-backdrop-filter:blur(24px) saturate(1.6);
-border:1px solid rgba(255,255,255,0.45);
-border-radius:10px;
-box-shadow:0 16px 50px rgba(82,77,60,0.18),inset 0 1px 0 rgba(255,255,255,0.6)}
-#s1 .brand-big{font-family:'Noto Serif SC',serif;font-weight:900;
-font-size:clamp(80px,13vw,200px);line-height:.95;color:var(--ink);
-letter-spacing:.02em;text-shadow:2px 2px 0 var(--amber-light)}
-#s1 .brand-en{font-family:'Playfair Display',serif;font-weight:400;
-font-size:clamp(20px,2.4vw,32px);color:var(--olive-deep);letter-spacing:.55em;
-text-transform:uppercase;margin-top:12px}
-#s1 .tag{font-size:clamp(16px,1.6vw,21px);color:var(--ink-2);line-height:1.7;
-margin-top:32px;max-width:58ch}
-#s1 .tag b{color:var(--rust);font-weight:700}
-#s1 .meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-muted);
-letter-spacing:.3em;margin-top:28px;text-transform:uppercase}
- 
-/* ════════ Slide 2 · 自我介绍 ════════ */
-#s2 .me-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:start}
-#s2 .me-left .who{font-family:'Noto Serif SC',serif;font-weight:900;
-font-size:clamp(28px,3.6vw,46px);color:var(--ink);line-height:1.1;margin-bottom:8px}
-#s2 .me-left .who em{color:var(--rust);font-style:normal}
-#s2 .me-left .role{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--olive-deep);
-letter-spacing:.2em;margin-bottom:24px;text-transform:uppercase}
-#s2 .me-left .bio{font-size:15px;line-height:1.8;color:var(--ink-2);margin-bottom:18px}
-#s2 .me-left .bio b{color:var(--ink);font-weight:700}
-#s2 .me-left .tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-#s2 .me-left .tg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);
-background:var(--parchment-2);border:1px solid var(--line);padding:4px 10px;border-radius:3px}
-#s2 .me-right{display:flex;flex-direction:column;gap:14px}
-#s2 .cred{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:18px;
-border-left:3px solid var(--olive)}
-#s2 .cred .n{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--amber);line-height:1}
-#s2 .cred .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);margin-top:6px}
-#s2 .cred .d{font-size:12px;color:var(--ink-muted);margin-top:4px;line-height:1.5}
-#s2 .why{margin-top:20px;padding:20px;border:1px solid var(--line-strong);border-radius:4px;
-background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s2 .why .q{font-family:'Noto Serif SC',serif;font-style:italic;font-size:17px;color:var(--ink);line-height:1.6}
-#s2 .why .a{font-size:13.5px;color:var(--ink-2);margin-top:10px;line-height:1.65}
- 
-/* ════════ Slide 3 · 痛点 + 多邻国 ════════ */
-#s3 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-#s3 .col{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:26px}
-#s3 .col.pro{border-top:4px solid var(--olive)}
-#s3 .col.con{border-top:4px solid var(--rust)}
-#s3 .col h3{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;margin-bottom:6px}
-#s3 .col .sub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);
-letter-spacing:.2em;margin-bottom:16px;text-transform:uppercase}
-#s3 .col.pro h3{color:var(--olive-deep)}
-#s3 .col.con h3{color:var(--rust)}
-#s3 .item{display:flex;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;line-height:1.55}
-#s3 .item:last-child{border-bottom:none}
-#s3 .item .mk{flex-shrink:0;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;
-justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
-#s3 .col.pro .item .mk{background:rgba(107,138,94,.18);color:var(--olive-deep)}
-#s3 .col.con .item .mk{background:rgba(184,85,48,.18);color:var(--rust)}
-#s3 .item .t{color:var(--ink);font-weight:500}
-#s3 .item .t b{color:var(--amber);font-weight:700}
-#s3 .scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:6px}
-#s3 .scene{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px;
-border-left:3px solid var(--amber)}
-#s3 .scene .ic{font-size:22px;margin-bottom:8px}
-#s3 .scene h4{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px}
-#s3 .scene p{font-size:12px;color:var(--ink-2);line-height:1.6}
-#s3 .scene .ex{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--rust);
-margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
- 
-/* ════════ Slide 4 · 有道对比 ════════ */
-#s4 .price-table{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;border:1.5px solid var(--line-strong);
-border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s4 .pt-head{display:contents}
-#s4 .pt-head>div{background:var(--parchment-2);padding:14px 18px;font-family:'JetBrains Mono',monospace;
-font-size:11px;color:var(--ink-muted);letter-spacing:.2em;text-transform:uppercase}
-#s4 .pt-head>div:nth-child(2){color:var(--rust)}
-#s4 .pt-head>div:nth-child(3){color:var(--olive-deep)}
-#s4 .pt-row{display:contents}
-#s4 .pt-row>div{padding:14px 18px;border-top:1px solid var(--line);font-size:13px;line-height:1.55}
-#s4 .pt-row>div:first-child{color:var(--ink);font-weight:500;background:rgba(237,229,210,.4)}
-#s4 .pt-row>div:nth-child(2){color:var(--ink-muted)}
-#s4 .pt-row>div:nth-child(3){color:var(--olive-deep);font-weight:500}
-#s4 .pt-row .price{font-family:'Playfair Display',serif;font-weight:900;font-size:22px;color:var(--ink)}
-#s4 .pt-row .price.bad{color:var(--rust)}
-#s4 .pt-row .price.good{color:var(--olive-deep)}
-#s4 .pt-row .unit{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-dim)}
-#s4 .conclusion{padding:18px 22px;border-left:4px solid var(--amber);background:rgba(232,200,133,.15);
-border-radius:0 4px 4px 0;font-size:14.5px;line-height:1.7;color:var(--ink)}
-#s4 .conclusion b{color:var(--rust)}
- 
-/* ════════ Slide 5 · 架构理念 ════════ */
-#s5 .arch-main{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;align-items:stretch}
-#s5 .arch-left{display:flex;flex-direction:column;gap:14px}
-#s5 .arch-left .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
-letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
-#s5 .mode{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px;
-border-left:4px solid var(--olive);display:flex;gap:14px;align-items:flex-start;flex:1}
-#s5 .mode .pn{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--amber);
-line-height:1;flex-shrink:0;width:34px}
-#s5 .mode .body h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:5px}
-#s5 .mode .body p{font-size:12.5px;line-height:1.65;color:var(--ink-2)}
-#s5 .mode .body p b{color:var(--rust)}
-#s5 .arch-right{display:flex;flex-direction:column;gap:14px}
-#s5 .arch-right .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
-letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
-#s5 .flow-v{display:flex;flex-direction:column;gap:8px;flex:1}
-#s5 .fv-step{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:13px 16px;
-display:flex;gap:12px;align-items:center;position:relative;flex:1}
-#s5 .fv-step .n{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);font-weight:700;
-letter-spacing:.15em;flex-shrink:0;width:28px}
-#s5 .fv-step .ic{font-size:18px;flex-shrink:0;width:24px;text-align:center}
-#s5 .fv-step .body{flex:1}
-#s5 .fv-step .body .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);line-height:1.2}
-#s5 .fv-step .body .d{font-size:11.5px;color:var(--ink-muted);margin-top:3px;line-height:1.45}
-#s5 .fv-step:not(:last-child)::after{content:'↓';position:absolute;left:21px;bottom:-13px;
-color:var(--olive);font-size:14px;font-weight:700;z-index:2}
-#s5 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
-#s5 .cmp-col{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
-#s5 .cmp-col.bad{border-top:3px solid var(--rust)}
-#s5 .cmp-col.good{border-top:3px solid var(--olive)}
-#s5 .cmp-col .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;margin-bottom:10px}
-#s5 .cmp-col.bad .h{color:var(--rust)}
-#s5 .cmp-col.good .h{color:var(--olive-deep)}
-#s5 .cmp-col ul{list-style:none}
-#s5 .cmp-col li{font-size:12.5px;color:var(--ink-2);padding:5px 0 5px 14px;position:relative;line-height:1.5}
-#s5 .cmp-col.bad li::before{content:'✗';position:absolute;left:0;color:var(--rust);font-weight:700}
-#s5 .cmp-col.good li::before{content:'✓';position:absolute;left:0;color:var(--olive-deep);font-weight:700}
-#s5 .cmp-col li b{color:var(--ink);font-weight:700}
- 
-/* ════════ Slide 6 · 200 语言 ════════ */
-#s6{padding:0;justify-content:center;align-items:center}
-#s6 .center{position:relative;z-index:5;text-align:center;
-background:rgba(253,251,245,0.20);
-backdrop-filter:blur(24px) saturate(1.6);
--webkit-backdrop-filter:blur(24px) saturate(1.6);
-border:1px solid rgba(255,255,255,0.45);
-border-radius:10px;
-box-shadow:0 16px 50px rgba(82,77,60,0.18),inset 0 1px 0 rgba(255,255,255,0.6);
-padding:64px 80px;margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:center;
-max-width:90%}
-#s6 .center .num{font-family:'Playfair Display',serif;font-weight:900;
-font-size:clamp(120px,22vw,300px);color:var(--ink);line-height:.85;
-text-shadow:3px 3px 0 var(--amber-light)}
-#s6 .center .num .plus{color:var(--rust)}
-#s6 .center .lbl{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--olive-deep);
-letter-spacing:.45em;text-transform:uppercase;margin-top:20px}
-#s6 .center .sub{font-size:15px;color:var(--ink-2);margin-top:24px;max-width:42ch;line-height:1.7}
-#s6 .center .sub b{color:var(--rust);font-weight:700}
-#s6 .center .pairs{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:24px;max-width:64ch}
-#s6 .center .pr{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);
-background:rgba(253,251,245,0.35);border:1px solid var(--line);padding:4px 10px;border-radius:3px;letter-spacing:.05em}
-#s6 .center .pr b{color:var(--rust)}
- 
-/* ════════ Slide 7 · 工具调用 ════════ */
-#s7 .tc-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:28px;align-items:start}
-#s7 .tc-left{display:flex;flex-direction:column;gap:18px}
-#s7 .tc-card{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:20px;
-border-left:4px solid var(--olive)}
-#s7 .tc-card .ic{font-family:'Playfair Display',serif;font-weight:900;font-size:24px;color:var(--amber);margin-bottom:6px}
-#s7 .tc-card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
-#s7 .tc-card p{font-size:13px;line-height:1.7;color:var(--ink-2)}
-#s7 .tc-card p b{color:var(--rust)}
-#s7 .tc-right{background:rgba(44,40,32,0.72);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);color:var(--cream);border-radius:4px;padding:22px;
-font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.75;position:relative;overflow:hidden;min-height:340px}
-#s7 .tc-right::before{content:'';position:absolute;inset:0;opacity:.08;pointer-events:none;
-background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.5) 3px,transparent 4px)}
-#s7 .tc-right .ttl{color:var(--amber-light);letter-spacing:.2em;margin-bottom:12px;font-size:10.5px;text-transform:uppercase}
-#s7 .tc-right .hl{color:var(--olive-soft)}
-#s7 .tc-right .ar{color:var(--amber-light)}
-#s7 .tc-right .cm{color:var(--ink-dim)}
-#s7 .tc-right .st{color:var(--cream)}
-#s7 .tc-right .str{color:var(--rust-light)}
- 
-/* ════════ Slide 8 · SaaS 价值 ════════ */
-#s8 .val-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-#s8 .val{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:22px;
-border-top:4px solid var(--olive)}
-#s8 .val .ic{font-size:26px;margin-bottom:10px}
-#s8 .val h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
-#s8 .val p{font-size:13px;line-height:1.7;color:var(--ink-2);margin-bottom:10px}
-#s8 .val ul{list-style:none}
-#s8 .val li{font-size:12.5px;color:var(--ink-2);padding:4px 0 4px 16px;position:relative;line-height:1.5}
-#s8 .val li::before{content:'▸';position:absolute;left:0;color:var(--amber)}
-#s8 .val li b{color:var(--ink);font-weight:700}
-#s8 .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1.5px solid var(--line-strong);
-border-radius:4px;overflow:hidden;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s8 .sp{padding:18px;text-align:center;border-right:1px solid var(--line);background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s8 .sp:last-child{border-right:none}
-#s8 .sp .n{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--rust);line-height:1}
-#s8 .sp .l{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-muted);
-letter-spacing:.18em;margin-top:6px;text-transform:uppercase}
- 
-/* ════════ Slide 9 · 订阅变现 ════════ */
-#s9 .tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:880px;margin:0 auto;width:100%}
-#s9 .tier{background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:4px;padding:24px;position:relative}
-#s9 .tier.feat{border-color:var(--amber);border-width:2px;box-shadow:0 6px 24px rgba(200,138,44,.12)}
-#s9 .tier .badge{position:absolute;top:-10px;left:24px;background:var(--rust);color:var(--cream);
-font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 10px;
-border-radius:3px;letter-spacing:.15em;text-transform:uppercase}
-#s9 .tier .who{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--olive-deep);
-letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px}
-#s9 .tier h3{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;color:var(--ink);margin-bottom:6px}
-#s9 .tier .price{font-family:'Playfair Display',serif;font-weight:900;font-size:30px;color:var(--rust);margin:12px 0}
-#s9 .tier .price .unit{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);font-weight:400}
-#s9 .tier ul{list-style:none;margin-top:12px}
-#s9 .tier li{font-size:12.5px;color:var(--ink-2);padding:5px 0 5px 16px;position:relative;line-height:1.5}
-#s9 .tier li::before{content:'▸';position:absolute;left:0;color:var(--olive)}
-#s9 .tier li b{color:var(--ink);font-weight:700}
-#s9 .hook{padding:20px 24px;border:1.5px dashed var(--line-strong);border-radius:4px;
-background:rgba(184,85,48,.06);font-size:15px;line-height:1.7;color:var(--ink)}
-#s9 .hook b{color:var(--rust)}
-#s9 .roadmap{display:flex;gap:14px}
-#s9 .rm{flex:1;padding:16px 18px;border:1px solid var(--line);border-radius:4px;background:rgba(253,251,245,0.20);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6)}
-#s9 .rm .stage{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--rust);
-letter-spacing:.2em;margin-bottom:6px}
-#s9 .rm .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;color:var(--ink)}
-#s9 .rm .d{font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.55}
- 
-/* ════════ Slide 10 · CTA ════════ */
-#s10{justify-content:center;align-items:center;text-align:center}
-#s10 .lockup{position:relative;z-index:3;padding:48px 56px;
-background:rgba(253,251,245,0.22);
-backdrop-filter:blur(24px) saturate(1.6);
--webkit-backdrop-filter:blur(24px) saturate(1.6);
-border:1px solid rgba(255,255,255,0.45);
-border-radius:10px;
-box-shadow:0 16px 50px rgba(82,77,60,0.18),inset 0 1px 0 rgba(255,255,255,0.6)}
-#s10 .term{font-family:'JetBrains Mono',monospace;font-size:clamp(15px,1.7vw,20px);color:var(--olive-deep);
-margin-bottom:28px}
-#s10 .term .p{color:var(--rust)}
-#s10 .term .cur{display:inline-block;width:.5ch;background:var(--olive-deep);margin-left:2px;
-animation:cur 1s steps(1) infinite;color:transparent}
-@keyframes cur{50%{opacity:0}}
-#s10 .head{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(52px,8.5vw,128px);
-color:var(--ink);line-height:1.05;text-shadow:3px 3px 0 var(--amber-light)}
-#s10 .head em{color:var(--rust);font-style:normal}
-#s10 .sub{font-size:clamp(15px,1.5vw,19px);color:var(--ink-2);margin-top:24px;max-width:50ch;
-line-height:1.7}
-#s10 .cta{display:inline-flex;align-items:center;gap:12px;margin-top:36px;padding:15px 34px;
-background:var(--rust);color:var(--cream);font-weight:700;font-size:14.5px;letter-spacing:.15em;
-text-transform:uppercase;border:none;border-radius:4px;cursor:pointer;
-box-shadow:0 6px 24px rgba(184,85,48,.3);transition:all .3s;text-decoration:none}
-#s10 .cta:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(184,85,48,.45)}
-#s10 .url{margin-top:28px;font-family:'JetBrains Mono',monospace;font-size:12px;
-color:var(--ink-muted);letter-spacing:.2em}
- 
-/* 入场 */
-.fade-up{opacity:0;transform:translateY(26px);transition:all .8s cubic-bezier(.2,.7,.2,1)}
-.slide.active .fade-up{opacity:1;transform:translateY(0)}
-.slide.active .fade-up.d1{transition-delay:.1s}
-.slide.active .fade-up.d2{transition-delay:.25s}
-.slide.active .fade-up.d3{transition-delay:.4s}
-.slide.active .fade-up.d4{transition-delay:.55s}
-.slide.active .fade-up.d5{transition-delay:.7s}
-
-/* 通用毛玻璃卡片 */
-.glass{
-  background:rgba(253,251,245,0.20);
-  backdrop-filter:blur(22px) saturate(1.6);
-  -webkit-backdrop-filter:blur(22px) saturate(1.6);
-  border:1px solid rgba(255,255,255,0.5);
-  border-radius:10px;
-  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65);
-}
- 
-@media(max-width:1024px){
-#s2 .me-grid,#s3 .cmp,#s7 .tc-grid{grid-template-columns:1fr}
-#s3 .scenes,#s8 .val-grid,#s9 .tiers{grid-template-columns:1fr}
-#s6 .lang-grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr)}
-#s6 .lang-cell:nth-child(n+7){display:none}
-#s4 .price-table{grid-template-columns:1fr;font-size:12px}
-#s8 .strip{grid-template-columns:repeat(2,1fr)}
-#s9 .roadmap{flex-direction:column}
-}
-</style>
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/slides.css">
 </head>
 <body>
- 
+
 <div class="hud">
 <div class="brand"><span class="dot"></span>GUALINGO · 呱邻国</div>
 <div class="right">
@@ -415,14 +20,14 @@ color:var(--ink-muted);letter-spacing:.2em}
 <span id="hudClock">--:--:--</span>
 </div>
 </div>
- 
+
 <div id="stage">
- 
+
 <!-- ═══ 1 · 封面 ═══ -->
-  <section class="slide" id="s1" data-effect="cover">
-    <div class="stripes-bg"></div>
-    <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.45,"dir":"down","speed":0.1,"vertical":true}'></canvas>
-    <div class="vignette"></div>
+<section class="slide" id="s1" data-effect="cover">
+  <div class="stripes-bg"></div>
+  <canvas class="flow" data-flow='{"mode":"phrases","phrases":"greetings","color":"#6B8A5E","size":36,"density":0.45,"dir":"down","speed":0.1,"vertical":true}'></canvas>
+  <div class="vignette"></div>
 <div class="lockup">
 <div class="label fade-up d1">AI-NATIVE · ALL LANGUAGES · ONE TEXTBOX</div>
 <h1 class="brand-big fade-up d2">呱邻国</h1>
@@ -431,7 +36,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 <div class="meta fade-up d5">任意文本 · 全语种 · 零预制 · LLM 即内容引擎</div>
 </div>
 </section>
- 
+
 <!-- ═══ 2 · 自我介绍 ═══ -->
 <section class="slide" id="s2" data-effect="intro">
 <div class="wrap">
@@ -476,7 +81,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 3 · 痛点 + 多邻国 ═══ -->
 <section class="slide" id="s3" data-effect="problem">
 <div class="wrap">
@@ -526,7 +131,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 4 · 有道对比 ═══ -->
 <section class="slide" id="s4" data-effect="translate">
 <div class="wrap">
@@ -587,7 +192,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 5 · 架构理念 ═══ -->
 <section class="slide" id="s5" data-effect="arch">
 <div class="wrap">
@@ -666,7 +271,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 6 · 200 语言 ═══ -->
 <section class="slide" id="s6" data-effect="languages">
 <div class="stripes-bg"></div>
@@ -686,7 +291,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 7 · 工具调用 ═══ -->
 <section class="slide" id="s7" data-effect="toolcall">
 <div class="wrap">
@@ -737,7 +342,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 8 · SaaS 价值 ═══ -->
 <section class="slide" id="s8" data-effect="saas">
 <div class="wrap">
@@ -786,7 +391,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 9 · 订阅变现 ═══ -->
 <section class="slide" id="s9" data-effect="monetize">
 <div class="wrap">
@@ -829,7 +434,7 @@ color:var(--ink-muted);letter-spacing:.2em}
 </div>
 </div>
 </section>
- 
+
 <!-- ═══ 10 · CTA ═══ -->
 <section class="slide" id="s10" data-effect="cta">
 <canvas class="flow" data-flow='{"mode":"twinkle","phrases":"world","color":"#B85530","size":44,"density":0.6,"dir":"down","speed":0,"vertical":true}'></canvas>
@@ -842,294 +447,16 @@ color:var(--ink-muted);letter-spacing:.2em}
 <a class="cta fade-up d4" href="https://gualingo.dpdns.org" target="_blank" rel="noopener">开始学习<span>→</span></a>
 </div>
 </section>
- 
+
 </div>
- 
+
 <div class="nav">
 <div class="hint">← / → / SPACE / 滚轮</div>
 <div class="dots" id="dots"></div>
 <div class="counter" id="counter">01 / 10</div>
 </div>
- 
-<script>
-/* ════════════════════════════════════════════════
-多文字体系字符集
-════════════════════════════════════════════════ */
-const CHARSETS={
-multilang:'ABCDEFGHabcdｱｲｳｴｵｶｷｸ你好世界语言学习沉浸式АБВГабвг0123456789ािीूαβγδε',
-latin:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÉÊÇÏÖÑÜßØÆ',
-cyrillic:'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя',
-cjk:'你好世界语言学习沉浸式语境翻译词典音标词形句法语法练习听说读写测试一二三四五六七八十',
-arabic:'ابتثجحخدذرزسشصضطظعغفقكلمنهوي',
-devanagari:'अआइईउऊएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह',
-hangul:'가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허',
-greek:'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλμνξοπρστυφχψω',
-thai:'กขคงจฉชซญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอ',
-runes:'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ',
-ethiopic:'ሀለሐመሠረሰሸቀበተኀነኘአከኸወዐዘዠየደጀገጠጨጰጸፀፈፐ',
-};
- 
-/* 真实多语言短语：让背景文字有意义 */
-const PHRASES={
-// 通用：世界各语言的"你好/学习/语言"等真实词句
-greetings:[
-'Hello','Bonjour','Hola','你好','こんにちは','안녕하세요',
-'Здравствуй','مرحبا','नमस्ते','สวัสดี','Γειά σου','Olá',
-'Ciao','Hallo','Hej','Cześć','Merhaba','Szia'
-],
-learn:[
-'learn','apprendre','aprender','学ぶ','배우다','учить',
-'تعلم','सीखना','เรียน','μαθαίνω','imparare','lernen',
-'leren','uczyć','öğren','tanulni','læra','oppia'
-],
-language:[
-'language','langue','idioma','言語','언어','язык',
-'لغة','भाषा','ภาษา','γλώσσα','lingua','Sprache',
-'taal','język','dil','nyelv','språk','kieli'
-],
-world:[
-'one world','un monde','un mundo','一つの世界','하나의 세계',
-'один мир','عالم واحد','एक दुनिया','หนึ่งโลก','ένας κόσμος',
-'un mondo','eine Welt','een wereld','jeden świat','tek dünya'
-],
-// 各语系真实词句（带翻译，更有意义）
-phrases_zh:['你好世界','学一门语言','任意文本','沉浸式学习','全球传播','200种语言'],
-phrases_fr:['Bonjour le monde','Apprendre une langue','Texte libre','Immersion totale'],
-phrases_de:['Hallo Welt','Eine Sprache lernen','Freier Text','Totales Eintauchen'],
-phrases_ja:['こんにちは世界','言語を学ぶ','任意のテキスト','没入学習'],
-phrases_ko:['안녕하세요 세계','언어 배우기','자유 텍스트','몰입 학습'],
-phrases_ar:['مرحبا بالعالم','تعلم لغة','نص حر','تعلم غامر'],
-phrases_ru:['Привет мир','Учить язык','Любой текст','Иммерсивное обучение'],
-phrases_hi:['नमस्ते दुनिया','भाषा सीखें','कोई भी टेक्स्ट','गहन अध्ययन'],
-// 全语种合并池（200 语言页用）
-all:[
-'Hello','Bonjour','Hola','你好','こんにちは','안녕하세요','Здравствуй','مرحبا','नमस्ते','สวัสดี',
-'Ciao','Hallo','Hej','Merhaba','Szia','Olá','Γειά σου','Apprendre','Learn','学ぶ',
-'배우다','учить','تعلم','सीखना','imparare','lernen','语言','言語','언어','язык',
-'langue','idioma','lingua','Sprache','你好世界','Bonjour le monde','Hola mundo',
-'Hallo Welt','Ciao mondo','Olá mundo','one world','un monde','un mundo',
-],
-};
- 
-/* ════════════════════════════════════════════════
-流动字符引擎 v3
-- mode: 'phrases' 短语流动 | 'twinkle' 短语闪烁
-- dir:  'down' | 'up' | 'left' | 'right' （单方向）
-- vertical: true 竖排（短语逐字纵向书写）
-- 透明清屏，毛玻璃后透出 body 渐变
-════════════════════════════════════════════════ */
-class FlowChars{
-constructor(c,o){
-this.canvas=c;this.ctx=c.getContext('2d');
-this.opts=Object.assign({
-mode:'phrases',
-phrases:'greetings',
-color:'#6B8A5E',
-size:34,
-density:0.35,
-dir:'down',
-speed:0.12,
-vertical:false,
-},o);
-this.pool=PHRASES[this.opts.phrases]||PHRASES.greetings;
-this.running=false;
-this.resize();
-window.addEventListener('resize',()=>this.resize());
-}
-pickPhrase(){return this.pool[Math.floor(Math.random()*this.pool.length)];}
-resize(){
-const dpr=Math.min(window.devicePixelRatio||1,2);
-const r=this.canvas.getBoundingClientRect();
-this.w=Math.max(1,r.width);this.h=Math.max(1,r.height);
-this.canvas.width=this.w*dpr;this.canvas.height=this.h*dpr;
-this.ctx.setTransform(dpr,0,0,dpr,0,0);
-this.fontSize=this.opts.size;
-this.ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
-this.particles=[];
-const n=Math.max(6,Math.floor((this.w/this.fontSize)*this.opts.density));
-// 调色板：发布会风格高级渐变（蛙绿/琥珀/红土三色系）
-this.palette=[
-[107,138,94],   // 蛙绿
-[150,138,94],   // 蛙绿偏暖
-[200,138,44],   // 琥珀
-[184,85,48],    // 红土
-[140,110,70],   // 暖褐
-];
-for(let i=0;i<n;i++) this.particles.push(this.spawn(true,i));
-// 透明清屏，让 body 渐变透出
-this.ctx.clearRect(0,0,this.w,this.h);
-}
-measure(txt){return this.ctx.measureText(txt).width;}
-// 竖排高度：每个字符一行
-vHeight(txt){return txt.length*this.fontSize;}
-spawn(init=false,idx=0){
-const dir=this.opts.dir;
-const txt=this.pickPhrase();
-const tw=this.measure(txt)||this.fontSize*2;
-const vh=this.opts.vertical?this.vHeight(txt):tw;
-const sp=this.opts.speed*this.fontSize;
-// 按索引循环分配调色板颜色
-const c=this.palette[idx%this.palette.length];
-// 随机选一个渐变方向（顶深底浅 / 顶浅底深），制造条纹层次
-const gradFlip=Math.random()>0.5;
-let x,y,vx=0,vy=0;
-if(dir==='down'){vy=sp;}
-else if(dir==='up'){vy=-sp;}
-else if(dir==='left'){vx=-sp;}
-else if(dir==='right'){vx=sp;}
-if(init){
-  // 初始：分散在整个屏幕 + 屏幕外，保证持续有粒子流动
-  x=Math.random()*this.w;
-  if(dir==='down'){y=Math.random()*(this.h+vh)-vh;}
-  else if(dir==='up'){y=Math.random()*(this.h+vh);}
-  else{y=Math.random()*this.h;}
-}else{
-  // 重生：在屏幕外重新进入，加随机偏移避免同时到达
-  if(dir==='down'){x=Math.random()*this.w;y=-vh-Math.random()*this.h*0.6;}
-  else if(dir==='up'){x=Math.random()*this.w;y=this.h+vh+Math.random()*this.h*0.6;}
-  else if(dir==='left'){x=this.w+tw+Math.random()*this.w*0.6;y=Math.random()*this.h;}
-  else if(dir==='right'){x=-tw-Math.random()*this.w*0.6;y=Math.random()*this.h;}
-}
-return {x,y,vx,vy,dir,txt,tw,vh,c,gradFlip,
-alpha:(this.opts.mode==='twinkle')?0.15:(0.22+Math.random()*0.22),
-twPhase:Math.random()*Math.PI*2,
-twSpeed:0.012+Math.random()*0.02,
-twAmp:0.16+Math.random()*0.2,
-isTwinkle:this.opts.mode==='twinkle'};
-}
-drawText(p){
-// 竖排：逐字纵向书写
-const [r,g,b]=p.c;
-if(this.opts.vertical){
-const chars=[...p.txt];
-// 居中 x 对齐到字宽
-const cw=this.fontSize;
-// 竖排逐字渐变：首字深、末字浅
-for(let i=0;i<chars.length;i++){
-const t=i/(chars.length-1||1);
-const k=p.gradFlip?(1-t*0.7):(0.4+t*0.6); // 0.4~1.0 明度系数
-this.ctx.fillStyle=`rgb(${Math.round(r*k)},${Math.round(g*k)},${Math.round(b*k)})`;
-this.ctx.fillText(chars[i],p.x,p.y+i*this.fontSize);
-}
-}else{
-// 横排整体用粒子色
-this.ctx.fillStyle=`rgb(${r},${g},${b})`;
-this.ctx.fillText(p.txt,p.x,p.y);
-}
-}
-start(){if(this.running)return;this.running=true;this.resize();this.loop();}
-stop(){this.running=false;if(this._raf)cancelAnimationFrame(this._raf);}
-loop(){
-if(!this.running)return;
-const {ctx,fontSize,w,h,opts}=this;
-// 透明清屏，让 body 渐变透出
-ctx.clearRect(0,0,w,h);
-ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
-ctx.textBaseline='top';
-for(const p of this.particles){
-if(p.isTwinkle){
-p.twPhase+=p.twSpeed;
-p.alpha=0.15+p.twAmp*(0.5+0.5*Math.sin(p.twPhase));
-if(Math.random()<0.003){p.txt=this.pickPhrase();}
-}else{
-p.x+=p.vx;p.y+=p.vy;
-const bound=this.opts.vertical?p.vh:p.tw;
-// 仅按粒子运动方向判断是否完全出界，避免入屏侧误触发重生
-let out=false;
-if(p.dir==='up'){out=p.y<-bound-fontSize;}
-else if(p.dir==='down'){out=p.y>h+fontSize;}
-else if(p.dir==='left'){out=p.x<-bound-fontSize;}
-else if(p.dir==='right'){out=p.x>w+fontSize;}
-if(out){
-// 重生：保留原色，避免颜色跳变
-const keepC=p.c,keepFlip=p.gradFlip;
-Object.assign(p,this.spawn(false));
-p.c=keepC;p.gradFlip=keepFlip;
-}
-}
-ctx.globalAlpha=p.alpha;
-this.drawText(p);
-}
-ctx.globalAlpha=1;
-this._raf=requestAnimationFrame(()=>this.loop());
-}
-}
- 
-/* ════════════════════════════════════════════════
-幻灯片管理
-════════════════════════════════════════════════ */
-const slides=[...document.querySelectorAll('.slide')];
-const dotsEl=document.getElementById('dots');
-const counterEl=document.getElementById('counter');
-const hudSlideEl=document.getElementById('hudSlide');
-let current=0;
-const flows=new Map();
-const entered=new Set();
- 
-slides.forEach((s,i)=>{
-const d=document.createElement('div');d.className='dot'+(i===0?' active':'');
-d.onclick=()=>go(i);dotsEl.appendChild(d);
-});
-slides.forEach(slide=>{
-const cs=slide.querySelectorAll('canvas.flow');
-flows.set(slide,[...cs].map(c=>new FlowChars(c,JSON.parse(c.dataset.flow||'{}'))));
-});
- 
-function go(i){
-i=Math.max(0,Math.min(slides.length-1,i));
-if(i===current && entered.has(i))return;
-flows.get(slides[current])?.forEach(f=>f.stop());
-slides[current].classList.remove('active');
-current=i;
-const slide=slides[i];
-slide.classList.add('active');
-setTimeout(()=>flows.get(slide)?.forEach(f=>f.start()),40);
-[...dotsEl.children].forEach((d,k)=>d.classList.toggle('active',k===i));
-const tag=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
-counterEl.textContent=tag;hudSlideEl.textContent=tag;
-if(!entered.has(i)){entered.add(i);runEffect(slide,i);}
-}
- 
-function runEffect(slide,i){
-const eff=slide.dataset.effect;
-if(eff==='languages')effLanguages();
-else if(eff==='cta')effCTA();
-}
-function effLanguages(){
-const el=document.getElementById('s6Count');const to=200;let v=0;
-const tick=()=>{v+=Math.max(2,Math.ceil((to-v)/9));if(v>=to){el.textContent=to;return;}el.textContent=v;requestAnimationFrame(tick);};
-setTimeout(tick,400);
-}
-function effCTA(){
-const el=document.getElementById('s10Typed');const text='./gualingo --text "任意一段文字"';
-el.textContent='';let i=0;
-const type=()=>{if(i<=text.length){el.textContent=text.slice(0,i);i++;setTimeout(type,55);}};
-setTimeout(type,600);
-}
- 
-document.addEventListener('keydown',e=>{
-if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(current+1);}
-else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(current-1);}
-else if(e.key==='Home')go(0);
-else if(e.key==='End')go(slides.length-1);
-});
-let wheelLock=false;
-document.addEventListener('wheel',e=>{
-if(wheelLock)return;if(Math.abs(e.deltaY)<30)return;
-wheelLock=true;if(e.deltaY>0)go(current+1);else go(current-1);
-setTimeout(()=>wheelLock=false,650);
-},{passive:true});
-let touchY=null;
-document.addEventListener('touchstart',e=>touchY=e.touches[0].clientY,{passive:true});
-document.addEventListener('touchend',e=>{
-if(touchY===null)return;const dy=e.changedTouches[0].clientY-touchY;
-if(Math.abs(dy)>50){if(dy<0)go(current+1);else go(current-1);}touchY=null;
-},{passive:true});
- 
-function tickClock(){const d=new Date();const p=n=>String(n).padStart(2,'0');
-document.getElementById('hudClock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
-setInterval(tickClock,1000);tickClock();
-go(0);
-</script>
+
+<script src="assets/js/flow.js"></script>
+<script src="assets/js/main.js"></script>
 </body>
 </html>

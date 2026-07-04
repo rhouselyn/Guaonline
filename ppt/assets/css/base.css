@@ -1,0 +1,150 @@
+/* ════════════════════════════════════════════════
+   base.css · 复古纸感基底
+   变量 / reset / HUD / 导航 / 排版 / 卡片基础 / 流动 canvas / 竖条纹
+════════════════════════════════════════════════ */
+:root{
+/* 复古纸感配色（落地页同源） */
+--cream:#FDFBF5;
+--parchment:#F5F0E8;
+--parchment-2:#EDE5D2;
+--parchment-3:#E0D6BC;
+--ink:#2C2820;
+--ink-2:#4A4538;
+--ink-muted:#6B6560;
+--ink-dim:#9B9590;
+--olive:#6B8A5E;          /* 蛙绿 */
+--olive-deep:#4A5F3E;
+--olive-soft:#A8BA8E;
+--amber:#C88A2C;          /* 复古琥珀（更沉） */
+--amber-light:#E8C985;
+--rust:#B85530;           /* 红土 */
+--rust-light:#D88060;
+--frog-dark:#524D3C;
+--line:rgba(82,77,60,.18);
+--line-strong:rgba(82,77,60,.38);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;color:var(--ink);
+font-family:'DM Sans','Noto Sans SC',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{background:
+  radial-gradient(ellipse 80% 60% at 20% 15%,rgba(200,138,44,0.18),transparent 60%),
+  radial-gradient(ellipse 70% 50% at 85% 80%,rgba(107,138,94,0.22),transparent 60%),
+  radial-gradient(ellipse 60% 40% at 50% 50%,rgba(184,85,48,0.12),transparent 70%),
+  var(--parchment)}
+
+/* 全局复古颗粒噪点 */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.045;
+background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+#stage{position:fixed;inset:0;overflow:hidden}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;
+padding:7vh 5vw 9vh;opacity:0;visibility:hidden;transition:opacity .55s ease,visibility .55s;
+pointer-events:none;overflow:auto}
+.slide.active{opacity:1;visibility:visible;pointer-events:auto}
+.slide::-webkit-scrollbar{width:6px}
+.slide::-webkit-scrollbar-thumb{background:var(--olive-soft);border-radius:3px}
+
+/* 顶部 HUD */
+.hud{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;justify-content:space-between;
+align-items:center;padding:14px 28px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+letter-spacing:.18em;color:var(--ink-muted);text-transform:uppercase;pointer-events:none;
+background:linear-gradient(180deg,rgba(245,240,232,.94),transparent)}
+.hud .brand{color:var(--olive-deep);font-weight:700;letter-spacing:.22em}
+.hud .brand .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amber);
+margin-right:8px;box-shadow:0 0 6px var(--amber);animation:blink 2s infinite}
+.hud .right{display:flex;gap:22px}
+@keyframes blink{0%,55%{opacity:1}75%,100%{opacity:.25}}
+
+/* 底部导航 */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;padding:14px 28px;display:flex;
+justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;
+font-size:10.5px;color:var(--ink-muted);letter-spacing:.15em;
+background:linear-gradient(0deg,rgba(245,240,232,.94),transparent);pointer-events:none}
+.nav .dots{display:flex;gap:7px;pointer-events:auto}
+.nav .dots .dot{width:7px;height:7px;border-radius:50%;background:rgba(82,77,60,.22);
+cursor:pointer;transition:all .3s}
+.nav .dots .dot.active{background:var(--rust);box-shadow:0 0 8px var(--rust);transform:scale(1.4)}
+.nav .hint{opacity:.6}
+.nav .counter{color:var(--olive-deep);font-weight:700}
+
+/* 排版工具类 */
+.serif{font-family:'Noto Serif SC','Playfair Display',serif}
+.pf{font-family:'Playfair Display',serif}
+.mono{font-family:'JetBrains Mono',monospace}
+.label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.32em;
+color:var(--rust);text-transform:uppercase;display:inline-flex;align-items:center;gap:10px}
+.label::before{content:'';width:24px;height:1px;background:var(--rust)}
+h1.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(34px,5vw,68px);
+line-height:1.05;letter-spacing:-.01em;color:var(--ink)}
+h2.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(26px,3.4vw,44px);
+line-height:1.1;letter-spacing:-.01em;color:var(--ink)}
+.lede{font-size:clamp(14.5px,1.35vw,17px);line-height:1.75;color:var(--ink-2);max-width:64ch}
+.strong{color:var(--olive-deep);font-weight:700}
+.amber{color:var(--amber)}
+.rust{color:var(--rust)}
+.italic{font-style:italic}
+
+/* 网格容器 */
+.wrap{max-width:1340px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;
+justify-content:center;gap:28px}
+
+/* 卡片基础（cream 实色，仅 .card 用） */
+.card{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:22px;
+position:relative;transition:all .3s;box-shadow:0 1px 3px rgba(82,77,60,.05)}
+.card:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 6px 20px rgba(82,77,60,.1)}
+.card .idx{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--amber);
+letter-spacing:.25em;margin-bottom:10px}
+.card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:18px;color:var(--ink);
+margin-bottom:10px;line-height:1.25}
+.card p{font-size:13.5px;line-height:1.7;color:var(--ink-2)}
+.card.accent{border-left:3px solid var(--olive)}
+.card.warn{border-left:3px solid var(--rust)}
+.card.gold{border-left:3px solid var(--amber)}
+
+/* 流动字符 canvas */
+canvas.flow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.vignette{position:absolute;inset:0;pointer-events:none;z-index:1;
+background:radial-gradient(ellipse at center,transparent 50%,rgba(245,240,232,.35) 100%)}
+.grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;
+background-image:linear-gradient(rgba(82,77,60,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(82,77,60,.06) 1px,transparent 1px);
+background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%)}
+
+/* 竖条纹渐变背景（QQ 主页风格 · 发布会质感） */
+.stripes-bg{position:absolute;inset:0;pointer-events:none;z-index:0;
+background:repeating-linear-gradient(90deg,
+  rgba(107,138,94,0.42) 0px,
+  rgba(150,138,94,0.36) 90px,
+  rgba(200,138,44,0.46) 180px,
+  rgba(184,85,48,0.40) 270px,
+  rgba(140,110,70,0.38) 360px,
+  rgba(107,138,94,0.42) 450px);
+background-size:450px 100%}
+.slide>*:not(canvas):not(.vignette):not(.grid-bg):not(.stripes-bg){position:relative;z-index:2}
+
+/* 入场动画 */
+.fade-up{opacity:0;transform:translateY(26px);transition:all .8s cubic-bezier(.2,.7,.2,1)}
+.slide.active .fade-up{opacity:1;transform:translateY(0)}
+.slide.active .fade-up.d1{transition-delay:.1s}
+.slide.active .fade-up.d2{transition-delay:.25s}
+.slide.active .fade-up.d3{transition-delay:.4s}
+.slide.active .fade-up.d4{transition-delay:.55s}
+.slide.active .fade-up.d5{transition-delay:.7s}
+
+/* 通用毛玻璃卡片 */
+.glass{
+  background:rgba(253,251,245,0.20);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  border-radius:10px;
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65);
+}
+
+/* 响应式（slide 专属规则的公共部分） */
+@media(max-width:1024px){
+#s2 .me-grid,#s3 .cmp,#s7 .tc-grid{grid-template-columns:1fr}
+#s3 .scenes,#s8 .val-grid,#s9 .tiers{grid-template-columns:1fr}
+#s4 .price-table{grid-template-columns:1fr;font-size:12px}
+#s8 .strip{grid-template-columns:repeat(2,1fr)}
+#s9 .roadmap{flex-direction:column}
+}
