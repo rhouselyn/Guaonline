@@ -92,13 +92,13 @@ this.fontSize=this.opts.size;
 this.ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
 this.particles=[];
 const n=Math.max(6,Math.floor((this.w/this.fontSize)*this.opts.density));
-// 调色板：发布会风格高级渐变（蛙绿/琥珀/红土三色系）
+// 调色板：明亮柑橘植物学（鲜叶绿/珊瑚/蜜糖琥珀/阳光黄/深绿）
 this.palette=[
-[107,138,94],   // 蛙绿
-[150,138,94],   // 蛙绿偏暖
-[200,138,44],   // 琥珀
-[184,85,48],    // 红土
-[140,110,70],   // 暖褐
+[45,182,113],   // 鲜叶绿
+[255,107,61],   // 活力珊瑚
+[245,177,46],   // 蜜糖琥珀
+[255,217,60],   // 阳光黄
+[54,156,96],    // 深绿
 ];
 for(let i=0;i<n;i++) this.particles.push(this.spawn(true,i));
 // 透明清屏，让 body 渐变透出
