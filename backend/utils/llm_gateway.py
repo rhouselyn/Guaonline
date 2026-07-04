@@ -32,6 +32,10 @@ CIRCUIT_COOLDOWN_401_MAX = 3600 # 401 升级封禁上限 1h（欠费 key 不会�
 CIRCUIT_COOLDOWN_5XX = 60       # 5xx 阻塞 60s（临时故障）
 CIRCUIT_COOLDOWN_NET = 30       # 网络错阻塞 30s
 
+# HTTP 调用超时（秒）。成功调用通常 30-50s 内返回，超过此值视为 provider 挂起，立即切下一 key。
+# 提高失败检测速度：原 120s 会让单次超时拖到 2 分钟才轮询，60s 能让一次失败+重试控制在 100s 内。
+HTTP_TIMEOUT = 60.0
+
 
 def _load_global_settings() -> dict:
     try:
@@ -521,7 +525,7 @@ class LLMGateway:
             _t0 = _t.time()
             _title = self.key_defs.get(key_id, {}).get("title", "") or "-"
             print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title}")
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 resp = await client.post(url, headers=headers, json=payload)
 
             if resp.status_code == 200:
@@ -542,14 +546,17 @@ class LLMGateway:
 
             elif resp.status_code == 429:
                 retry_after = _parse_retry_after(resp.headers.get("retry-after"))
+                print(f"[GATEWAY] <<< 429 key_id={key_id} title={_title} retry_after={retry_after} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_rate_limited(self, idx, retry_after=retry_after)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             elif resp.status_code == 401:
+                print(f"[GATEWAY] <<< 401 key_id={key_id} title={_title} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_invalid(self, idx)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
             elif resp.status_code >= 500:
+                print(f"[GATEWAY] <<< {resp.status_code} key_id={key_id} title={_title} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_server_error(self, idx)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
@@ -562,15 +569,18 @@ class LLMGateway:
                         print(f"[GATEWAY] max_tokens 非法({eff})，折半为 {halved} 后重试 tier={tier} type={request_type}")
                         pool.mark_complete(self, idx)
                         return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=halved)
+                print(f"[GATEWAY] <<< {resp.status_code} key_id={key_id} title={_title} body={body!r} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_server_error(self, idx)
                 return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
 
         except httpx.TimeoutException:
+            _elapsed = _t.time() - _t0
+            print(f"[GATEWAY] <<< TIMEOUT key_id={key_id} title={_title} elapsed={_elapsed:.1f}s (>{HTTP_TIMEOUT}s) → 切换 key 重试 tier={tier} type={request_type}")
             pool.mark_network_error(self, idx)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except httpx.HTTPError as e:
             # 其他网络错（连接失败、DNS 等）
-            print(f"[GATEWAY] network error key_id={key_id} title={_title}: {e}")
+            print(f"[GATEWAY] network error key_id={key_id} title={_title}: {e} → 切换 key 重试 tier={tier} type={request_type}")
             pool.mark_network_error(self, idx)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except Exception as e:
