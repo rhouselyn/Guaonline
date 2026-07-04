@@ -30,8 +30,13 @@
 --line-strong:rgba(82,77,60,.38);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:var(--parchment);color:var(--ink);
+html,body{height:100%;color:var(--ink);
 font-family:'DM Sans','Noto Sans SC',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{background:
+  radial-gradient(ellipse 80% 60% at 20% 15%,rgba(200,138,44,0.18),transparent 60%),
+  radial-gradient(ellipse 70% 50% at 85% 80%,rgba(107,138,94,0.22),transparent 60%),
+  radial-gradient(ellipse 60% 40% at 50% 50%,rgba(184,85,48,0.12),transparent 70%),
+  var(--parchment)}
 
 /* 全局复古颗粒噪点 */
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.045;
@@ -120,6 +125,24 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 .slide.active .fade-up.d4{transition-delay:.55s}
 .slide.active .fade-up.d5{transition-delay:.7s}
 
+/* ═══ 毛玻璃面板通用类（发布会风格）═══ */
+.glass{
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  border-radius:10px;
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65);
+}
+.glass-strong{
+  background:rgba(253,251,245,0.6);
+  backdrop-filter:blur(26px) saturate(1.7);
+  -webkit-backdrop-filter:blur(26px) saturate(1.7);
+  border:1px solid rgba(255,255,255,0.6);
+  border-radius:12px;
+  box-shadow:0 16px 50px rgba(82,77,60,0.2),inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
 /* ════════ Slide 1 · 封面 ════════ */
 #s1{justify-content:center;align-items:center;text-align:center}
 #s1 .lockup{position:relative;z-index:3;max-width:900px;padding:48px 56px;
@@ -152,7 +175,13 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 #s2 .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
 #s2 .tg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--olive-deep);
   background:var(--parchment-2);border:1px solid var(--line);padding:5px 11px;border-radius:3px}
-#s2 .why{background:var(--cream);border-left:3px solid var(--amber);padding:24px 28px;border-radius:0 4px 4px 0}
+#s2 .why{padding:24px 28px;border-radius:10px;border:none;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  border-left:3px solid var(--amber);
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65)}
 #s2 .why .q{font-family:'Noto Serif SC',serif;font-size:16px;line-height:1.6;color:var(--ink);font-style:italic}
 #s2 .why .a{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-muted);
   margin-top:14px;line-height:1.7}
@@ -160,7 +189,12 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 
 /* ════════ Slide 3 · 多邻国对比 ════════ */
 #s3 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-#s3 .col{background:var(--cream);border:1px solid var(--line);border-radius:6px;padding:26px}
+#s3 .col{border-radius:10px;padding:26px;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65)}
 #s3 .col.good{border-top:4px solid var(--olive)}
 #s3 .col.bad{border-top:4px solid var(--rust)}
 #s3 .col .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:20px;margin-bottom:6px}
@@ -174,13 +208,22 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 #s3 .col.bad li::before{content:'✕';position:absolute;left:0;color:var(--rust);font-weight:700}
 #s3 .col li b{color:var(--ink);font-weight:700}
 #s3 .scenarios{display:flex;gap:12px;margin-top:18px}
-#s3 .sc{flex:1;background:var(--parchment-2);border:1px solid var(--line);border-radius:4px;padding:14px 16px}
+#s3 .sc{flex:1;border-radius:6px;padding:14px 16px;
+  background:rgba(253,251,245,0.38);
+  backdrop-filter:blur(18px) saturate(1.5);
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);
+  border:1px solid rgba(255,255,255,0.45)}
 #s3 .sc .t{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--rust);letter-spacing:.2em;margin-bottom:6px}
 #s3 .sc .d{font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 #s3 .sc .d b{color:var(--ink)}
 
 /* ════════ Slide 4 · 有道对比 ════════ */
-#s4 .cmp-table{background:var(--cream);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+#s4 .cmp-table{border-radius:10px;overflow:hidden;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65)}
 #s4 .row{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:0;border-bottom:1px solid var(--line)}
 #s4 .row:last-child{border-bottom:none}
 #s4 .row.head{background:var(--parchment-2);font-family:'JetBrains Mono',monospace;
@@ -198,8 +241,13 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 #s5 .arch-left{display:flex;flex-direction:column;gap:14px}
 #s5 .arch-left .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
   letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
-#s5 .mode{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:16px 18px;
-  border-left:4px solid var(--olive);display:flex;gap:14px;align-items:flex-start}
+#s5 .mode{border-radius:8px;padding:16px 18px;
+  border-left:4px solid var(--olive);display:flex;gap:14px;align-items:flex-start;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);border-left:4px solid var(--olive);
+  box-shadow:0 8px 28px rgba(82,77,60,0.12),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s5 .mode .pn{font-family:'Playfair Display',serif;font-weight:900;font-size:28px;color:var(--amber);
   line-height:1;flex-shrink:0;width:34px}
 #s5 .mode .body h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:5px}
@@ -209,8 +257,13 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 #s5 .arch-right .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);
   letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
 #s5 .flow-v{display:flex;flex-direction:column;gap:8px;flex:1}
-#s5 .fv-step{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:13px 16px;
-  display:flex;gap:12px;align-items:center;position:relative}
+#s5 .fv-step{border-radius:8px;padding:13px 16px;
+  display:flex;gap:12px;align-items:center;position:relative;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 8px 28px rgba(82,77,60,0.12),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s5 .fv-step .n{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);font-weight:700;
   letter-spacing:.15em;flex-shrink:0;width:28px}
 #s5 .fv-step .ic{font-size:18px;flex-shrink:0;width:24px;text-align:center}
@@ -220,7 +273,11 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 #s5 .fv-step:not(:last-child)::after{content:'↓';position:absolute;left:21px;bottom:-13px;
   color:var(--olive);font-size:14px;font-weight:700;z-index:2}
 #s5 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
-#s5 .cmp-col{background:var(--parchment-2);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
+#s5 .cmp-col{border-radius:8px;padding:16px 18px;
+  background:rgba(253,251,245,0.38);
+  backdrop-filter:blur(18px) saturate(1.5);
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);
+  border:1px solid rgba(255,255,255,0.45)}
 #s5 .cmp-col.bad{border-top:3px solid var(--rust)}
 #s5 .cmp-col.good{border-top:3px solid var(--olive)}
 #s5 .cmp-col .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;margin-bottom:10px}
@@ -259,8 +316,13 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 /* ════════ Slide 7 · 工具调用 ════════ */
 #s7 .tc-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:28px;align-items:start}
 #s7 .tc-cards{display:flex;flex-direction:column;gap:14px}
-#s7 .tc-card{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:18px 20px;
-  border-left:4px solid var(--olive)}
+#s7 .tc-card{border-radius:8px;padding:18px 20px;
+  border-left:4px solid var(--olive);
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);border-left:4px solid var(--olive);
+  box-shadow:0 8px 28px rgba(82,77,60,0.12),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s7 .tc-card .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:8px}
 #s7 .tc-card .d{font-size:13px;line-height:1.7;color:var(--ink-2)}
 #s7 .tc-card .d b{color:var(--rust)}
@@ -274,12 +336,22 @@ background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,
 
 /* ════════ Slide 8 · SaaS 价值 ════════ */
 #s8 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-#s8 .stat{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:18px;text-align:center}
+#s8 .stat{border-radius:8px;padding:18px;text-align:center;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 8px 28px rgba(82,77,60,0.12),inset 0 1px 0 rgba(255,255,255,0.6)}
 #s8 .stat .n{font-family:'Playfair Display',serif;font-weight:900;font-size:32px;color:var(--rust);line-height:1}
 #s8 .stat .l{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-muted);
   letter-spacing:.15em;margin-top:8px;text-transform:uppercase}
 #s8 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-#s8 .feat{background:var(--cream);border:1px solid var(--line);border-radius:4px;padding:22px}
+#s8 .feat{border-radius:10px;padding:22px;
+  background:rgba(253,251,245,0.42);
+  backdrop-filter:blur(22px) saturate(1.6);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 12px 40px rgba(82,77,60,0.16),inset 0 1px 0 rgba(255,255,255,0.65)}
 #s8 .feat .ic{font-size:24px;margin-bottom:10px}
 #s8 .feat h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:10px}
 #s8 .feat p{font-size:13px;line-height:1.7;color:var(--ink-2)}
@@ -858,9 +930,8 @@ class FlowChars{
       [140,110,70],   // 暖褐
     ];
     for(let i=0;i<n;i++) this.particles.push(this.spawn(true,i));
-    // 初始不透明清屏
-    this.ctx.fillStyle='#F5F0E8';
-    this.ctx.fillRect(0,0,this.w,this.h);
+    // 初始清屏（透明，让 body 渐变透出）
+    this.ctx.clearRect(0,0,this.w,this.h);
   }
   measure(txt){return this.ctx.measureText(txt).width;}
   // 竖排高度：每个字符一行
@@ -916,9 +987,8 @@ class FlowChars{
   loop(){
     if(!this.running)return;
     const {ctx,fontSize,w,h,opts}=this;
-    // 不透明清屏，无重影
-    ctx.fillStyle='#F5F0E8';
-    ctx.fillRect(0,0,w,h);
+    // 透明清屏（让 body 渐变 + 毛玻璃效果可见）
+    ctx.clearRect(0,0,w,h);
     ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
     ctx.textBaseline='top';
     for(const p of this.particles){
