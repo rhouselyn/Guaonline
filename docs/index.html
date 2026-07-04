@@ -3,40 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>呱邻国 Gualingo — AI 驱动的沉浸式外语学习平台</title>
+  <title>呱邻国 Gualingo — 从身边出发的市场观察</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,700&family=Noto+Serif+SC:wght@400;700;900&family=Schibsted+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --frog-green: #8B9A6B;
-      --frog-belly: #D8D4BF;
-      --frog-dark: #524D3C;
-      --amber: #E8A838;
-      --amber-light: #F5D78E;
-      --parchment: #F5F0E8;
-      --parchment-dark: #E8E0D0;
-      --ink: #2C2820;
-      --ink-light: #6B6560;
-      --ink-muted: #9B9590;
-      --olive: #6B8A5E;
-      --rust: #C45C3C;
-      --cream: #FDFBF5;
+      --ivory: #F2EDE0;
+      --ivory-2: #EAE3D2;
+      --paper: #F7F3E8;
+      --ink: #16130F;
+      --ink-2: #2B2620;
+      --ink-soft: #4A4339;
+      --muted: #7A6F5C;
+      --muted-2: #9C9078;
+      --vermilion: #D64933;
+      --vermilion-deep: #A8351F;
+      --moss: #3A5A40;
+      --moss-soft: #5C7A5F;
+      --gold: #C89B3C;
+      --gold-soft: #E8C985;
+      --rule: rgba(22,19,15,0.14);
+      --rule-soft: rgba(22,19,15,0.08);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html {
-      scroll-behavior: smooth;
-      font-size: 16px;
-    }
+    html { scroll-behavior: smooth; font-size: 16px; }
 
     body {
-      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--cream);
+      font-family: 'Schibsted Grotesk', 'Noto Serif SC', -apple-system, sans-serif;
+      background: var(--ivory);
       color: var(--ink);
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
     }
 
     /* ── Grain Texture Overlay ── */
@@ -46,656 +47,961 @@
       inset: 0;
       pointer-events: none;
       z-index: 9999;
-      opacity: 0.03;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
     }
 
-    /* ── Hero Section ── */
-    .hero {
+    /* ── Editorial Frame (running header/footer) ── */
+    .frame-top, .frame-bottom {
+      position: fixed;
+      left: 0; right: 0;
+      padding: 0.85rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      z-index: 100;
+      pointer-events: none;
+      background: linear-gradient(to bottom, var(--ivory), transparent);
+    }
+    .frame-top { top: 0; }
+    .frame-bottom {
+      bottom: 0;
+      background: linear-gradient(to top, var(--ivory), transparent);
+    }
+    .frame-top .mark, .frame-bottom .mark {
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .frame-top .dot, .frame-bottom .dot {
+      display: inline-block;
+      width: 5px; height: 5px;
+      background: var(--vermilion);
+      border-radius: 50%;
+      margin: 0 0.5rem;
+      vertical-align: middle;
+    }
+
+    /* ── Spread (each "page" is a full-viewport spread) ── */
+    .spread {
       min-height: 100vh;
+      padding: 6rem 2rem 5rem;
+      max-width: 1280px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: center;
       position: relative;
-      padding: 2rem;
-      background:
-        radial-gradient(ellipse at 20% 50%, rgba(139,154,107,0.12) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 30%, rgba(232,168,56,0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 80%, rgba(216,212,191,0.15) 0%, transparent 50%),
-        var(--cream);
     }
 
-    .hero-badge {
-      display: inline-flex;
+    /* ── Editorial section index ── */
+    .sec-index {
+      display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 1rem;
-      background: rgba(139,154,107,0.1);
-      border: 1.5px solid rgba(139,154,107,0.25);
-      border-radius: 100px;
-      font-size: 0.8rem;
-      font-weight: 500;
-      color: var(--frog-green);
-      letter-spacing: 0.04em;
-      margin-bottom: 2rem;
-      animation: fadeInDown 0.8s ease-out;
-    }
-
-    .hero-badge::before {
-      content: '';
-      width: 6px; height: 6px;
-      background: var(--olive);
-      border-radius: 50%;
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .frog-mascot {
-      width: 120px;
-      height: 120px;
-      margin-bottom: 1.5rem;
-      animation: float 4s ease-in-out infinite;
-      filter: drop-shadow(0 8px 24px rgba(82,77,60,0.15));
-    }
-
-    .hero-title {
-      font-family: 'Noto Serif SC', 'Playfair Display', serif;
-      font-weight: 900;
-      font-size: clamp(3rem, 8vw, 5.5rem);
-      line-height: 1.1;
-      text-align: center;
-      color: var(--ink);
-      margin-bottom: 0.5rem;
-      animation: fadeInUp 0.8s ease-out 0.2s both;
-    }
-
-    .hero-subtitle {
-      font-family: 'Playfair Display', serif;
-      font-size: clamp(1rem, 2.5vw, 1.4rem);
-      font-weight: 400;
-      color: var(--ink-muted);
-      letter-spacing: 0.15em;
+      gap: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      margin-bottom: 1.5rem;
-      animation: fadeInUp 0.8s ease-out 0.4s both;
+      color: var(--vermilion);
+      margin-bottom: 2rem;
+      font-weight: 500;
     }
-
-    .hero-tagline {
-      font-size: clamp(1rem, 2vw, 1.25rem);
-      color: var(--ink-light);
-      text-align: center;
-      max-width: 560px;
-      line-height: 1.7;
-      margin-bottom: 2.5rem;
-      animation: fadeInUp 0.8s ease-out 0.6s both;
+    .sec-index::before {
+      content: '';
+      width: 48px;
+      height: 1.5px;
+      background: var(--vermilion);
     }
-
-    .hero-tagline strong {
-      color: var(--frog-dark);
+    .sec-index .num {
+      color: var(--ink);
       font-weight: 700;
     }
-
-    .hero-cta {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 1rem 2.5rem;
-      background: var(--amber);
-      color: #fff;
-      font-weight: 700;
-      font-size: 1rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(232,168,56,0.3), 0 1px 3px rgba(0,0,0,0.08);
-      transition: all 0.3s ease;
-      animation: fadeInUp 0.8s ease-out 0.8s both;
-      text-decoration: none;
+    .sec-index .of {
+      color: var(--muted-2);
     }
 
-    .hero-cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(232,168,56,0.4), 0 2px 6px rgba(0,0,0,0.1);
+    /* ── Display Typography ── */
+    .display {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 900;
+      font-variation-settings: "opsz" 144, "SOFT" 50;
+      line-height: 0.92;
+      letter-spacing: -0.025em;
+      color: var(--ink);
     }
 
-    .hero-cta svg { width: 18px; height: 18px; }
+    .display-italic {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 400;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+      color: var(--vermilion);
+    }
 
-    .scroll-hint {
-      position: absolute;
-      bottom: 2rem;
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .lede {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 300;
+      font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+      line-height: 1.65;
+      color: var(--ink-soft);
+      font-variation-settings: "opsz" 14;
+    }
+
+    .body-text {
+      font-size: 0.95rem;
+      line-height: 1.75;
+      color: var(--ink-soft);
+      max-width: 62ch;
+    }
+
+    /* ═══════════════ SPREAD 01 — MARKET DEMAND (NEW OPENING) ═══════════════ */
+    .spread-opening {
+      background:
+        radial-gradient(ellipse 80% 50% at 70% 20%, rgba(214,73,51,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 10% 80%, rgba(58,90,64,0.05) 0%, transparent 60%),
+        var(--ivory);
+      position: relative;
+    }
+
+    .opening-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    @media (min-width: 900px) {
+      .opening-grid {
+        grid-template-columns: 1.4fr 1fr;
+        gap: 4rem;
+      }
+    }
+
+    .opening-headline {
+      font-size: clamp(3.5rem, 11vw, 8.5rem);
+      line-height: 0.88;
+    }
+
+    .opening-headline .line-2 {
+      display: block;
+      padding-left: 0.4em;
+    }
+    .opening-headline .accent-word {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+    }
+
+    .opening-side {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--ink-muted);
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
-      animation: fadeInUp 0.8s ease-out 1.2s both;
+      gap: 2rem;
+      padding-top: 1rem;
     }
 
-    .scroll-hint-line {
-      width: 1px;
-      height: 40px;
-      background: linear-gradient(to bottom, var(--ink-muted), transparent);
-      animation: scrollPulse 2s ease-in-out infinite;
+    .opening-narrative {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 300;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      color: var(--ink-2);
+      font-variation-settings: "opsz" 14;
+    }
+    .opening-narrative .pull {
+      color: var(--vermilion);
+      font-weight: 500;
+      font-style: italic;
+    }
+    .opening-narrative strong {
+      color: var(--ink);
+      font-weight: 600;
     }
 
-    /* ── Section Shared ── */
-    .section {
-      padding: 6rem 2rem;
-      max-width: 1100px;
-      margin: 0 auto;
+    .opening-observation {
+      border-top: 1.5px solid var(--ink);
+      padding-top: 1.5rem;
+    }
+    .opening-observation .obs-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .opening-observation .obs-text {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-size: 0.98rem;
+      line-height: 1.7;
+      color: var(--ink-2);
     }
 
-    .section-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.75rem;
-      font-weight: 700;
+    .opening-conclusion {
+      margin-top: 3rem;
+      padding: 2rem 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .opening-conclusion .verdict {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 900;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+    }
+    .opening-conclusion .verdict em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .opening-conclusion .verdict-note {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      color: var(--olive);
-      margin-bottom: 1rem;
+      color: var(--muted);
     }
 
-    .section-label::before {
-      content: '';
-      width: 24px;
-      height: 2px;
-      background: var(--olive);
+    /* Language flags decoration */
+    .lang-strip {
+      display: flex;
+      gap: 0;
+      margin-top: 2rem;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .lang-strip .lang-cell {
+      flex: 1;
+      padding: 0.7rem 0.5rem;
+      text-align: center;
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border-right: 1px solid var(--rule);
+      background: var(--paper);
+      color: var(--ink-2);
+      transition: background 0.2s;
+    }
+    .lang-strip .lang-cell:last-child { border-right: none; }
+    .lang-strip .lang-cell.gap {
+      background: var(--vermilion);
+      color: var(--ivory);
+      font-style: italic;
+    }
+    .lang-strip .lang-cell:hover { background: var(--ivory-2); }
+    .lang-strip .lang-cell.gap:hover { background: var(--vermilion-deep); }
+
+    /* ═══════════════ SPREAD 02 — PROBLEM ═══════════════ */
+    .spread-problem {
+      background:
+        linear-gradient(180deg, var(--ivory) 0%, var(--paper) 100%);
     }
 
-    .section-title {
-      font-family: 'Noto Serif SC', serif;
-      font-weight: 900;
-      font-size: clamp(1.8rem, 4vw, 2.8rem);
+    .problem-head {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3.5rem;
+    }
+    @media (min-width: 800px) {
+      .problem-head {
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        align-items: end;
+      }
+    }
+
+    .problem-head .display {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
+    }
+    .problem-head .display em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .pain-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0;
+      border-top: 1.5px solid var(--ink);
+    }
+
+    .pain-item {
+      padding: 2rem 1.5rem 2rem 0;
+      border-bottom: 1px solid var(--rule);
+      border-right: 1px solid var(--rule);
+      position: relative;
+      transition: background 0.3s ease;
+    }
+    .pain-item:last-child { border-right: none; }
+    .pain-item:hover { background: var(--paper); }
+    .pain-item:hover .pain-num { color: var(--vermilion); }
+
+    @media (min-width: 800px) {
+      .pain-item { padding: 2.5rem 1.75rem; }
+    }
+
+    .pain-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+      transition: color 0.3s;
+      font-weight: 500;
+    }
+
+    .pain-item h3 {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 700;
+      font-size: 1.4rem;
       line-height: 1.2;
       margin-bottom: 1rem;
       color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+    .pain-item h3 em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
     }
 
-    .section-desc {
-      font-size: 1.05rem;
-      line-height: 1.8;
-      color: var(--ink-light);
-      max-width: 680px;
+    .pain-item p {
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: var(--ink-soft);
     }
 
-    /* ── Problem Section ── */
-    .problem-section {
-      background:
-        linear-gradient(135deg, rgba(139,154,107,0.06) 0%, transparent 50%),
-        var(--cream);
+    /* ═══════════════ SPREAD 03 — SOLUTION FLOW ═══════════════ */
+    .spread-solution {
+      background: var(--ink);
+      color: var(--ivory);
+      max-width: none;
+      padding: 6rem 2rem 5rem;
     }
-
-    .pain-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-top: 3rem;
+    .spread-solution .inner {
+      max-width: 1280px;
+      margin: 0 auto;
     }
+    .spread-solution .sec-index { color: var(--gold-soft); }
+    .spread-solution .sec-index::before { background: var(--gold-soft); }
+    .spread-solution .sec-index .num { color: var(--ivory); }
+    .spread-solution .sec-index .of { color: var(--muted-2); }
 
-    .pain-card {
-      background: var(--parchment);
-      border: 2px solid var(--parchment-dark);
-      border-radius: 4px;
-      padding: 2rem;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.3s ease;
-    }
-
-    .pain-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(44,40,32,0.08);
-      border-color: var(--amber);
-    }
-
-    .pain-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 4px;
-      height: 100%;
-      background: var(--rust);
-    }
-
-    .pain-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.4rem;
+    .solution-head .display {
+      color: var(--ivory);
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
       margin-bottom: 1rem;
-      background: rgba(196,92,60,0.08);
+    }
+    .solution-head .display em {
+      color: var(--gold-soft);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .solution-head .lede {
+      color: var(--ivory-2);
+      opacity: 0.75;
+      max-width: 60ch;
     }
 
-    .pain-card h3 {
-      font-family: 'Noto Serif SC', serif;
+    .flow-grid {
+      margin-top: 4rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1px;
+      background: rgba(242,237,224,0.1);
+      border: 1px solid rgba(242,237,224,0.1);
+    }
+
+    .flow-cell {
+      background: var(--ink);
+      padding: 2rem 1.5rem;
+      position: relative;
+      transition: background 0.3s;
+    }
+    .flow-cell:hover {
+      background: var(--ink-2);
+    }
+
+    .flow-cell .step-num {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 3rem;
+      line-height: 1;
+      color: var(--gold-soft);
+      margin-bottom: 1.5rem;
+      font-variation-settings: "opsz" 144;
+    }
+
+    .flow-cell h3 {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
       font-weight: 700;
-      font-size: 1.15rem;
+      font-size: 1.2rem;
       margin-bottom: 0.75rem;
-      color: var(--ink);
+      color: var(--ivory);
+      letter-spacing: -0.01em;
     }
 
-    .pain-card p {
-      font-size: 0.95rem;
-      line-height: 1.7;
-      color: var(--ink-light);
+    .flow-cell p {
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: rgba(242,237,224,0.7);
+      margin-bottom: 1rem;
     }
 
-    /* ── Solution / Flow Section ── */
-    .flow-section {
-      position: relative;
-    }
-
-    .flow-steps {
-      margin-top: 3rem;
+    .flow-tags {
       display: flex;
-      flex-direction: column;
-      gap: 0;
+      flex-wrap: wrap;
+      gap: 0.35rem;
     }
-
-    .flow-step {
-      display: grid;
-      grid-template-columns: 80px 1fr;
-      gap: 2rem;
-      padding: 2rem 0;
-      position: relative;
-    }
-
-    .flow-step:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      left: 39px;
-      top: 80px;
-      bottom: 0;
-      width: 2px;
-      background: linear-gradient(to bottom, var(--amber), var(--parchment-dark));
-    }
-
-    .flow-number {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: var(--parchment);
-      border: 2.5px solid var(--amber);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Playfair Display', serif;
-      font-weight: 900;
-      font-size: 1.6rem;
-      color: var(--amber);
-      position: relative;
-      z-index: 1;
-    }
-
-    .flow-content h3 {
-      font-family: 'Noto Serif SC', serif;
-      font-weight: 700;
-      font-size: 1.25rem;
-      margin-bottom: 0.5rem;
-      color: var(--ink);
-    }
-
-    .flow-content p {
-      font-size: 0.95rem;
-      line-height: 1.7;
-      color: var(--ink-light);
-    }
-
     .flow-tag {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      background: rgba(139,154,107,0.1);
-      border: 1px solid rgba(139,154,107,0.2);
-      border-radius: 3px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--olive);
-      margin-top: 0.5rem;
-      margin-right: 0.3rem;
-    }
-
-    /* ── Exercise Types ── */
-    .exercise-section {
-      background:
-        linear-gradient(180deg, rgba(232,168,56,0.04) 0%, transparent 100%),
-        var(--cream);
-    }
-
-    .exercise-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
-      margin-top: 3rem;
-    }
-
-    .exercise-card {
-      background: #fff;
-      border: 2px solid var(--parchment-dark);
-      border-radius: 4px;
-      padding: 2rem;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-
-    .exercise-card:hover {
-      border-color: var(--amber);
-      box-shadow: 0 8px 24px rgba(44,40,32,0.06);
-    }
-
-    .exercise-phase {
-      display: inline-block;
-      padding: 0.2rem 0.7rem;
-      border-radius: 3px;
-      font-size: 0.7rem;
-      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid rgba(242,237,224,0.2);
+      color: var(--gold-soft);
+      border-radius: 1px;
+    }
+
+    /* ═══════════════ SPREAD 04 — EXERCISES ═══════════════ */
+    .spread-exercises {
+      background: var(--paper);
+    }
+
+    .ex-head {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3.5rem;
+    }
+    @media (min-width: 800px) {
+      .ex-head {
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        align-items: end;
+      }
+    }
+    .ex-head .display {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
+    }
+    .ex-head .display em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .ex-table {
+      border-top: 1.5px solid var(--ink);
+    }
+
+    .ex-row {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 1.5rem;
+      padding: 1.75rem 0;
+      border-bottom: 1px solid var(--rule);
+      align-items: start;
+      transition: padding 0.3s ease;
+    }
+    .ex-row:hover {
+      padding-left: 0.75rem;
+    }
+    @media (min-width: 800px) {
+      .ex-row {
+        grid-template-columns: 80px 1fr 1.4fr 1fr;
+        gap: 2rem;
+        padding: 2rem 0;
+      }
+    }
+
+    .ex-phase {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--moss);
+      font-weight: 600;
+      padding-top: 0.3rem;
+    }
+    .ex-phase.p2 { color: var(--vermilion); }
+
+    .ex-name {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+
+    .ex-desc {
+      font-size: 0.9rem;
+      line-height: 1.65;
+      color: var(--ink-soft);
+    }
+
+    .ex-demo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--ink-2);
+      padding: 0.6rem 0.75rem;
+      background: var(--ivory);
+      border-left: 2px solid var(--vermilion);
+      line-height: 1.5;
+      margin-top: 0.5rem;
+    }
+    .ex-demo .hl { color: var(--vermilion); font-weight: 500; }
+    @media (max-width: 799px) {
+      .ex-demo { margin-top: 0.75rem; }
+    }
+
+    /* ═══════════════ SPREAD 05 — USERS ═══════════════ */
+    .spread-users {
+      background:
+        radial-gradient(ellipse 60% 40% at 30% 50%, rgba(58,90,64,0.06) 0%, transparent 60%),
+        var(--ivory);
+    }
+
+    .users-head {
+      margin-bottom: 3.5rem;
+    }
+    .users-head .display {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
       margin-bottom: 1rem;
     }
-
-    .phase-1 {
-      background: rgba(107,138,94,0.1);
-      color: var(--olive);
-      border: 1px solid rgba(107,138,94,0.2);
+    .users-head .display em {
+      color: var(--moss);
+      font-style: italic;
+      font-weight: 400;
     }
 
-    .phase-2 {
-      background: rgba(232,168,56,0.1);
-      color: #B8860B;
-      border: 1px solid rgba(232,168,56,0.2);
-    }
-
-    .exercise-card h3 {
-      font-family: 'Noto Serif SC', serif;
-      font-weight: 700;
-      font-size: 1.15rem;
-      margin-bottom: 0.75rem;
-      color: var(--ink);
-    }
-
-    .exercise-card p {
-      font-size: 0.9rem;
-      line-height: 1.7;
-      color: var(--ink-light);
-    }
-
-    .exercise-demo {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: var(--parchment);
-      border-radius: 3px;
-      font-size: 0.85rem;
-      color: var(--ink-light);
-      border-left: 3px solid var(--amber);
-    }
-
-    .exercise-demo code {
-      background: rgba(232,168,56,0.12);
-      padding: 0.1rem 0.4rem;
-      border-radius: 2px;
-      font-size: 0.82rem;
-      color: #B8860B;
-    }
-
-    /* ── Target Users ── */
-    .users-section {
-      position: relative;
-    }
-
-    .user-cards {
+    .users-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 1.5rem;
-      margin-top: 3rem;
     }
 
     .user-card {
-      background: var(--parchment);
-      border: 2px solid var(--parchment-dark);
-      border-radius: 4px;
-      padding: 2rem;
-      text-align: center;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      padding: 2.25rem 1.75rem;
+      position: relative;
       transition: all 0.3s ease;
     }
-
     .user-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 24px rgba(44,40,32,0.06);
+      transform: translateY(-4px);
+      border-color: var(--ink);
+      box-shadow: 0 16px 40px -12px rgba(22,19,15,0.18);
     }
 
-    .user-avatar {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      margin: 0 auto 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.8rem;
-      background: rgba(139,154,107,0.1);
-      border: 2px solid rgba(139,154,107,0.15);
+    .user-card .user-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
     }
 
     .user-card h3 {
-      font-family: 'Noto Serif SC', serif;
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
       font-weight: 700;
-      font-size: 1.1rem;
+      font-size: 1.4rem;
       margin-bottom: 0.5rem;
+      color: var(--ink);
+      letter-spacing: -0.01em;
     }
-
     .user-card .user-scene {
-      font-size: 0.85rem;
-      color: var(--olive);
-      font-weight: 500;
-      margin-bottom: 0.75rem;
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      color: var(--moss);
+      margin-bottom: 1rem;
+      font-weight: 400;
     }
-
     .user-card p {
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       line-height: 1.7;
-      color: var(--ink-light);
+      color: var(--ink-soft);
     }
 
-    /* ── Value Section ── */
-    .value-section {
-      background:
-        radial-gradient(ellipse at 30% 50%, rgba(232,168,56,0.06) 0%, transparent 60%),
-        var(--cream);
+    /* ═══════════════ SPREAD 06 — VALUE ═══════════════ */
+    .spread-value {
+      background: var(--paper);
+    }
+
+    .value-head .display {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
+      margin-bottom: 3.5rem;
+    }
+    .value-head .display em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
     }
 
     .value-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
-      margin-top: 3rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0;
+      border-top: 1.5px solid var(--ink);
     }
 
     .value-block {
-      padding: 2.5rem;
-      background: #fff;
-      border: 2px solid var(--parchment-dark);
-      border-radius: 4px;
+      padding: 2.5rem 1.75rem;
+      border-bottom: 1px solid var(--rule);
+      border-right: 1px solid var(--rule);
       position: relative;
-      overflow: hidden;
+      transition: background 0.3s;
     }
+    .value-block:last-child { border-right: none; }
+    .value-block:hover { background: var(--ivory); }
 
-    .value-block::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
+    .value-block .v-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
     }
-
-    .value-block.commercial::after { background: var(--amber); }
-    .value-block.efficiency::after { background: var(--olive); }
-    .value-block.social::after { background: var(--frog-dark); }
-
-    .value-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 1.25rem;
-    }
-
-    .value-block.commercial .value-icon { background: rgba(232,168,56,0.1); }
-    .value-block.efficiency .value-icon { background: rgba(107,138,94,0.1); }
-    .value-block.social .value-icon { background: rgba(82,77,60,0.08); }
+    .value-block.commercial .v-label { color: var(--vermilion); }
+    .value-block.efficiency .v-label { color: var(--moss); }
+    .value-block.social .v-label { color: var(--gold); }
 
     .value-block h3 {
-      font-family: 'Noto Serif SC', serif;
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
       font-weight: 700;
-      font-size: 1.2rem;
-      margin-bottom: 0.75rem;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--ink);
+      letter-spacing: -0.01em;
     }
+    .value-block h3 em {
+      font-style: italic;
+      font-weight: 400;
+    }
+    .value-block.commercial h3 em { color: var(--vermilion); }
+    .value-block.efficiency h3 em { color: var(--moss); }
+    .value-block.social h3 em { color: var(--gold); }
 
     .value-block p {
-      font-size: 0.95rem;
-      line-height: 1.7;
-      color: var(--ink-light);
+      font-size: 0.92rem;
+      line-height: 1.75;
+      color: var(--ink-soft);
     }
 
-    /* ── Tech Section ── */
-    .tech-section {
-      position: relative;
+    /* ═══════════════ SPREAD 07 — TECH ═══════════════ */
+    .spread-tech {
+      background: var(--ivory);
+    }
+
+    .tech-head {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    @media (min-width: 800px) {
+      .tech-head {
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        align-items: end;
+      }
+    }
+    .tech-head .display {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      line-height: 0.95;
+    }
+    .tech-head .display em {
+      color: var(--moss);
+      font-style: italic;
+      font-weight: 400;
     }
 
     .tech-stack {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
-      margin-top: 2rem;
+      gap: 0.5rem;
+      margin-bottom: 3rem;
     }
-
     .tech-tag {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.6rem 1.2rem;
-      background: var(--parchment);
-      border: 1.5px solid var(--parchment-dark);
-      border-radius: 4px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: var(--ink);
+      padding: 0.5rem 0.9rem;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      color: var(--ink-2);
       transition: all 0.2s ease;
     }
-
     .tech-tag:hover {
-      border-color: var(--amber);
-      background: rgba(232,168,56,0.05);
+      border-color: var(--ink);
+      background: var(--ivory);
     }
-
     .tech-tag .dot {
-      width: 8px;
-      height: 8px;
+      width: 7px; height: 7px;
       border-radius: 50%;
     }
 
     .tech-features {
-      margin-top: 3rem;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.5rem;
+      gap: 1px;
+      background: var(--rule);
+      border: 1px solid var(--rule);
     }
-
     .tech-feature {
-      padding: 1.5rem;
-      background: var(--parchment);
-      border: 2px solid var(--parchment-dark);
-      border-radius: 4px;
+      background: var(--paper);
+      padding: 1.5rem 1.25rem;
+      transition: background 0.3s;
     }
-
+    .tech-feature:hover { background: var(--ivory); }
     .tech-feature h4 {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
       font-weight: 700;
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       margin-bottom: 0.5rem;
       color: var(--ink);
     }
-
     .tech-feature p {
       font-size: 0.85rem;
       line-height: 1.6;
-      color: var(--ink-light);
+      color: var(--ink-soft);
     }
 
-    /* ── Footer ── */
-    .footer {
-      text-align: center;
-      padding: 4rem 2rem;
-      border-top: 2px solid var(--parchment-dark);
+    /* Language cloud */
+    .lang-cloud-section {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--rule);
     }
-
-    .footer-frog {
-      width: 48px;
-      height: 48px;
+    .lang-cloud-section .lc-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
       margin-bottom: 1rem;
-      opacity: 0.5;
+    }
+    .lang-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .lang-chip {
+      padding: 0.35rem 0.7rem;
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--ivory);
+      border-radius: 1px;
+      transition: transform 0.2s ease;
+    }
+    .lang-chip.more {
+      background: var(--ink) !important;
+      font-style: italic;
+    }
+    .lang-chip:hover { transform: translateY(-2px); }
+
+    /* ═══════════════ SPREAD 08 — CLOSING (MIRRORS OPENING) ═══════════════ */
+    .spread-closing {
+      background:
+        radial-gradient(ellipse 80% 50% at 30% 80%, rgba(214,73,51,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 20%, rgba(58,90,64,0.05) 0%, transparent 60%),
+        var(--ivory);
+      position: relative;
     }
 
-    .footer p {
-      font-size: 0.85rem;
-      color: var(--ink-muted);
+    .closing-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+    @media (min-width: 900px) {
+      .closing-grid {
+        grid-template-columns: 1.4fr 1fr;
+        gap: 4rem;
+      }
+    }
+
+    .closing-headline {
+      font-size: clamp(3.5rem, 11vw, 8.5rem);
+      line-height: 0.88;
+    }
+    .closing-headline .line-2 {
+      display: block;
+      padding-left: 0.4em;
+    }
+    .closing-headline .accent-word {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+    }
+
+    .closing-side {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      padding-top: 1rem;
+    }
+
+    .closing-product {
+      border-top: 1.5px solid var(--ink);
+      padding-top: 1.5rem;
+    }
+    .closing-product .cp-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .closing-product .cp-name {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 900;
+      font-size: 1.6rem;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+    .closing-product .cp-en {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 1rem;
+      color: var(--vermilion);
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+    .closing-product .cp-tagline {
+      font-size: 0.92rem;
       line-height: 1.7;
+      color: var(--ink-soft);
     }
 
-    .footer a {
-      color: var(--olive);
+    .closing-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem 1.5rem;
+      padding: 1.5rem 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .closing-meta .meta-item .ml {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+    .closing-meta .meta-item .mv {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-size: 0.95rem;
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .closing-meta .meta-item .mv a {
+      color: var(--ink);
       text-decoration: none;
-      border-bottom: 1px solid rgba(107,138,94,0.3);
+      border-bottom: 1px solid var(--vermilion);
+      transition: color 0.2s;
     }
+    .closing-meta .meta-item .mv a:hover { color: var(--vermilion); }
 
-    .footer a:hover {
-      color: var(--amber);
-      border-color: var(--amber);
+    .closing-signature {
+      margin-top: 3rem;
+      padding: 2rem 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .closing-signature .thanks {
+      font-family: 'Fraunces', 'Noto Serif SC', serif;
+      font-weight: 900;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+    }
+    .closing-signature .thanks em {
+      color: var(--vermilion);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .closing-signature .thanks-note {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
 
     /* ── Animations ── */
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(24px); }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(28px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
-    @keyframes fadeInDown {
-      from { opacity: 0; transform: translateY(-16px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes drawLine {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
     }
 
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
-    }
+    .anim-1 { animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
+    .anim-2 { animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
+    .anim-3 { animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.4s both; }
+    .anim-4 { animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.55s both; }
+    .anim-5 { animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.7s both; }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    @keyframes scrollPulse {
-      0%, 100% { opacity: 0.3; transform: scaleY(1); }
-      50% { opacity: 1; transform: scaleY(1.2); }
-    }
-
-    /* ── Scroll Reveal ── */
+    /* Scroll reveal */
     .reveal {
       opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+      transform: translateY(32px);
+      transition: opacity 0.9s cubic-bezier(0.22,1,0.36,1),
+                  transform 0.9s cubic-bezier(0.22,1,0.36,1);
     }
-
     .reveal.visible {
       opacity: 1;
       transform: translateY(0);
@@ -703,423 +1009,454 @@
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
-      .flow-step {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+      .spread { padding: 5rem 1.25rem 4rem; }
+      .spread-solution { padding: 5rem 1.25rem 4rem; }
+      .frame-top, .frame-bottom { padding: 0.7rem 1.25rem; font-size: 0.62rem; }
+      .opening-headline, .closing-headline {
+        font-size: clamp(3rem, 14vw, 5rem);
       }
-
-      .flow-step:not(:last-child)::after {
-        left: 39px;
-        top: 80px;
-      }
-
-      .flow-number {
-        width: 60px;
-        height: 60px;
-        font-size: 1.2rem;
-      }
-
-      .section {
-        padding: 4rem 1.25rem;
-      }
+      .opening-headline .line-2, .closing-headline .line-2 { padding-left: 0.2em; }
+      .lang-strip { flex-wrap: wrap; }
+      .lang-strip .lang-cell { flex: 1 1 30%; }
     }
 
-    /* ── Language Cloud ── */
-    .lang-cloud {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 2rem;
-      justify-content: center;
-    }
-
-    .lang-chip {
-      padding: 0.35rem 0.75rem;
-      border-radius: 3px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #fff;
-      letter-spacing: 0.02em;
-      transition: transform 0.2s ease;
-    }
-
-    .lang-chip:hover {
-      transform: scale(1.08);
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- ═══════════════ HERO ═══════════════ -->
-  <section class="hero">
-    <div class="hero-badge">学习工作赛道</div>
+  <!-- Editorial running frame -->
+  <div class="frame-top">
+    <span><span class="mark">Gualingo</span><span class="dot"></span>呱邻国 · 市场观察纪要</span>
+    <span>Vol. 01 · 2026</span>
+  </div>
+  <div class="frame-bottom">
+    <span>从身边出发 — ToC 视角</span>
+    <span><span class="dot"></span><span class="mark">END / FIN</span></span>
+  </div>
 
-    <!-- Frog SVG Mascot -->
-    <svg class="frog-mascot" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="50" cy="58" rx="38" ry="32" fill="#B5AE8E"/>
-      <ellipse cx="50" cy="55" rx="34" ry="28" fill="#D8D4BF"/>
-      <circle cx="34" cy="38" r="16" fill="#B5AE8E"/>
-      <circle cx="66" cy="38" r="16" fill="#B5AE8E"/>
-      <circle cx="34" cy="38" r="13" fill="#fff"/>
-      <circle cx="66" cy="38" r="13" fill="#fff"/>
-      <circle cx="36" cy="37" r="6" fill="#524D3C"/>
-      <circle cx="68" cy="37" r="6" fill="#524D3C"/>
-      <circle cx="38" cy="35" r="2" fill="#fff"/>
-      <circle cx="70" cy="35" r="2" fill="#fff"/>
-      <ellipse cx="50" cy="62" rx="18" ry="8" fill="#E8C985"/>
-      <path d="M38 60 Q50 70 62 60" stroke="#524D3C" stroke-width="2" fill="none" stroke-linecap="round"/>
-    </svg>
-
-    <h1 class="hero-title">呱邻国</h1>
-    <div class="hero-subtitle">Gualingo</div>
-    <p class="hero-tagline">
-      完全由 <strong>AI 驱动</strong>的沉浸式外语学习平台。<br>
-      输入任意文本，AI 自动生成词汇表、分句翻译和多种练习题，<br>
-      把每一段文字都变成你的<strong>专属学习材料</strong>。
-    </p>
-    <a href="#problem" class="hero-cta">
-      了解更多
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-    </a>
-
-    <div class="scroll-hint">
-      <div class="scroll-hint-line"></div>
+  <!-- ═══════════════ 01 — OPENING / MARKET DEMAND ═══════════════ -->
+  <section class="spread spread-opening">
+    <div class="sec-index anim-1">
+      <span class="num">01</span><span class="of">/ 08</span> · 市场观察 · 从身边出发
     </div>
-  </section>
 
-  <!-- ═══════════════ PROBLEM ═══════════════ -->
-  <section class="problem-section" id="problem">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">痛点洞察</div>
-        <h2 class="section-title">学外语的素材，永远不够"自己"</h2>
-        <p class="section-desc">
-          传统语言学习 App 提供的是固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的新闻、追的剧、工作文档里的专业术语——这些最贴近你生活的内容，恰恰无法被标准化课程覆盖。
+    <div class="opening-grid">
+      <div>
+        <h1 class="display opening-headline anim-2">
+          从身边<br>
+          <span class="line-2"><span class="accent-word">出发</span>。</span>
+        </h1>
+
+        <div class="opening-conclusion anim-4">
+          <div class="verdict">市场<em>缺口</em>巨大。</div>
+          <div class="verdict-note">— 一个被忽视的 ToC 切口</div>
+        </div>
+      </div>
+
+      <aside class="opening-side">
+        <p class="opening-narrative anim-3">
+          大家都在做 <strong>Agent</strong>、做 <strong>ToB</strong>。我刚毕业，没接触那么多——
+          所以只能<span class="pull">基于身边观察，做 ToC</span>。
         </p>
+
+        <div class="opening-observation anim-4">
+          <div class="obs-label">观察 · 01</div>
+          <p class="obs-text">
+            身边同学留学 <strong>德国、法国、瑞士</strong>——只有多邻国能学这么多语种。
+            其它大众语种如日语，只有专门 App 能学。
+          </p>
+        </div>
+
+        <div class="lang-strip anim-5">
+          <div class="lang-cell">Deutsch</div>
+          <div class="lang-cell">Français</div>
+          <div class="lang-cell">Italiano</div>
+          <div class="lang-cell gap">+ 100 种缺口</div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 02 — PROBLEM ═══════════════ -->
+  <section class="spread spread-problem">
+    <div class="sec-index reveal">
+      <span class="num">02</span><span class="of">/ 08</span> · 痛点洞察
+    </div>
+
+    <div class="problem-head reveal">
+      <h2 class="display">
+        学外语的素材，<br>
+        永远<em>不够"自己"</em>。
+      </h2>
+      <p class="lede">
+        传统语言学习 App 提供的是固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的新闻、追的剧、工作文档里的专业术语——这些最贴近你生活的内容，恰恰无法被标准化课程覆盖。
+      </p>
+    </div>
+
+    <div class="pain-list">
+      <div class="pain-item reveal">
+        <div class="pain-num">P · 01</div>
+        <h3>课程内容<em>千篇一律</em></h3>
+        <p>市面上的 App 用统一教材教所有人，你被迫学习与自己无关的对话场景，学了忘、忘了学，效率极低。</p>
       </div>
-
-      <div class="pain-grid">
-        <div class="pain-card reveal">
-          <div class="pain-icon">📖</div>
-          <h3>课程内容千篇一律</h3>
-          <p>市面上的 App 用统一教材教所有人，你被迫学习与自己无关的对话场景，学了忘、忘了学，效率极低。</p>
-        </div>
-        <div class="pain-card reveal">
-          <div class="pain-icon">🔍</div>
-          <h3>生词脱离上下文</h3>
-          <p>单独背单词没有语境，记住的只是翻译对照，无法在真实阅读和交流中灵活运用，"认识但不会用"是常态。</p>
-        </div>
-        <div class="pain-card reveal">
-          <div class="pain-icon">🌍</div>
-          <h3>小语种资源匮乏</h3>
-          <p>想学泰语、越南语、阿拉伯语方言？主流 App 要么不支持，要么内容极少。100+ 种语言的学习需求被长期忽视。</p>
-        </div>
-
+      <div class="pain-item reveal">
+        <div class="pain-num">P · 02</div>
+        <h3>生词<em>脱离上下文</em></h3>
+        <p>单独背单词没有语境，记住的只是翻译对照，无法在真实阅读和交流中灵活运用，"认识但不会用"是常态。</p>
+      </div>
+      <div class="pain-item reveal">
+        <div class="pain-num">P · 03</div>
+        <h3>小语种<em>资源匮乏</em></h3>
+        <p>想学泰语、越南语、阿拉伯语方言？主流 App 要么不支持，要么内容极少。100+ 种语言的学习需求被长期忽视。</p>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════ SOLUTION FLOW ═══════════════ -->
-  <section class="flow-section" id="solution">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">解决方案</div>
-        <h2 class="section-title">你的文本，就是你的课本</h2>
-        <p class="section-desc">
+  <!-- ═══════════════ 03 — SOLUTION FLOW ═══════════════ -->
+  <section class="spread spread-solution">
+    <div class="inner">
+      <div class="sec-index reveal">
+        <span class="num">03</span><span class="of">/ 08</span> · 解决方案
+      </div>
+
+      <div class="solution-head reveal">
+        <h2 class="display">
+          你的文本，<br>
+          就是<em>你的课本</em>。
+        </h2>
+        <p class="lede">
           呱邻国的核心理念：让 AI 理解你提供的任意文本，自动拆解为可学习的单元，生成完整的词汇表和多样化的练习——从输入到掌握，一站式完成。
         </p>
       </div>
 
-      <div class="flow-steps">
-        <div class="flow-step reveal">
-          <div class="flow-number">1</div>
-          <div class="flow-content">
-            <h3>输入文本</h3>
-            <p>三种输入模式：直接粘贴原文、输入母语让 AI 翻译成目标语言、或让 AI 根据主题自动生成学习文本。支持 100+ 种语言的自动检测。</p>
+      <div class="flow-grid">
+        <div class="flow-cell reveal">
+          <div class="step-num">01</div>
+          <h3>输入文本</h3>
+          <p>三种输入模式：直接粘贴原文、输入母语让 AI 翻译成目标语言、或让 AI 根据主题自动生成。支持 100+ 种语言自动检测。</p>
+          <div class="flow-tags">
             <span class="flow-tag">直接输入</span>
             <span class="flow-tag">AI 翻译</span>
             <span class="flow-tag">AI 生成</span>
           </div>
         </div>
-
-        <div class="flow-step reveal">
-          <div class="flow-number">2</div>
-          <div class="flow-content">
-            <h3>AI 分句翻译 + 生成词汇表</h3>
-            <p>LLM 自动完成句子拆分、逐句翻译、单词划分、词性标注、音标生成和上下文释义。全程零手工规则，纯 AI 理解上下文——你只需提供文本，剩下的交给 AI。</p>
+        <div class="flow-cell reveal">
+          <div class="step-num">02</div>
+          <h3>AI 分句 + 词汇表</h3>
+          <p>LLM 自动完成句子拆分、逐句翻译、单词划分、词性标注、音标生成和上下文释义。零手工规则，纯 AI 理解上下文。</p>
+          <div class="flow-tags">
             <span class="flow-tag">分句翻译</span>
             <span class="flow-tag">词性标注</span>
-            <span class="flow-tag">音标生成</span>
             <span class="flow-tag">上下文释义</span>
           </div>
         </div>
-
-        <div class="flow-step reveal">
-          <div class="flow-number">3</div>
-          <div class="flow-content">
-            <h3>阶段一：学单词</h3>
-            <p>单词选择题、句子翻译排序、听力理解三种题型交替出现。每个单词配有丰富释义、词形变化、例句和记忆辅助，答对后展开完整单词卡深度学习。</p>
+        <div class="flow-cell reveal">
+          <div class="step-num">03</div>
+          <h3>阶段一 · 学单词</h3>
+          <p>单词选择题、句子翻译排序、听力理解三种题型交替出现。答对后展开完整单词卡深度学习。</p>
+          <div class="flow-tags">
             <span class="flow-tag">单词选择</span>
             <span class="flow-tag">句子翻译</span>
             <span class="flow-tag">听力理解</span>
           </div>
         </div>
-
-        <div class="flow-step reveal">
-          <div class="flow-number">4</div>
-          <div class="flow-content">
-            <h3>阶段二：练句子</h3>
-            <p>遮蔽填空（完形填空）和翻译重组（将打乱的翻译片段拖回正确顺序）两种高阶练习，训练对完整句子的理解和输出能力。</p>
+        <div class="flow-cell reveal">
+          <div class="step-num">04</div>
+          <h3>阶段二 · 练句子</h3>
+          <p>遮蔽填空（完形填空）和翻译重组（打乱翻译片段拖回正确顺序）两种高阶练习，训练完整句子的理解和输出。</p>
+          <div class="flow-tags">
             <span class="flow-tag">遮蔽填空</span>
             <span class="flow-tag">翻译重组</span>
           </div>
         </div>
-
-        <div class="flow-step reveal">
-          <div class="flow-number">5</div>
-          <div class="flow-content">
-            <h3>错题回顾 + 星级评价</h3>
-            <p>答错的题自动收集，单元结束后可选择错题回顾，强化练习直到掌握。每个单元根据错误数量给出 0-3 星评价，激励持续进步。</p>
+        <div class="flow-cell reveal">
+          <div class="step-num">05</div>
+          <h3>错题回顾 + 星评</h3>
+          <p>答错的题自动收集，单元结束后可选错题回顾，强化练习直到掌握。每个单元根据错误数量给出 0-3 星评价。</p>
+          <div class="flow-tags">
             <span class="flow-tag">错题回顾</span>
             <span class="flow-tag">星级评价</span>
             <span class="flow-tag">进度追踪</span>
           </div>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════ EXERCISE TYPES ═══════════════ -->
-  <section class="exercise-section" id="exercises">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">练习体系</div>
-        <h2 class="section-title">五大题型，从认到用</h2>
-        <p class="section-desc">
-          从单词辨认到句子输出，阶梯式设计确保每一步都有挑战，每一步都有收获。
-        </p>
-      </div>
-
-      <div class="exercise-grid">
-        <div class="exercise-card reveal">
-          <span class="exercise-phase phase-1">阶段一</span>
-          <h3>单词选择题</h3>
-          <p>看到目标语言单词，从四个母语释义中选出正确答案。答对后展开完整单词卡：丰富释义、词形变化、例句、记忆辅助。</p>
-          <div class="exercise-demo">
-            <code>abandon</code> → 废弃 / 采纳 / 伴随 / 仰慕 ✓
-          </div>
-        </div>
-
-        <div class="exercise-card reveal">
-          <span class="exercise-phase phase-1">阶段一</span>
-          <h3>句子翻译排序</h3>
-          <p>将打乱的母语翻译片段拖拽排列成正确顺序，训练对句子结构和语义的理解。</p>
-          <div class="exercise-demo">
-            <code>他 / 放弃了 / 这个 / 计划</code> → 拖拽排序
-          </div>
-        </div>
-
-        <div class="exercise-card reveal">
-          <span class="exercise-phase phase-1">阶段一</span>
-          <h3>听力理解</h3>
-          <p>听 AI 朗读句子，从四个翻译选项中选出正确含义。语音合成支持多种语言，可随时点击重听。</p>
-          <div class="exercise-demo">
-            🔊 <code>He abandoned the plan.</code> → 选出正确翻译
-          </div>
-        </div>
-
-        <div class="exercise-card reveal">
-          <span class="exercise-phase phase-2">阶段二</span>
-          <h3>遮蔽填空</h3>
-          <p>原文中随机遮蔽若干单词，从候选词池中选出正确单词填入空位。同一句子多次出现，每次遮蔽不同位置，确保全面掌握。</p>
-          <div class="exercise-demo">
-            He <code>___</code> the plan. → 候选：abandon / adopted / ...
-          </div>
-        </div>
-
-        <div class="exercise-card reveal">
-          <span class="exercise-phase phase-2">阶段二</span>
-          <h3>翻译重组</h3>
-          <p>看到原文句子，将打乱的母语翻译片段重新排列成正确顺序。比阶段一的翻译排序更难——需要自己理解原文并组织翻译。</p>
-          <div class="exercise-demo">
-            原文：<code>He abandoned the plan.</code> → 重组翻译片段
+        <div class="flow-cell reveal">
+          <div class="step-num">06</div>
+          <h3>持续掌握</h3>
+          <p>从单词辨认到句子输出，阶梯式设计确保每一步都有挑战、都有收获。学习闭环由 AI 全程驱动。</p>
+          <div class="flow-tags">
+            <span class="flow-tag">闭环学习</span>
+            <span class="flow-tag">AI 驱动</span>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════ TARGET USERS ═══════════════ -->
-  <section class="users-section" id="users">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">目标用户</div>
-        <h2 class="section-title">谁需要呱邻国？</h2>
-        <p class="section-desc">
-          任何想要用自己感兴趣的内容学外语的人——从考试备考到兴趣阅读，从职场提升到旅行准备。
-        </p>
-      </div>
+  <!-- ═══════════════ 04 — EXERCISES ═══════════════ -->
+  <section class="spread spread-exercises">
+    <div class="sec-index reveal">
+      <span class="num">04</span><span class="of">/ 08</span> · 练习体系
+    </div>
 
-      <div class="user-cards">
-        <div class="user-card reveal">
-          <div class="user-avatar">🎓</div>
-          <h3>语言学习者</h3>
-          <div class="user-scene">备考 / 日常提升</div>
-          <p>厌倦了固定教材？粘贴你喜欢的文章、新闻、播客文本，立刻生成专属练习，让学习不再枯燥。</p>
-        </div>
-        <div class="user-card reveal">
-          <div class="user-avatar">💼</div>
-          <h3>职场人士</h3>
-          <div class="user-scene">外企沟通 / 专业阅读</div>
-          <p>把工作邮件、行业报告变成学习材料，学到的就是用得上的，专业术语不再陌生。</p>
-        </div>
-        <div class="user-card reveal">
-          <div class="user-avatar">🌏</div>
-          <h3>小语种爱好者</h3>
-          <div class="user-scene">旅行 / 文化探索</div>
-          <p>100+ 种语言支持，泰语、越南语、阿拉伯语方言……主流 App 忽略的语言，这里都能学。</p>
-        </div>
+    <div class="ex-head reveal">
+      <h2 class="display">
+        五大题型，<br>
+        从<em>认</em>到<em>用</em>。
+      </h2>
+      <p class="lede">
+        从单词辨认到句子输出，阶梯式设计确保每一步都有挑战，每一步都有收获。
+      </p>
+    </div>
+
+    <div class="ex-table">
+      <div class="ex-row reveal">
+        <div class="ex-phase">阶段 01</div>
+        <div class="ex-name">单词选择题</div>
+        <div class="ex-desc">看到目标语言单词，从四个母语释义中选出正确答案。答对后展开完整单词卡：丰富释义、词形变化、例句、记忆辅助。</div>
+        <div class="ex-demo"><span class="hl">abandon</span> → 废弃 / 采纳 / 伴随 / 仰慕 ✓</div>
+      </div>
+      <div class="ex-row reveal">
+        <div class="ex-phase">阶段 01</div>
+        <div class="ex-name">句子翻译排序</div>
+        <div class="ex-desc">将打乱的母语翻译片段拖拽排列成正确顺序，训练对句子结构和语义的理解。</div>
+        <div class="ex-demo"><span class="hl">他 / 放弃了 / 这个 / 计划</span> → 拖拽排序</div>
+      </div>
+      <div class="ex-row reveal">
+        <div class="ex-phase">阶段 01</div>
+        <div class="ex-name">听力理解</div>
+        <div class="ex-desc">听 AI 朗读句子，从四个翻译选项中选出正确含义。语音合成支持多种语言，可随时点击重听。</div>
+        <div class="ex-demo">🔊 <span class="hl">He abandoned the plan.</span> → 选出正确翻译</div>
+      </div>
+      <div class="ex-row reveal">
+        <div class="ex-phase p2">阶段 02</div>
+        <div class="ex-name">遮蔽填空</div>
+        <div class="ex-desc">原文中随机遮蔽若干单词，从候选词池中选出正确单词填入空位。同一句子多次出现，每次遮蔽不同位置。</div>
+        <div class="ex-demo">He <span class="hl">___</span> the plan. → 候选：abandon / adopted / ...</div>
+      </div>
+      <div class="ex-row reveal">
+        <div class="ex-phase p2">阶段 02</div>
+        <div class="ex-name">翻译重组</div>
+        <div class="ex-desc">看到原文句子，将打乱的母语翻译片段重新排列成正确顺序。需要自己理解原文并组织翻译。</div>
+        <div class="ex-demo">原文：<span class="hl">He abandoned the plan.</span> → 重组翻译</div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════ VALUE ═══════════════ -->
-  <section class="value-section" id="value">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">价值与意义</div>
-        <h2 class="section-title">为什么呱邻国值得做？</h2>
-      </div>
+  <!-- ═══════════════ 05 — USERS ═══════════════ -->
+  <section class="spread spread-users">
+    <div class="sec-index reveal">
+      <span class="num">05</span><span class="of">/ 08</span> · 目标用户
+    </div>
 
-      <div class="value-grid">
-        <div class="value-block commercial reveal">
-          <div class="value-icon">💰</div>
-          <h3>商业价值</h3>
-          <p>语言学习市场规模超百亿美元，但现有产品同质化严重。呱邻国以"个性化内容 + AI 自动生成"切入，用户只需一个 API Key 即可使用，极低的获客和运营成本。未来可拓展订阅制、API 服务、企业定制等多元变现模式。</p>
-        </div>
-        <div class="value-block efficiency reveal">
-          <div class="value-icon">⚡</div>
-          <h3>效率提升</h3>
-          <p>传统方式：查词 → 复制到 Anki → 手动做卡片 → 忘记复习。呱邻国：粘贴文本 → AI 一键生成全部内容 → 立刻开始练习。从"看到生词"到"开始学习"的时间从数小时缩短到数秒。</p>
-        </div>
-        <div class="value-block social reveal">
-          <div class="value-icon">🌱</div>
-          <h3>社会价值</h3>
-          <p>降低语言学习门槛，让资源匮乏的小语种学习者也能获得高质量学习材料。开源模式（AGPL v3）确保社区可以自由使用和改进，推动教育公平。任何人在任何地方，只要有网络和 API，就能学习任何语言。</p>
-        </div>
+    <div class="users-head reveal">
+      <h2 class="display">
+        谁需要<em>呱邻国</em>？
+      </h2>
+      <p class="lede">
+        任何想要用自己感兴趣的内容学外语的人——从考试备考到兴趣阅读，从职场提升到旅行准备。
+      </p>
+    </div>
+
+    <div class="users-grid">
+      <div class="user-card reveal">
+        <div class="user-num">U · 01</div>
+        <h3>语言学习者</h3>
+        <div class="user-scene">备考 / 日常提升</div>
+        <p>厌倦了固定教材？粘贴你喜欢的文章、新闻、播客文本，立刻生成专属练习，让学习不再枯燥。</p>
+      </div>
+      <div class="user-card reveal">
+        <div class="user-num">U · 02</div>
+        <h3>职场人士</h3>
+        <div class="user-scene">外企沟通 / 专业阅读</div>
+        <p>把工作邮件、行业报告变成学习材料，学到的就是用得上的，专业术语不再陌生。</p>
+      </div>
+      <div class="user-card reveal">
+        <div class="user-num">U · 03</div>
+        <h3>小语种爱好者</h3>
+        <div class="user-scene">旅行 / 文化探索</div>
+        <p>100+ 种语言支持，泰语、越南语、阿拉伯语方言……主流 App 忽略的语言，这里都能学。</p>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════ TECH ═══════════════ -->
-  <section class="tech-section" id="tech">
-    <div class="section">
-      <div class="reveal">
-        <div class="section-label">技术架构</div>
-        <h2 class="section-title">纯 LLM 驱动，零手工规则</h2>
-        <p class="section-desc">
-          从句子解析、单词划分到释义生成，全程由 LLM 完成。精心设计的 prompt 与结构化输出格式，确保 AI 返回的数据干净、可解析、可直接使用。
-        </p>
-      </div>
+  <!-- ═══════════════ 06 — VALUE ═══════════════ -->
+  <section class="spread spread-value">
+    <div class="sec-index reveal">
+      <span class="num">06</span><span class="of">/ 08</span> · 价值与意义
+    </div>
 
-      <div class="tech-stack reveal">
-        <span class="tech-tag"><span class="dot" style="background:#61dafb"></span>React 18</span>
-        <span class="tech-tag"><span class="dot" style="background:#646cff"></span>Vite</span>
-        <span class="tech-tag"><span class="dot" style="background:#38bdf8"></span>TailwindCSS</span>
-        <span class="tech-tag"><span class="dot" style="background:#ff6b6b"></span>Framer Motion</span>
-        <span class="tech-tag"><span class="dot" style="background:#009688"></span>FastAPI</span>
-        <span class="tech-tag"><span class="dot" style="background:#3776ab"></span>Python 3.10+</span>
-        <span class="tech-tag"><span class="dot" style="background:#47a248"></span>SQLite</span>
-        <span class="tech-tag"><span class="dot" style="background:#47848f"></span>Electron</span>
-        <span class="tech-tag"><span class="dot" style="background:#74aa9c"></span>OpenAI API</span>
-        <span class="tech-tag"><span class="dot" style="background:#f59e0b"></span>Web Speech API</span>
-      </div>
+    <div class="value-head reveal">
+      <h2 class="display">
+        为什么<em>值得做</em>？
+      </h2>
+    </div>
 
-      <div class="tech-features reveal">
-        <div class="tech-feature">
-          <h4>多 API Key 轮询</h4>
-          <p>支持配置多组 API Key，限速时自动切换，确保学习不中断。内置智能重试和错误恢复机制。</p>
-        </div>
-        <div class="tech-feature">
-          <h4>极致节省 Token</h4>
-          <p>精简 prompt、压缩输出格式、避免冗余字段，将 token 消耗降至最低，降低 API 成本。</p>
-        </div>
-        <div class="tech-feature">
-          <h4>跨平台桌面应用</h4>
-          <p>Electron + PyInstaller 打包，支持 Windows / macOS / Linux，也可 Docker 部署或从源码运行。</p>
-        </div>
-        <div class="tech-feature">
-          <h4>100+ 语言支持</h4>
-          <p>覆盖印欧语系、汉藏语系、亚非语系、南岛语系、达罗毗荼语系、突厥语系等主要语族。</p>
-        </div>
-        <div class="tech-feature">
-          <h4>界面多语言</h4>
-          <p>内置中英日韩等语言包，其他语言由 LLM 实时翻译 UI 文本，实现真正的国际化。</p>
-        </div>
-        <div class="tech-feature">
-          <h4>语音朗读</h4>
-          <p>Web Speech API 驱动的 TTS 朗读，单词和例句随时可听，支持听力理解练习。</p>
-        </div>
+    <div class="value-grid">
+      <div class="value-block commercial reveal">
+        <div class="v-label">V · 01 — 商业价值</div>
+        <h3>低成本的<em>切入</em></h3>
+        <p>语言学习市场规模超百亿美元，但现有产品同质化严重。呱邻国以"个性化内容 + AI 自动生成"切入，用户只需一个 API Key 即可使用，极低获客和运营成本。未来可拓展订阅制、API 服务、企业定制等多元变现。</p>
       </div>
-
-      <!-- Language Cloud -->
-      <div class="reveal" style="margin-top: 3rem; text-align: center;">
-        <p style="font-size: 0.85rem; color: var(--ink-muted); margin-bottom: 1rem;">支持的语言（部分展示）</p>
-        <div class="lang-cloud">
-          <span class="lang-chip" style="background:#dc2626">中文</span>
-          <span class="lang-chip" style="background:#3b82f6">English</span>
-          <span class="lang-chip" style="background:#dc2626">日本語</span>
-          <span class="lang-chip" style="background:#1d4ed8">한국어</span>
-          <span class="lang-chip" style="background:#ef4444">Español</span>
-          <span class="lang-chip" style="background:#6366f1">Français</span>
-          <span class="lang-chip" style="background:#eab308">Deutsch</span>
-          <span class="lang-chip" style="background:#16a34a">Italiano</span>
-          <span class="lang-chip" style="background:#22c55e">Português</span>
-          <span class="lang-chip" style="background:#1d4ed8">Русский</span>
-          <span class="lang-chip" style="background:#7c3aed">ไทย</span>
-          <span class="lang-chip" style="background:#dc2626">Tiếng Việt</span>
-          <span class="lang-chip" style="background:#16a34a">العربية</span>
-          <span class="lang-chip" style="background:#2563eb">עברית</span>
-          <span class="lang-chip" style="background:#f97316">हिन्दी</span>
-          <span class="lang-chip" style="background:#dc2626">Türkçe</span>
-          <span class="lang-chip" style="background:#1d4ed8">Suomi</span>
-          <span class="lang-chip" style="background:#16a34a">Magyar</span>
-          <span class="lang-chip" style="background:#f97316">বাংলা</span>
-          <span class="lang-chip" style="background:#f97316">தமிழ்</span>
-          <span class="lang-chip" style="background:#ef4444">Indonesia</span>
-          <span class="lang-chip" style="background:#16a34a">Kiswahili</span>
-          <span class="lang-chip" style="background:#dc2626">Yue</span>
-          <span class="lang-chip" style="background:#eab308">Myanmar</span>
-          <span class="lang-chip" style="background:#2563eb">ქართული</span>
-          <span class="lang-chip" style="background:#0ea5e9">Euskara</span>
-          <span class="lang-chip" style="background:#78716c">100+ ...</span>
-        </div>
+      <div class="value-block efficiency reveal">
+        <div class="v-label">V · 02 — 效率提升</div>
+        <h3>从小时到<em>数秒</em></h3>
+        <p>传统方式：查词 → 复制到 Anki → 手动做卡片 → 忘记复习。呱邻国：粘贴文本 → AI 一键生成全部内容 → 立刻开始练习。从"看到生词"到"开始学习"的时间从数小时缩短到数秒。</p>
+      </div>
+      <div class="value-block social reveal">
+        <div class="v-label">V · 03 — 社会价值</div>
+        <h3>教育<em>公平</em></h3>
+        <p>降低语言学习门槛，让资源匮乏的小语种学习者也能获得高质量学习材料。开源模式（AGPL v3）确保社区可以自由使用和改进。任何人在任何地方，只要有网络和 API，就能学习任何语言。</p>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════ FOOTER ═══════════════ -->
-  <footer class="footer">
-    <svg class="footer-frog" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="50" cy="58" rx="38" ry="32" fill="#B5AE8E"/>
-      <ellipse cx="50" cy="55" rx="34" ry="28" fill="#D8D4BF"/>
-      <circle cx="34" cy="38" r="16" fill="#B5AE8E"/>
-      <circle cx="66" cy="38" r="16" fill="#B5AE8E"/>
-      <circle cx="34" cy="38" r="13" fill="#fff"/>
-      <circle cx="66" cy="38" r="13" fill="#fff"/>
-      <circle cx="36" cy="37" r="6" fill="#524D3C"/>
-      <circle cx="68" cy="37" r="6" fill="#524D3C"/>
-      <circle cx="38" cy="35" r="2" fill="#fff"/>
-      <circle cx="70" cy="35" r="2" fill="#fff"/>
-      <ellipse cx="50" cy="62" rx="18" ry="8" fill="#E8C985"/>
-      <path d="M38 60 Q50 70 62 60" stroke="#524D3C" stroke-width="2" fill="none" stroke-linecap="round"/>
-    </svg>
-    <p>
-      <strong>呱邻国 Gualingo</strong> — AI 驱动的沉浸式外语学习平台<br>
-      开源协议：AGPL v3 · <a href="https://github.com/rhouselyn/Gualingo" target="_blank">GitHub</a><br>
-      用 TRAE 构建 · 2025
-    </p>
-  </footer>
+  <!-- ═══════════════ 07 — TECH ═══════════════ -->
+  <section class="spread spread-tech">
+    <div class="sec-index reveal">
+      <span class="num">07</span><span class="of">/ 08</span> · 技术架构
+    </div>
+
+    <div class="tech-head reveal">
+      <h2 class="display">
+        纯 LLM 驱动，<br>
+        <em>零手工规则</em>。
+      </h2>
+      <p class="lede">
+        从句子解析、单词划分到释义生成，全程由 LLM 完成。精心设计的 prompt 与结构化输出格式，确保 AI 返回的数据干净、可解析、可直接使用。
+      </p>
+    </div>
+
+    <div class="tech-stack reveal">
+      <span class="tech-tag"><span class="dot" style="background:#61dafb"></span>React 18</span>
+      <span class="tech-tag"><span class="dot" style="background:#646cff"></span>Vite</span>
+      <span class="tech-tag"><span class="dot" style="background:#38bdf8"></span>TailwindCSS</span>
+      <span class="tech-tag"><span class="dot" style="background:#ff6b6b"></span>Framer Motion</span>
+      <span class="tech-tag"><span class="dot" style="background:#009688"></span>FastAPI</span>
+      <span class="tech-tag"><span class="dot" style="background:#3776ab"></span>Python 3.10+</span>
+      <span class="tech-tag"><span class="dot" style="background:#47a248"></span>SQLite</span>
+      <span class="tech-tag"><span class="dot" style="background:#47848f"></span>Electron</span>
+      <span class="tech-tag"><span class="dot" style="background:#74aa9c"></span>OpenAI API</span>
+      <span class="tech-tag"><span class="dot" style="background:#f59e0b"></span>Web Speech API</span>
+    </div>
+
+    <div class="tech-features reveal">
+      <div class="tech-feature">
+        <h4>多 API Key 轮询</h4>
+        <p>支持配置多组 API Key，限速时自动切换，确保学习不中断。内置智能重试和错误恢复。</p>
+      </div>
+      <div class="tech-feature">
+        <h4>极致节省 Token</h4>
+        <p>精简 prompt、压缩输出格式、避免冗余字段，将 token 消耗降至最低，降低 API 成本。</p>
+      </div>
+      <div class="tech-feature">
+        <h4>跨平台桌面应用</h4>
+        <p>Electron + PyInstaller 打包，支持 Windows / macOS / Linux，也可 Docker 部署或源码运行。</p>
+      </div>
+      <div class="tech-feature">
+        <h4>100+ 语言支持</h4>
+        <p>覆盖印欧、汉藏、亚非、南岛、达罗毗荼、突厥等主要语族。</p>
+      </div>
+      <div class="tech-feature">
+        <h4>界面多语言</h4>
+        <p>内置中英日韩等语言包，其他语言由 LLM 实时翻译 UI 文本，实现真正国际化。</p>
+      </div>
+      <div class="tech-feature">
+        <h4>语音朗读</h4>
+        <p>Web Speech API 驱动的 TTS 朗读，单词和例句随时可听，支持听力理解练习。</p>
+      </div>
+    </div>
+
+    <div class="lang-cloud-section reveal">
+      <div class="lc-label">支持的语言（部分展示）</div>
+      <div class="lang-cloud">
+        <span class="lang-chip" style="background:#A8351F">中文</span>
+        <span class="lang-chip" style="background:#2B5C8A">English</span>
+        <span class="lang-chip" style="background:#A8351F">日本語</span>
+        <span class="lang-chip" style="background:#1F4068">한국어</span>
+        <span class="lang-chip" style="background:#C44A33">Español</span>
+        <span class="lang-chip" style="background:#3A5A8A">Français</span>
+        <span class="lang-chip" style="background:#B8860B">Deutsch</span>
+        <span class="lang-chip" style="background:#3A5A40">Italiano</span>
+        <span class="lang-chip" style="background:#4A7C59">Português</span>
+        <span class="lang-chip" style="background:#1F4068">Русский</span>
+        <span class="lang-chip" style="background:#6B3FA0">ไทย</span>
+        <span class="lang-chip" style="background:#A8351F">Tiếng Việt</span>
+        <span class="lang-chip" style="background:#3A5A40">العربية</span>
+        <span class="lang-chip" style="background:#2B5C8A">עברית</span>
+        <span class="lang-chip" style="background:#D97706">हिन्दी</span>
+        <span class="lang-chip" style="background:#A8351F">Türkçe</span>
+        <span class="lang-chip" style="background:#1F4068">Suomi</span>
+        <span class="lang-chip" style="background:#3A5A40">Magyar</span>
+        <span class="lang-chip" style="background:#D97706">বাংলা</span>
+        <span class="lang-chip" style="background:#D97706">தமிழ்</span>
+        <span class="lang-chip" style="background:#C44A33">Indonesia</span>
+        <span class="lang-chip" style="background:#3A5A40">Kiswahili</span>
+        <span class="lang-chip" style="background:#A8351F">Yue</span>
+        <span class="lang-chip" style="background:#B8860B">Myanmar</span>
+        <span class="lang-chip" style="background:#2B5C8A">ქართული</span>
+        <span class="lang-chip" style="background:#3B82C4">Euskara</span>
+        <span class="lang-chip more">100+ …</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 08 — CLOSING (MIRRORS OPENING) ═══════════════ -->
+  <section class="spread spread-closing">
+    <div class="sec-index anim-1">
+      <span class="num">08</span><span class="of">/ 08</span> · 结语 · 谢谢聆听
+    </div>
+
+    <div class="closing-grid">
+      <div>
+        <h2 class="display closing-headline anim-2">
+          谢谢<br>
+          <span class="line-2"><span class="accent-word">聆听</span>。</span>
+        </h2>
+
+        <div class="closing-signature anim-4">
+          <div class="thanks">让<em>每段文字</em>，<br>都成<em>课本</em>。</div>
+          <div class="thanks-note">— Gualingo · 2026</div>
+        </div>
+      </div>
+
+      <aside class="closing-side">
+        <div class="closing-product anim-3">
+          <div class="cp-label">关于本项目</div>
+          <div class="cp-name">呱邻国</div>
+          <div class="cp-en">Gualingo</div>
+          <p class="cp-tagline">
+            完全由 AI 驱动的沉浸式外语学习平台。输入任意文本，AI 自动生成词汇表、分句翻译和多种练习题——把每一段文字都变成你的专属学习材料。
+          </p>
+        </div>
+
+        <div class="closing-meta anim-4">
+          <div class="meta-item">
+            <div class="ml">开源协议</div>
+            <div class="mv">AGPL v3</div>
+          </div>
+          <div class="meta-item">
+            <div class="ml">代码仓库</div>
+            <div class="mv"><a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener">GitHub ↗</a></div>
+          </div>
+          <div class="meta-item">
+            <div class="ml">构建工具</div>
+            <div class="mv">TRAE</div>
+          </div>
+          <div class="meta-item">
+            <div class="ml">年份</div>
+            <div class="mv">2026</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
 
   <script>
     // Scroll reveal
@@ -1129,12 +1466,11 @@
         if (entry.isIntersecting) {
           setTimeout(() => {
             entry.target.classList.add('visible');
-          }, i * 80);
+          }, i * 70);
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
     reveals.forEach(el => observer.observe(el));
   </script>
 </body>
