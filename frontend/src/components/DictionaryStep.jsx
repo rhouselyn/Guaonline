@@ -563,7 +563,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       speakText(wordKey, sourceLang)
       fetchWordDetail(wordKey)
     }, 150)
-  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab])
+
+    // 手机端：点击句子中的单词后自动滑动到词汇表面板
+    if (!isDesktop && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ left: scrollContainerRef.current.clientWidth, behavior: 'smooth' })
+      setActivePanel(1)
+    }
+  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -956,11 +962,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </motion.button>
       </div>
 
-      {/* 手机横向滑动指示器 */}
+      {/* 手机横向滑动滑块指示器 */}
       {!isDesktop && (
-        <div className="flex justify-center gap-2 py-2 md:hidden">
-          <span className={`w-2 h-2 rounded-full transition-colors ${activePanel === 0 ? 'bg-amber-400' : 'bg-aged-300'}`} />
-          <span className={`w-2 h-2 rounded-full transition-colors ${activePanel === 1 ? 'bg-amber-400' : 'bg-aged-300'}`} />
+        <div className="flex justify-center py-2 md:hidden">
+          <div className="relative w-16 h-1 bg-aged-200 rounded-full overflow-hidden">
+            <div className={`absolute top-0 left-0 h-full w-1/2 bg-amber-400 rounded-full transition-transform duration-200 ${activePanel === 1 ? 'translate-x-full' : ''}`} />
+          </div>
         </div>
       )}
 
