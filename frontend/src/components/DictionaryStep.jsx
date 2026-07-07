@@ -969,12 +969,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         )}
 
+        {/* 桌面端显示"开始学习"按钮，手机端移到底部栏 */}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
           disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
-          className="btn-primary flex items-center gap-2 shrink-0"
+          className="hidden md:flex btn-primary items-center gap-2 shrink-0"
         >
           {(loading || preprocessStatus) ? (
             <>
@@ -989,34 +990,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           )}
         </motion.button>
       </div>
-
-      {/* 手机端 Tab 式切换器 */}
-      {!isDesktop && (
-        <div className="flex gap-1 p-1 mb-2 bg-aged-100/60 rounded-lg md:hidden">
-          <button
-            onClick={() => switchPanel(0)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
-              activePanel === 0
-                ? 'bg-parchment-50 text-amber-700 shadow-retro-sm'
-                : 'text-ink-500 hover:text-ink-700'
-            }`}
-          >
-            <Languages className="w-3.5 h-3.5" />
-            {t.sentTranslation || '句子翻译'}
-          </button>
-          <button
-            onClick={() => switchPanel(1)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
-              activePanel === 1
-                ? 'bg-parchment-50 text-amber-700 shadow-retro-sm'
-                : 'text-ink-500 hover:text-ink-700'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            {t.vocabulary || '词汇表'}
-          </button>
-        </div>
-      )}
 
       <div
         ref={scrollContainerRef}
