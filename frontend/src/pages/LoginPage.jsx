@@ -35,6 +35,11 @@ function DotBackground() {
     const ctx = canvas.getContext('2d');
     let animId;
     let time = 0;
+    // 移动端使用更大的点距 + 更低的帧率，减少节点数与主线程占用
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const sp = isMobile ? 56 : 28;
+    const frameInterval = 1000 / (isMobile ? 30 : 60);
+    let lastDraw = 0;
     const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     resize();
     window.addEventListener('resize', resize);
@@ -43,7 +48,6 @@ function DotBackground() {
       const w = canvas.width, h = canvas.height;
       ctx.fillStyle = '#faf8f0';
       ctx.fillRect(0, 0, w, h);
-      const sp = 28;
       for (let x = sp / 2; x < w; x += sp) {
         for (let y = sp / 2; y < h; y += sp) {
           const d = Math.sqrt((x - w / 2) ** 2 + (y - h / 2) ** 2);
@@ -54,9 +58,16 @@ function DotBackground() {
           ctx.fill();
         }
       }
-      animId = requestAnimationFrame(draw);
     };
-    draw();
+    // 节流到目标帧率，移动端 ~30fps，桌面端 60fps
+    const animate = (now) => {
+      if (now - lastDraw >= frameInterval) {
+        draw();
+        lastDraw = now;
+      }
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
   }, []);
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
@@ -112,7 +123,7 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="bg-[#faf8f0]/90 backdrop-blur-sm border-2 border-[#d4c9a8] rounded-lg p-8 shadow-[4px_4px_0_#b5ae8e] relative"
+          className="bg-[#faf8f0]/90 backdrop-blur-sm border-2 border-[#d4c9a8] rounded-lg p-5 sm:p-8 shadow-[4px_4px_0_#b5ae8e] relative"
         >
           {/* 返回按钮 */}
           <motion.button
