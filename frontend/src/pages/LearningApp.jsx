@@ -1265,7 +1265,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-parchment-50 bg-paper-grain relative">
+    <div className="h-screen h-[100svh] overflow-hidden bg-parchment-50 bg-paper-grain relative">
       {/* 装饰性波点背景 */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-0"
         style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }}
