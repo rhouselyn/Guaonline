@@ -15,6 +15,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
   const scrollContainerRef = useRef(null)
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const touchStartTime = useRef(0)
   const [expandedWord, setExpandedWord] = useState(null)
   const [wordDetailCache, setWordDetailCache] = useState({})
   const [loadingWords, setLoadingWords] = useState({})
@@ -988,6 +991,31 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           if (isDesktop) return
           const idx = Math.round(e.target.scrollLeft / e.target.clientWidth)
           if (idx !== activePanel) setActivePanel(idx)
+        }}
+        onTouchStart={(e) => {
+          if (isDesktop) return
+          touchStartX.current = e.touches[0].clientX
+          touchStartY.current = e.touches[0].clientY
+          touchStartTime.current = Date.now()
+        }}
+        onTouchEnd={(e) => {
+          if (isDesktop) return
+          const dx = e.changedTouches[0].clientX - touchStartX.current
+          const dy = e.changedTouches[0].clientY - touchStartY.current
+          const dt = Date.now() - touchStartTime.current
+          // 横向位移大于纵向（避免误触垂直滚动）且滑动距离或速度达阈值
+          if (Math.abs(dx) < Math.abs(dy)) return
+          const container = scrollContainerRef.current
+          if (!container) return
+          const pageWidth = container.clientWidth
+          const currentIdx = Math.round(container.scrollLeft / pageWidth)
+          // 距离超过 1/4 页面，或速度超过 0.5px/ms
+          const isSwipe = Math.abs(dx) > pageWidth * 0.25 || (dt > 0 && Math.abs(dx) / dt > 0.5)
+          if (!isSwipe) return
+          const targetIdx = dx < 0 ? Math.min(1, currentIdx + 1) : Math.max(0, currentIdx - 1)
+          if (targetIdx === currentIdx) return
+          container.scrollTo({ left: targetIdx * pageWidth, behavior: 'smooth' })
+          setActivePanel(targetIdx)
         }}
         className="flex gap-0 md:gap-6 flex-1 min-h-0 md:overflow-hidden touch-scroll-x"
       >
