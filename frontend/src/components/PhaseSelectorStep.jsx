@@ -35,7 +35,7 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
           <p className="text-lg text-ink-600">{t.loading}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {phases.map((phase, index) => (
             <motion.div
               key={phase.phase_number}

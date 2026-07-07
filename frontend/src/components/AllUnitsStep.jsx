@@ -232,7 +232,7 @@ function AllUnitsStep({
       exit={{ opacity: 0, y: -20 }}
       className="w-full"
     >
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-1 sm:gap-2 flex-wrap mb-6">
         <button
           onClick={onBack}
           className="btn-ghost p-2"
@@ -241,7 +241,7 @@ function AllUnitsStep({
         </button>
 
         {fileTitle && (
-          <span className="text-base font-bold text-ink-500 truncate max-w-[240px]">
+          <span className="text-base font-bold text-ink-500 truncate max-w-[140px] sm:max-w-[240px]">
             {fileTitle}
           </span>
         )}
