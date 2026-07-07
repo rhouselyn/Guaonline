@@ -333,8 +333,8 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           <Type className="w-3 h-3" />
           {t.fontSize || '字体大小'}
         </label>
-        <div className="p-3 rounded-sm border-2 border-aged-200 bg-parchment-50">
-          <div className="flex items-center justify-between mb-2">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
             <span className="text-[10px] text-ink-400">{t.fontScaleDesc || '调整学习页面字号'}</span>
             <span className="text-[11px] font-bold text-amber-500 tabular-nums">{Math.round((isDesktop ? localFontScaleDesktop : localFontScaleMobile) * 100)}%</span>
           </div>
