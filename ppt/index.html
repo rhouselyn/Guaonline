@@ -7,8 +7,392 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/base.css">
-<link rel="stylesheet" href="assets/css/slides.css">
+<style>
+/* ════════════════════════════════════════════════
+   base.css · 明亮柑橘植物学基底
+   变量 / reset / HUD / 导航 / 排版 / 卡片基础 / 流动 canvas / 竖条纹
+════════════════════════════════════════════════ */
+:root{
+/* 明亮柑橘植物学配色 */
+--cream:#FFFEFB;          /* 几乎纯白带暖意 */
+--parchment:#FFF8EC;      /* 暖奶油 */
+--parchment-2:#FFF0D6;    /* 暖米 */
+--parchment-3:#FFE4B5;    /* 浅蜜 */
+--ink:#1A2620;            /* 深植物墨 */
+--ink-2:#3D4A3D;
+--ink-muted:#6B7A6B;
+--ink-dim:#A8B2A8;
+--leaf:#2DB671;           /* 鲜叶绿 */
+--leaf-deep:#16864F;
+--leaf-soft:#8FE3B5;
+--coral:#FF6B3D;          /* 活力珊瑚 */
+--coral-light:#FFA080;
+--coral-deep:#E04F22;
+--amber:#F5B12E;          /* 蜜糖琥珀 */
+--amber-light:#FFD874;
+--sun:#FFD93C;            /* 阳光黄 */
+--sky:#4FB3D9;            /* 点缀天蓝 */
+--frog-dark:#1F2A1F;
+--line:rgba(31,42,31,.12);
+--line-strong:rgba(31,42,31,.30);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;color:var(--ink);
+font-family:'Manrope','Noto Sans SC',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{background:
+  radial-gradient(ellipse 80% 60% at 15% 12%,rgba(255,107,61,0.14),transparent 60%),
+  radial-gradient(ellipse 70% 50% at 85% 82%,rgba(45,182,113,0.18),transparent 60%),
+  radial-gradient(ellipse 60% 40% at 50% 50%,rgba(245,177,46,0.12),transparent 70%),
+  var(--cream)}
+
+/* 全局细颗粒噪点（更轻） */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.03;
+background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+#stage{position:fixed;inset:0;overflow:hidden}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;
+padding:7vh 5vw 9vh;opacity:0;visibility:hidden;transition:opacity .55s ease,visibility .55s;
+pointer-events:none;overflow:auto}
+.slide.active{opacity:1;visibility:visible;pointer-events:auto}
+.slide::-webkit-scrollbar{width:6px}
+.slide::-webkit-scrollbar-thumb{background:var(--leaf-soft);border-radius:3px}
+
+/* 顶部 HUD */
+.hud{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;justify-content:space-between;
+align-items:center;padding:14px 28px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+letter-spacing:.18em;color:var(--ink-muted);text-transform:uppercase;pointer-events:none;
+background:linear-gradient(180deg,rgba(255,254,251,.92),transparent)}
+.hud .brand{color:var(--leaf-deep);font-weight:700;letter-spacing:.22em}
+.hud .brand .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--coral);
+margin-right:8px;box-shadow:0 0 8px var(--coral);animation:blink 2s infinite}
+.hud .right{display:flex;gap:22px}
+@keyframes blink{0%,55%{opacity:1}75%,100%{opacity:.25}}
+
+/* 底部导航 */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;padding:14px 28px;display:flex;
+justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;
+font-size:10.5px;color:var(--ink-muted);letter-spacing:.15em;
+background:linear-gradient(0deg,rgba(255,254,251,.92),transparent);pointer-events:none}
+.nav .dots{display:flex;gap:7px;pointer-events:auto}
+.nav .dots .dot{width:7px;height:7px;border-radius:50%;background:rgba(31,42,31,.22);
+cursor:pointer;transition:all .3s}
+.nav .dots .dot.active{background:var(--coral);box-shadow:0 0 8px var(--coral);transform:scale(1.4)}
+.nav .hint{opacity:.6}
+.nav .counter{color:var(--leaf-deep);font-weight:700}
+
+/* 排版工具类 */
+.serif{font-family:'Noto Serif SC','Fraunces',serif}
+.pf{font-family:'Fraunces',serif}
+.mono{font-family:'JetBrains Mono',monospace}
+.label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.32em;
+color:var(--coral);text-transform:uppercase;display:inline-flex;align-items:center;gap:10px}
+.label::before{content:'';width:24px;height:1px;background:var(--coral)}
+h1.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(34px,5vw,68px);
+line-height:1.05;letter-spacing:-.01em;color:var(--ink)}
+h2.title{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(26px,3.4vw,44px);
+line-height:1.1;letter-spacing:-.01em;color:var(--ink)}
+.lede{font-size:clamp(14.5px,1.35vw,17px);line-height:1.75;color:var(--ink-2);max-width:64ch}
+.strong{color:var(--leaf-deep);font-weight:700}
+.amber{color:var(--amber)}
+.coral{color:var(--coral)}
+.italic{font-style:italic}
+
+/* 网格容器 */
+.wrap{max-width:1340px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;
+justify-content:center;gap:28px}
+
+/* 卡片基础 */
+.card{background:var(--cream);border:1px solid var(--line);border-radius:8px;padding:22px;
+position:relative;transition:all .3s;box-shadow:0 1px 3px rgba(31,42,31,.05)}
+.card:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 6px 20px rgba(31,42,31,.1)}
+.card .idx{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--amber);
+letter-spacing:.25em;margin-bottom:10px}
+.card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:18px;color:var(--ink);
+margin-bottom:10px;line-height:1.25}
+.card p{font-size:13.5px;line-height:1.7;color:var(--ink-2)}
+.card.accent{border-left:3px solid var(--leaf)}
+.card.warn{border-left:3px solid var(--coral)}
+.card.gold{border-left:3px solid var(--amber)}
+
+/* 流动字符 canvas */
+canvas.flow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.vignette{position:absolute;inset:0;pointer-events:none;z-index:1;
+background:radial-gradient(ellipse at center,transparent 50%,rgba(255,254,251,.35) 100%)}
+.grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;
+background-image:linear-gradient(rgba(31,42,31,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(31,42,31,.06) 1px,transparent 1px);
+background-size:56px 56px;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%)}
+
+/* 竖条纹渐变背景（明亮发布会质感） */
+.stripes-bg{position:absolute;inset:0;pointer-events:none;z-index:0;
+background:repeating-linear-gradient(90deg,
+  rgba(45,182,113,0.42) 0px,
+  rgba(255,217,60,0.36) 90px,
+  rgba(245,177,46,0.46) 180px,
+  rgba(255,107,61,0.40) 270px,
+  rgba(143,227,181,0.34) 360px,
+  rgba(45,182,113,0.42) 450px);
+background-size:450px 100%}
+.slide>*:not(canvas):not(.vignette):not(.grid-bg):not(.stripes-bg){position:relative;z-index:2}
+
+/* 入场动画 */
+.fade-up{opacity:0;transform:translateY(26px);transition:all .8s cubic-bezier(.2,.7,.2,1)}
+.slide.active .fade-up{opacity:1;transform:translateY(0)}
+.slide.active .fade-up.d1{transition-delay:.1s}
+.slide.active .fade-up.d2{transition-delay:.25s}
+.slide.active .fade-up.d3{transition-delay:.4s}
+.slide.active .fade-up.d4{transition-delay:.55s}
+.slide.active .fade-up.d5{transition-delay:.7s}
+
+/* 通用毛玻璃卡片（更明亮通透） */
+.glass{
+  background:rgba(255,255,255,0.36);
+  backdrop-filter:blur(22px) saturate(1.8);
+  -webkit-backdrop-filter:blur(22px) saturate(1.8);
+  border:1px solid rgba(255,255,255,0.6);
+  border-radius:12px;
+  box-shadow:0 12px 40px rgba(31,42,31,.10),inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+/* 响应式 */
+@media(max-width:1024px){
+#s2 .cmp,#s4 .arch-main,#s6 .tc-grid{grid-template-columns:1fr}
+#s2 .scenes,#s7 .val-grid,#s8 .tiers{grid-template-columns:1fr}
+#s3 .price-table{grid-template-columns:1fr;font-size:12px}
+#s7 .strip{grid-template-columns:repeat(2,1fr)}
+#s8 .roadmap{flex-direction:column}
+}
+
+/* ════════════════════════════════════════════════
+   slides.css · 各幻灯片专属样式（明亮柑橘植物学）
+   页面顺序：1 封面 / 2 痛点 / 3 有道对比 / 4 架构 /
+            5 200 语言 / 6 工具调用 / 7 SaaS / 8 订阅 / 9 CTA
+════════════════════════════════════════════════ */
+
+/* ════════ Slide 1 · 封面 ════════ */
+#s1{justify-content:center;align-items:center;text-align:center}
+#s1 .lockup{position:relative;z-index:3;max-width:900px;padding:48px 56px;
+background:rgba(255,255,255,0.38);
+backdrop-filter:blur(24px) saturate(1.8);
+-webkit-backdrop-filter:blur(24px) saturate(1.8);
+border:1px solid rgba(255,255,255,0.6);
+border-radius:14px;
+box-shadow:0 18px 60px rgba(31,42,31,.14),inset 0 1px 0 rgba(255,255,255,0.8)}
+#s1 .brand-big{font-family:'Noto Serif SC',serif;font-weight:900;
+font-size:clamp(80px,13vw,200px);line-height:.95;color:var(--ink);
+letter-spacing:.02em;text-shadow:3px 3px 0 var(--amber-light)}
+#s1 .brand-en{font-family:'Fraunces',serif;font-weight:400;
+font-size:clamp(20px,2.4vw,32px);color:var(--leaf-deep);letter-spacing:.55em;
+text-transform:uppercase;margin-top:12px}
+#s1 .tag{font-size:clamp(16px,1.6vw,21px);color:var(--ink-2);line-height:1.7;
+margin-top:32px;max-width:58ch}
+#s1 .tag b{color:var(--coral);font-weight:700}
+#s1 .meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-muted);
+letter-spacing:.3em;margin-top:28px;text-transform:uppercase}
+
+/* ════════ Slide 2 · 痛点 + 多邻国 ════════ */
+#s2 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+#s2 .col{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:26px}
+#s2 .col.pro{border-top:4px solid var(--leaf)}
+#s2 .col.con{border-top:4px solid var(--coral)}
+#s2 .col h3{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;margin-bottom:6px}
+#s2 .col .sub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);
+letter-spacing:.2em;margin-bottom:16px;text-transform:uppercase}
+#s2 .col.pro h3{color:var(--leaf-deep)}
+#s2 .col.con h3{color:var(--coral)}
+#s2 .item{display:flex;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;line-height:1.55}
+#s2 .item:last-child{border-bottom:none}
+#s2 .item .mk{flex-shrink:0;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;
+justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
+#s2 .col.pro .item .mk{background:rgba(45,182,113,.20);color:var(--leaf-deep)}
+#s2 .col.con .item .mk{background:rgba(255,107,61,.20);color:var(--coral)}
+#s2 .item .t{color:var(--ink);font-weight:500}
+#s2 .item .t b{color:var(--amber);font-weight:700}
+#s2 .scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:6px}
+#s2 .scene{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:16px;
+border-left:3px solid var(--amber)}
+#s2 .scene .ic{font-size:22px;margin-bottom:8px}
+#s2 .scene h4{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px}
+#s2 .scene p{font-size:12px;color:var(--ink-2);line-height:1.6}
+#s2 .scene .ex{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--coral);
+margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+
+/* ════════ Slide 3 · 有道对比 ════════ */
+#s3 .price-table{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;border:1.5px solid var(--line-strong);
+border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8)}
+#s3 .pt-head{display:contents}
+#s3 .pt-head>div{background:var(--parchment-2);padding:14px 18px;font-family:'JetBrains Mono',monospace;
+font-size:11px;color:var(--ink-muted);letter-spacing:.2em;text-transform:uppercase}
+#s3 .pt-head>div:nth-child(2){color:var(--coral)}
+#s3 .pt-head>div:nth-child(3){color:var(--leaf-deep)}
+#s3 .pt-row{display:contents}
+#s3 .pt-row>div{padding:14px 18px;border-top:1px solid var(--line);font-size:13px;line-height:1.55}
+#s3 .pt-row>div:first-child{color:var(--ink);font-weight:500;background:rgba(255,240,214,.5)}
+#s3 .pt-row>div:nth-child(2){color:var(--ink-muted)}
+#s3 .pt-row>div:nth-child(3){color:var(--leaf-deep);font-weight:500}
+#s3 .pt-row .price{font-family:'Fraunces',serif;font-weight:900;font-size:22px;color:var(--ink)}
+#s3 .pt-row .price.bad{color:var(--coral)}
+#s3 .pt-row .price.good{color:var(--leaf-deep)}
+#s3 .pt-row .unit{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-dim)}
+#s3 .conclusion{padding:18px 22px;border-left:4px solid var(--amber);background:rgba(245,177,46,.14);
+border-radius:0 8px 8px 0;font-size:14.5px;line-height:1.7;color:var(--ink)}
+#s3 .conclusion b{color:var(--coral)}
+
+/* ════════ Slide 4 · 架构理念 ════════ */
+#s4 .arch-main{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;align-items:stretch}
+#s4 .arch-left{display:flex;flex-direction:column;gap:14px}
+#s4 .arch-left .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--coral);
+letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
+#s4 .mode{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+border-left:4px solid var(--leaf);display:flex;gap:14px;align-items:flex-start;flex:1}
+#s4 .mode .pn{font-family:'Fraunces',serif;font-weight:900;font-size:28px;color:var(--amber);
+line-height:1;flex-shrink:0;width:34px}
+#s4 .mode .body h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:5px}
+#s4 .mode .body p{font-size:12.5px;line-height:1.65;color:var(--ink-2)}
+#s4 .mode .body p b{color:var(--coral)}
+#s4 .arch-right{display:flex;flex-direction:column;gap:14px}
+#s4 .arch-right .ttl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--coral);
+letter-spacing:.25em;text-transform:uppercase;margin-bottom:2px}
+#s4 .flow-v{display:flex;flex-direction:column;gap:8px;flex:1}
+#s4 .fv-step{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:13px 16px;
+display:flex;gap:12px;align-items:center;position:relative;flex:1}
+#s4 .fv-step .n{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);font-weight:700;
+letter-spacing:.15em;flex-shrink:0;width:28px}
+#s4 .fv-step .ic{font-size:18px;flex-shrink:0;width:24px;text-align:center}
+#s4 .fv-step .body{flex:1}
+#s4 .fv-step .body .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;color:var(--ink);line-height:1.2}
+#s4 .fv-step .body .d{font-size:11.5px;color:var(--ink-muted);margin-top:3px;line-height:1.45}
+#s4 .fv-step:not(:last-child)::after{content:'↓';position:absolute;left:21px;bottom:-13px;
+color:var(--leaf);font-size:14px;font-weight:700;z-index:2}
+#s4 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
+#s4 .cmp-col{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+#s4 .cmp-col.bad{border-top:3px solid var(--coral)}
+#s4 .cmp-col.good{border-top:3px solid var(--leaf)}
+#s4 .cmp-col .h{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;margin-bottom:10px}
+#s4 .cmp-col.bad .h{color:var(--coral)}
+#s4 .cmp-col.good .h{color:var(--leaf-deep)}
+#s4 .cmp-col ul{list-style:none}
+#s4 .cmp-col li{font-size:12.5px;color:var(--ink-2);padding:5px 0 5px 14px;position:relative;line-height:1.5}
+#s4 .cmp-col.bad li::before{content:'✗';position:absolute;left:0;color:var(--coral);font-weight:700}
+#s4 .cmp-col.good li::before{content:'✓';position:absolute;left:0;color:var(--leaf-deep);font-weight:700}
+#s4 .cmp-col li b{color:var(--ink);font-weight:700}
+
+/* ════════ Slide 5 · 200 语言 ════════ */
+#s5{padding:0;justify-content:center;align-items:center}
+#s5 .center{position:relative;z-index:5;text-align:center;
+background:rgba(255,255,255,0.38);
+backdrop-filter:blur(24px) saturate(1.8);
+-webkit-backdrop-filter:blur(24px) saturate(1.8);
+border:1px solid rgba(255,255,255,0.6);
+border-radius:14px;
+box-shadow:0 18px 60px rgba(31,42,31,.14),inset 0 1px 0 rgba(255,255,255,0.8);
+padding:64px 80px;margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:center;
+max-width:90%}
+#s5 .center .num{font-family:'Fraunces',serif;font-weight:900;
+font-size:clamp(120px,22vw,300px);color:var(--ink);line-height:.85;
+text-shadow:4px 4px 0 var(--amber-light)}
+#s5 .center .num .plus{color:var(--coral)}
+#s5 .center .lbl{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--leaf-deep);
+letter-spacing:.45em;text-transform:uppercase;margin-top:20px}
+#s5 .center .sub{font-size:15px;color:var(--ink-2);margin-top:24px;max-width:42ch;line-height:1.7}
+#s5 .center .sub b{color:var(--coral);font-weight:700}
+#s5 .center .pairs{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:24px;max-width:64ch}
+#s5 .center .pr{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);
+background:rgba(255,255,255,0.5);border:1px solid var(--line);padding:4px 10px;border-radius:4px;letter-spacing:.05em}
+#s5 .center .pr b{color:var(--coral)}
+
+/* ════════ Slide 6 · 工具调用 ════════ */
+#s6 .tc-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:28px;align-items:start}
+#s6 .tc-left{display:flex;flex-direction:column;gap:18px}
+#s6 .tc-card{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:20px;
+border-left:4px solid var(--leaf)}
+#s6 .tc-card .ic{font-family:'Fraunces',serif;font-weight:900;font-size:24px;color:var(--amber);margin-bottom:6px}
+#s6 .tc-card h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
+#s6 .tc-card p{font-size:13px;line-height:1.7;color:var(--ink-2)}
+#s6 .tc-card p b{color:var(--coral)}
+#s6 .tc-right{background:rgba(26,38,32,0.78);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);color:var(--cream);border-radius:8px;padding:22px;
+font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.75;position:relative;overflow:hidden;min-height:340px}
+#s6 .tc-right::before{content:'';position:absolute;inset:0;opacity:.08;pointer-events:none;
+background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.5) 3px,transparent 4px)}
+#s6 .tc-right .ttl{color:var(--amber-light);letter-spacing:.2em;margin-bottom:12px;font-size:10.5px;text-transform:uppercase}
+#s6 .tc-right .hl{color:var(--leaf-soft)}
+#s6 .tc-right .ar{color:var(--amber-light)}
+#s6 .tc-right .cm{color:var(--ink-dim)}
+#s6 .tc-right .st{color:var(--cream)}
+#s6 .tc-right .str{color:var(--coral-light)}
+
+/* ════════ Slide 7 · SaaS 价值 ════════ */
+#s7 .val-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+#s7 .val{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:22px;
+border-top:4px solid var(--leaf)}
+#s7 .val .ic{font-size:26px;margin-bottom:10px}
+#s7 .val h3{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:8px}
+#s7 .val p{font-size:13px;line-height:1.7;color:var(--ink-2);margin-bottom:10px}
+#s7 .val ul{list-style:none}
+#s7 .val li{font-size:12.5px;color:var(--ink-2);padding:4px 0 4px 16px;position:relative;line-height:1.5}
+#s7 .val li::before{content:'▸';position:absolute;left:0;color:var(--amber)}
+#s7 .val li b{color:var(--ink);font-weight:700}
+#s7 .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1.5px solid var(--line-strong);
+border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8)}
+#s7 .sp{padding:18px;text-align:center;border-right:1px solid var(--line);background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8)}
+#s7 .sp:last-child{border-right:none}
+#s7 .sp .n{font-family:'Fraunces',serif;font-weight:900;font-size:28px;color:var(--coral);line-height:1}
+#s7 .sp .l{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-muted);
+letter-spacing:.18em;margin-top:6px;text-transform:uppercase}
+
+/* ════════ Slide 8 · 订阅变现 ════════ */
+#s8 .tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:880px;margin:0 auto;width:100%}
+#s8 .tier{background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);border:1px solid var(--line);border-radius:8px;padding:24px;position:relative}
+#s8 .tier.feat{border-color:var(--amber);border-width:2px;box-shadow:0 6px 24px rgba(245,177,46,.18)}
+#s8 .tier .badge{position:absolute;top:-10px;left:24px;background:var(--coral);color:var(--cream);
+font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 10px;
+border-radius:4px;letter-spacing:.15em;text-transform:uppercase}
+#s8 .tier .who{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--leaf-deep);
+letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px}
+#s8 .tier h3{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;color:var(--ink);margin-bottom:6px}
+#s8 .tier .price{font-family:'Fraunces',serif;font-weight:900;font-size:30px;color:var(--coral);margin:12px 0}
+#s8 .tier .price .unit{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);font-weight:400}
+#s8 .tier ul{list-style:none;margin-top:12px}
+#s8 .tier li{font-size:12.5px;color:var(--ink-2);padding:5px 0 5px 16px;position:relative;line-height:1.5}
+#s8 .tier li::before{content:'▸';position:absolute;left:0;color:var(--leaf)}
+#s8 .tier li b{color:var(--ink);font-weight:700}
+#s8 .hook{padding:20px 24px;border:1.5px dashed var(--line-strong);border-radius:8px;
+background:rgba(255,107,61,.08);font-size:15px;line-height:1.7;color:var(--ink)}
+#s8 .hook b{color:var(--coral)}
+#s8 .roadmap{display:flex;gap:14px}
+#s8 .rm{flex:1;padding:16px 18px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,0.36);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8)}
+#s8 .rm .stage{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--coral);
+letter-spacing:.2em;margin-bottom:6px}
+#s8 .rm .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:14.5px;color:var(--ink)}
+#s8 .rm .d{font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.55}
+
+/* ════════ Slide 9 · CTA（与封面同模式） ════════ */
+#s9{justify-content:center;align-items:center;text-align:center}
+#s9 .lockup{position:relative;z-index:3;max-width:900px;padding:48px 56px;
+background:rgba(255,255,255,0.38);
+backdrop-filter:blur(24px) saturate(1.8);
+-webkit-backdrop-filter:blur(24px) saturate(1.8);
+border:1px solid rgba(255,255,255,0.6);
+border-radius:14px;
+box-shadow:0 18px 60px rgba(31,42,31,.14),inset 0 1px 0 rgba(255,255,255,0.8)}
+#s9 .term{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,1.5vw,18px);color:var(--leaf-deep);
+margin-bottom:24px;display:flex;align-items:center;justify-content:center;gap:4px}
+#s9 .term .p{color:var(--coral)}
+#s9 .term .cur{display:inline-block;width:.5ch;background:var(--leaf-deep);margin-left:2px;
+animation:cur 1s steps(1) infinite;color:transparent}
+@keyframes cur{50%{opacity:0}}
+#s9 .head{font-family:'Noto Serif SC',serif;font-weight:900;font-size:clamp(52px,8.5vw,128px);
+color:var(--ink);line-height:1.05;text-shadow:4px 4px 0 var(--amber-light)}
+#s9 .head em{color:var(--coral);font-style:normal}
+#s9 .sub{font-size:clamp(15px,1.5vw,19px);color:var(--ink-2);margin-top:24px;max-width:50ch;
+line-height:1.7}
+#s9 .cta{display:inline-flex;align-items:center;gap:12px;margin-top:36px;padding:15px 34px;
+background:var(--coral);color:var(--cream);font-weight:700;font-size:14.5px;letter-spacing:.15em;
+text-transform:uppercase;border:none;border-radius:8px;cursor:pointer;
+box-shadow:0 8px 28px rgba(255,107,61,.32);transition:all .3s;text-decoration:none}
+#s9 .cta:hover{transform:translateY(-2px);box-shadow:0 12px 36px rgba(255,107,61,.48);background:var(--coral-deep)}
+#s9 .url{margin-top:28px;font-family:'JetBrains Mono',monospace;font-size:12px;
+color:var(--ink-muted);letter-spacing:.2em}
+</style>
 </head>
 <body>
 
@@ -412,7 +796,286 @@
 <div class="counter" id="counter">01 / 09</div>
 </div>
 
-<script src="assets/js/flow.js"></script>
-<script src="assets/js/main.js"></script>
+<script>
+/* ════════════════════════════════════════════════
+   flow.js · 多语言字符流动引擎
+   - mode: 'phrases' 短语流动 | 'twinkle' 短语闪烁
+   - dir:  'down' | 'up' | 'left' | 'right' （单方向）
+   - vertical: true 竖排（短语逐字纵向书写）
+   - 透明清屏，毛玻璃后透出 body 渐变
+════════════════════════════════════════════════ */
+
+/* 多文字体系字符集 */
+const CHARSETS={
+multilang:'ABCDEFGHabcdｱｲｳｴｵｶｷｸ你好世界语言学习沉浸式АБВГабвг0123456789ािीूαβγδε',
+latin:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÉÊÇÏÖÑÜßØÆ',
+cyrillic:'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя',
+cjk:'你好世界语言学习沉浸式语境翻译词典音标词形句法语法练习听说读写测试一二三四五六七八十',
+arabic:'ابتثجحخدذرزسشصضطظعغفقكلمنهوي',
+devanagari:'अआइईउऊएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह',
+hangul:'가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허',
+greek:'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλμνξοπρστυφχψω',
+thai:'กขคงจฉชซญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอ',
+runes:'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ',
+ethiopic:'ሀለሐመሠረሰሸቀበተኀነኘአከኸወዐዘዠየደጀገጠጨጰጸፀፈፐ',
+};
+
+/* 真实多语言短语：让背景文字有意义 */
+const PHRASES={
+// 通用：世界各语言的"你好/学习/语言"等真实词句
+greetings:[
+'Hello','Bonjour','Hola','你好','こんにちは','안녕하세요',
+'Здравствуй','مرحبا','नमस्ते','สวัสดี','Γειά σου','Olá',
+'Ciao','Hallo','Hej','Cześć','Merhaba','Szia'
+],
+learn:[
+'learn','apprendre','aprender','学ぶ','배우다','учить',
+'تعلم','सीखना','เรียน','μαθαίνω','imparare','lernen',
+'leren','uczyć','öğren','tanulni','læra','oppia'
+],
+language:[
+'language','langue','idioma','言語','언어','язык',
+'لغة','भाषा','ภาษา','γλώσσα','lingua','Sprache',
+'taal','język','dil','nyelv','språk','kieli'
+],
+world:[
+'one world','un monde','un mundo','一つの世界','하나의 세계',
+'один мир','عالم واحد','एक दुनिया','หนึ่งโลก','ένας κόσμος',
+'un mondo','eine Welt','een wereld','jeden świat','tek dünya'
+],
+// 各语系真实词句（带翻译，更有意义）
+phrases_zh:['你好世界','学一门语言','任意文本','沉浸式学习','全球传播','200种语言'],
+phrases_fr:['Bonjour le monde','Apprendre une langue','Texte libre','Immersion totale'],
+phrases_de:['Hallo Welt','Eine Sprache lernen','Freier Text','Totales Eintauchen'],
+phrases_ja:['こんにちは世界','言語を学ぶ','任意のテキスト','没入学習'],
+phrases_ko:['안녕하세요 세계','언어 배우기','자유 텍스트','몰입 학습'],
+phrases_ar:['مرحبا بالعالم','تعلم لغة','نص حر','تعلم غامر'],
+phrases_ru:['Привет мир','Учить язык','Любой текст','Иммерсивное обучение'],
+phrases_hi:['नमस्ते दुनिया','भाषा सीखें','कोई भी टेक्स्ट','गहन अध्ययन'],
+// 全语种合并池（200 语言页用）
+all:[
+'Hello','Bonjour','Hola','你好','こんにちは','안녕하세요','Здравствуй','مرحبا','नमस्ते','สวัสดี',
+'Ciao','Hallo','Hej','Merhaba','Szia','Olá','Γειά σου','Apprendre','Learn','学ぶ',
+'배우다','учить','تعلم','सीखना','imparare','lernen','语言','言語','언어','язык',
+'langue','idioma','lingua','Sprache','你好世界','Bonjour le monde','Hola mundo',
+'Hallo Welt','Ciao mondo','Olá mundo','one world','un monde','un mundo',
+],
+};
+
+class FlowChars{
+constructor(c,o){
+this.canvas=c;this.ctx=c.getContext('2d');
+this.opts=Object.assign({
+mode:'phrases',
+phrases:'greetings',
+color:'#6B8A5E',
+size:34,
+density:0.35,
+dir:'down',
+speed:0.12,
+vertical:false,
+},o);
+this.pool=PHRASES[this.opts.phrases]||PHRASES.greetings;
+this.running=false;
+this.resize();
+window.addEventListener('resize',()=>this.resize());
+}
+pickPhrase(){return this.pool[Math.floor(Math.random()*this.pool.length)];}
+resize(){
+const dpr=Math.min(window.devicePixelRatio||1,2);
+const r=this.canvas.getBoundingClientRect();
+this.w=Math.max(1,r.width);this.h=Math.max(1,r.height);
+this.canvas.width=this.w*dpr;this.canvas.height=this.h*dpr;
+this.ctx.setTransform(dpr,0,0,dpr,0,0);
+this.fontSize=this.opts.size;
+this.ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
+this.particles=[];
+const n=Math.max(6,Math.floor((this.w/this.fontSize)*this.opts.density));
+// 调色板：明亮柑橘植物学（鲜叶绿/珊瑚/蜜糖琥珀/阳光黄/深绿）
+this.palette=[
+[45,182,113],   // 鲜叶绿
+[255,107,61],   // 活力珊瑚
+[245,177,46],   // 蜜糖琥珀
+[255,217,60],   // 阳光黄
+[54,156,96],    // 深绿
+];
+for(let i=0;i<n;i++) this.particles.push(this.spawn(true,i));
+// 透明清屏，让 body 渐变透出
+this.ctx.clearRect(0,0,this.w,this.h);
+}
+measure(txt){return this.ctx.measureText(txt).width;}
+// 竖排高度：每个字符一行
+vHeight(txt){return txt.length*this.fontSize;}
+spawn(init=false,idx=0){
+const dir=this.opts.dir;
+const txt=this.pickPhrase();
+const tw=this.measure(txt)||this.fontSize*2;
+const vh=this.opts.vertical?this.vHeight(txt):tw;
+const sp=this.opts.speed*this.fontSize;
+// 按索引循环分配调色板颜色
+const c=this.palette[idx%this.palette.length];
+// 随机选一个渐变方向（顶深底浅 / 顶浅底深），制造条纹层次
+const gradFlip=Math.random()>0.5;
+let x,y,vx=0,vy=0;
+if(dir==='down'){vy=sp;}
+else if(dir==='up'){vy=-sp;}
+else if(dir==='left'){vx=-sp;}
+else if(dir==='right'){vx=sp;}
+if(init){
+  // 初始：分散在整个屏幕 + 屏幕外，保证持续有粒子流动
+  x=Math.random()*this.w;
+  if(dir==='down'){y=Math.random()*(this.h+vh)-vh;}
+  else if(dir==='up'){y=Math.random()*(this.h+vh);}
+  else{y=Math.random()*this.h;}
+}else{
+  // 重生：在屏幕外重新进入，加随机偏移避免同时到达
+  if(dir==='down'){x=Math.random()*this.w;y=-vh-Math.random()*this.h*0.6;}
+  else if(dir==='up'){x=Math.random()*this.w;y=this.h+vh+Math.random()*this.h*0.6;}
+  else if(dir==='left'){x=this.w+tw+Math.random()*this.w*0.6;y=Math.random()*this.h;}
+  else if(dir==='right'){x=-tw-Math.random()*this.w*0.6;y=Math.random()*this.h;}
+}
+return {x,y,vx,vy,dir,txt,tw,vh,c,gradFlip,
+alpha:(this.opts.mode==='twinkle')?0.15:(0.22+Math.random()*0.22),
+twPhase:Math.random()*Math.PI*2,
+twSpeed:0.012+Math.random()*0.02,
+twAmp:0.16+Math.random()*0.2,
+isTwinkle:this.opts.mode==='twinkle'};
+}
+drawText(p){
+// 竖排：逐字纵向书写
+const [r,g,b]=p.c;
+if(this.opts.vertical){
+const chars=[...p.txt];
+// 居中 x 对齐到字宽
+const cw=this.fontSize;
+// 竖排逐字渐变：首字深、末字浅
+for(let i=0;i<chars.length;i++){
+const t=i/(chars.length-1||1);
+const k=p.gradFlip?(1-t*0.7):(0.4+t*0.6); // 0.4~1.0 明度系数
+this.ctx.fillStyle=`rgb(${Math.round(r*k)},${Math.round(g*k)},${Math.round(b*k)})`;
+this.ctx.fillText(chars[i],p.x,p.y+i*this.fontSize);
+}
+}else{
+// 横排整体用粒子色
+this.ctx.fillStyle=`rgb(${r},${g},${b})`;
+this.ctx.fillText(p.txt,p.x,p.y);
+}
+}
+start(){if(this.running)return;this.running=true;this.resize();this.loop();}
+stop(){this.running=false;if(this._raf)cancelAnimationFrame(this._raf);}
+loop(){
+if(!this.running)return;
+const {ctx,fontSize,w,h,opts}=this;
+// 透明清屏，让 body 渐变透出
+ctx.clearRect(0,0,w,h);
+ctx.font=`${this.fontSize}px 'Noto Serif SC','Noto Sans JP',serif`;
+ctx.textBaseline='top';
+for(const p of this.particles){
+if(p.isTwinkle){
+p.twPhase+=p.twSpeed;
+p.alpha=0.15+p.twAmp*(0.5+0.5*Math.sin(p.twPhase));
+if(Math.random()<0.003){p.txt=this.pickPhrase();}
+}else{
+p.x+=p.vx;p.y+=p.vy;
+const bound=this.opts.vertical?p.vh:p.tw;
+// 仅按粒子运动方向判断是否完全出界，避免入屏侧误触发重生
+let out=false;
+if(p.dir==='up'){out=p.y<-bound-fontSize;}
+else if(p.dir==='down'){out=p.y>h+fontSize;}
+else if(p.dir==='left'){out=p.x<-bound-fontSize;}
+else if(p.dir==='right'){out=p.x>w+fontSize;}
+if(out){
+// 重生：保留原色，避免颜色跳变
+const keepC=p.c,keepFlip=p.gradFlip;
+Object.assign(p,this.spawn(false));
+p.c=keepC;p.gradFlip=keepFlip;
+}
+}
+ctx.globalAlpha=p.alpha;
+this.drawText(p);
+}
+ctx.globalAlpha=1;
+this._raf=requestAnimationFrame(()=>this.loop());
+}
+}
+</script>
+<script>
+/* ════════════════════════════════════════════════
+   main.js · 幻灯片切换 + 入场特效
+   依赖：flow.js (FlowChars)
+════════════════════════════════════════════════ */
+const slides=[...document.querySelectorAll('.slide')];
+const dotsEl=document.getElementById('dots');
+const counterEl=document.getElementById('counter');
+const hudSlideEl=document.getElementById('hudSlide');
+let current=0;
+const flows=new Map();
+const entered=new Set();
+
+slides.forEach((s,i)=>{
+const d=document.createElement('div');d.className='dot'+(i===0?' active':'');
+d.onclick=()=>go(i);dotsEl.appendChild(d);
+});
+slides.forEach(slide=>{
+const cs=slide.querySelectorAll('canvas.flow');
+flows.set(slide,[...cs].map(c=>new FlowChars(c,JSON.parse(c.dataset.flow||'{}'))));
+});
+
+function go(i){
+i=Math.max(0,Math.min(slides.length-1,i));
+if(i===current && entered.has(i))return;
+flows.get(slides[current])?.forEach(f=>f.stop());
+slides[current].classList.remove('active');
+current=i;
+const slide=slides[i];
+slide.classList.add('active');
+setTimeout(()=>flows.get(slide)?.forEach(f=>f.start()),40);
+[...dotsEl.children].forEach((d,k)=>d.classList.toggle('active',k===i));
+const tag=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+counterEl.textContent=tag;hudSlideEl.textContent=tag;
+if(!entered.has(i)){entered.add(i);runEffect(slide,i);}
+}
+
+function runEffect(slide,i){
+const eff=slide.dataset.effect;
+if(eff==='languages')effLanguages();
+else if(eff==='cta')effCTA();
+}
+function effLanguages(){
+const el=document.getElementById('s5Count');const to=200;let v=0;
+const tick=()=>{v+=Math.max(2,Math.ceil((to-v)/9));if(v>=to){el.textContent=to;return;}el.textContent=v;requestAnimationFrame(tick);};
+setTimeout(tick,400);
+}
+function effCTA(){
+const el=document.getElementById('s9Typed');const text='./gualingo --text "任意一段文字"';
+el.textContent='';let i=0;
+const type=()=>{if(i<=text.length){el.textContent=text.slice(0,i);i++;setTimeout(type,55);}};
+setTimeout(type,600);
+}
+
+document.addEventListener('keydown',e=>{
+if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(current+1);}
+else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(current-1);}
+else if(e.key==='Home')go(0);
+else if(e.key==='End')go(slides.length-1);
+});
+let wheelLock=false;
+document.addEventListener('wheel',e=>{
+if(wheelLock)return;if(Math.abs(e.deltaY)<30)return;
+wheelLock=true;if(e.deltaY>0)go(current+1);else go(current-1);
+setTimeout(()=>wheelLock=false,650);
+},{passive:true});
+let touchY=null;
+document.addEventListener('touchstart',e=>touchY=e.touches[0].clientY,{passive:true});
+document.addEventListener('touchend',e=>{
+if(touchY===null)return;const dy=e.changedTouches[0].clientY-touchY;
+if(Math.abs(dy)>50){if(dy<0)go(current+1);else go(current-1);}touchY=null;
+},{passive:true});
+
+function tickClock(){const d=new Date();const p=n=>String(n).padStart(2,'0');
+document.getElementById('hudClock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
+setInterval(tickClock,1000);tickClock();
+go(0);
+</script>
 </body>
 </html>
