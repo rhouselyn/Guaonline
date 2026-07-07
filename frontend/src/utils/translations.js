@@ -211,9 +211,7 @@ export const translations = {
     downloadUpdate: "下载更新",
     releaseNotes: "更新说明",
     fontSize: "字体大小",
-    fontScaleMobile: "手机端字号",
-    fontScaleDesktop: "电脑端字号",
-    fontScaleDesc: "学习页面字号缩放，移动端与桌面端分别保存",
+    fontScaleDesc: "调整学习页面字号",
     fontScaleSmall: "小",
     fontScaleLarge: "大"
   },
@@ -428,9 +426,7 @@ export const translations = {
     downloadUpdate: "Download Update",
     releaseNotes: "Release Notes",
     fontSize: "Font Size",
-    fontScaleMobile: "Mobile Font Scale",
-    fontScaleDesktop: "Desktop Font Scale",
-    fontScaleDesc: "Scale learning page fonts; mobile and desktop saved separately",
+    fontScaleDesc: "Adjust learning page font size",
     fontScaleSmall: "Small",
     fontScaleLarge: "Large"
   }
