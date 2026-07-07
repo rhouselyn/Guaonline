@@ -164,7 +164,8 @@ export default function AdminUsers() {
 
       {/* 表格 */}
       {loading ? <div className="text-[#e8d5b7]">加载中...</div> : (
-        <div className="bg-[#16213e] rounded-lg border border-[#c9a96e]/20 overflow-hidden">
+        <>
+        <div className="hidden md:block bg-[#16213e] rounded-lg border border-[#c9a96e]/20 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[#e8d5b7]/60 border-b border-[#c9a96e]/10">
@@ -235,6 +236,48 @@ export default function AdminUsers() {
             </div>
           </div>
         </div>
+
+        {/* 手机卡片列表 */}
+        <div className="md:hidden space-y-3">
+          {data?.users?.map(user => (
+            <div key={user.id} className="bg-[#16213e] rounded-lg border border-[#c9a96e]/20 p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={selected.has(user.id)}
+                    onChange={() => toggleSelect(user.id)} className="accent-[#c9a96e]" />
+                  <div>
+                    <div className="text-[#e8d5b7] font-bold text-sm cursor-pointer" onClick={() => navigate(`/admin/users/${user.id}`)}>{user.email}</div>
+                    <div className="text-[#e8d5b7]/60 text-xs">{user.name}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {user.banned ? (
+                    <button onClick={() => handleUnban(user.id)} title="解封" className="p-1 text-green-400 hover:bg-green-900/30 rounded">
+                      <ShieldOff size={16} />
+                    </button>
+                  ) : (
+                    <button onClick={() => handleBan(user.id)} title="封禁" className="p-1 text-orange-400 hover:bg-orange-900/30 rounded">
+                      <Shield size={16} />
+                    </button>
+                  )}
+                  <button onClick={() => handleDelete(user.id)} title="注销账号" className="p-1 text-red-400 hover:bg-red-900/30 rounded">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={`px-2 py-0.5 rounded font-bold ${user.tier === 'pro' ? 'bg-purple-900/30 text-purple-400' : user.tier === 'basic' ? 'bg-blue-900/30 text-blue-400' : 'bg-gray-700/30 text-gray-400'}`}>{user.tier}</span>
+                {user.banned
+                  ? <span className="px-2 py-0.5 rounded font-bold bg-red-900/30 text-red-400">已封禁</span>
+                  : <span className="px-2 py-0.5 rounded font-bold bg-green-900/30 text-green-400">正常</span>
+                }
+                <span className="text-[#e8d5b7]/60">额度：{user.quota_max - user.quota_used}</span>
+                <span className="text-[#e8d5b7]/60">{user.created_at?.slice(0, 10)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
 
       {/* 批量操作栏 */}

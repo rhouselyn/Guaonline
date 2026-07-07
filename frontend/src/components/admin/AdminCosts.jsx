@@ -131,7 +131,7 @@ export default function AdminCosts() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
+        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20 overflow-x-auto">
           <h3 className="text-[#c9a96e] font-bold mb-3">按模型分布</h3>
           <table className="w-full text-sm">
             <thead>
@@ -153,7 +153,7 @@ export default function AdminCosts() {
           </table>
         </div>
 
-        <div className="bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
+        <div className="hidden md:block bg-[#16213e] rounded-lg p-4 border border-[#c9a96e]/20">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-[#c9a96e] font-bold">Top 成本用户</h3>
             <div className="flex gap-1">
@@ -197,6 +197,21 @@ export default function AdminCosts() {
             <button onClick={() => setTopPage(p => p + 1)} disabled={topUsers.length < 20}
               className="px-2 py-1 rounded text-xs bg-[#1a1a2e] text-[#e8d5b7] disabled:opacity-30">下一页</button>
           </div>
+        </div>
+
+        {/* 手机卡片列表 */}
+        <div className="md:hidden space-y-3">
+          {topUsers.map((u, idx) => (
+            <div key={idx} className="bg-[#16213e] rounded-lg border border-[#c9a96e]/20 p-4 text-[#e8d5b7]">
+              <div className="font-bold text-sm mb-2 truncate">{u.email || `用户 ${idx+1}`}</div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>输入：<span className="text-[#c9a96e]">{(u.prompt_tokens || 0).toLocaleString()}</span></div>
+                <div>输出：<span className="text-[#c9a96e]">{(u.completion_tokens || 0).toLocaleString()}</span></div>
+                <div>句子数：<span className="text-[#c9a96e]">{(u.request_count || 0).toLocaleString()}</span></div>
+                <div>成本：<span className="text-[#c9a96e]">${(u.cost || 0).toFixed(4)}</span></div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

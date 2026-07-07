@@ -340,7 +340,7 @@ export default function AdminGlobalVocab() {
 
       {/* 筛选 */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 w-full sm:w-auto sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#e8d5b7]/30" />
           <input
             value={search}
@@ -385,7 +385,7 @@ export default function AdminGlobalVocab() {
           {stats?.total === 0 ? '全局词汇库为空，用户学习后词条会自动积累' : '当前筛选条件下没有词条'}
         </div>
       ) : (
-        <div className="bg-[#16213e] rounded-lg border border-[#c9a96e]/10 overflow-hidden">
+        <div className="bg-[#16213e] rounded-lg border border-[#c9a96e]/10 overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#c9a96e]/10">

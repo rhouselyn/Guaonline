@@ -443,8 +443,8 @@ export default function AdminApiKeys() {
 
       {/* 编辑 key 全局属性弹窗 */}
       {editModal.open && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditModal(m => ({ ...m, open: false }))}>
-          <div className="bg-[#16213e] rounded-lg p-6 border border-[#c9a96e]/30 w-[480px]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => setEditModal(m => ({ ...m, open: false }))}>
+          <div className="bg-[#16213e] rounded-none sm:rounded-md p-6 border border-[#c9a96e]/30 w-full max-w-[480px]" onClick={e => e.stopPropagation()}>
             <h3 className="text-[#c9a96e] font-bold mb-1">编辑 Key 全局属性</h3>
             <p className="text-[#e8d5b7]/60 text-xs mb-4">
               改动将同步到所有引用此 Key 的池（当前共享 {editModal.refCount} 处）。
@@ -499,8 +499,8 @@ export default function AdminApiKeys() {
 
       {/* 添加 key 弹窗 */}
       {addModal.open && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setAddModal(m => ({ ...m, open: false }))}>
-          <div className="bg-[#16213e] rounded-lg p-6 border border-[#c9a96e]/30 w-[480px]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => setAddModal(m => ({ ...m, open: false }))}>
+          <div className="bg-[#16213e] rounded-none sm:rounded-md p-6 border border-[#c9a96e]/30 w-full max-w-[480px]" onClick={e => e.stopPropagation()}>
             <h3 className="text-[#c9a96e] font-bold mb-4">添加 Key 到 {activeTier}/{activeSub}</h3>
             {addModal.mode === 'choose' && (
               <div className="space-y-2">
@@ -580,8 +580,8 @@ export default function AdminApiKeys() {
 
       {/* 删除引用确认弹窗 */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmDelete(null)}>
-          <div className="bg-[#16213e] rounded-lg p-6 border border-red-500/40 w-[420px]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-[#16213e] rounded-none sm:rounded-md p-6 border border-red-500/40 w-full max-w-[420px]" onClick={e => e.stopPropagation()}>
             <h3 className="text-red-400 font-bold mb-2">确认删除引用</h3>
             <p className="text-[#e8d5b7]/80 text-sm mb-1">确定要移除此池对该 Key 的引用吗？</p>
             <p className="text-[#e8d5b7]/50 text-xs mb-5">此操作只移除当前池的引用，不会删除全局 Key 定义。可随时重新添加。</p>
