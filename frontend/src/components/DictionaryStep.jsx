@@ -784,24 +784,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
-    // 手机端：圆点指示器（当前页为高亮圆点，其他为细线）
+    // 手机端：底部已有微信式 Tab，分页指示器删掉
     if (!isDesktop) {
-      return (
-        <div className="flex items-center justify-center gap-1.5 py-2 border-t border-aged-200/60 bg-parchment-50/40">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button
-              key={p}
-              onClick={() => onPageChange(p)}
-              aria-label={`第 ${p} 页`}
-              className={`h-1.5 rounded-full transition-all duration-200 ${
-                currentPage === p
-                  ? 'w-4 bg-amber-500'
-                  : 'w-1.5 bg-aged-300 hover:bg-aged-400'
-              }`}
-            />
-          ))}
-        </div>
-      )
+      return null
     }
     // 桌面端：原有数字分页器
     return (
@@ -984,7 +969,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           ) : (
             <>
               <Shuffle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t.startLearning || '开始学习'}</span>
+              <span>{t.startLearning || '开始学习'}</span>
             </>
           )}
         </motion.button>
