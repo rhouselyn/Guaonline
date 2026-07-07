@@ -229,6 +229,8 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x mandatory;
+  scroll-snap-stop: always;
+  overscroll-behavior-x: contain;
 }
 
 /* snap 子项：占满父容器宽度，snap 起点对齐 */
