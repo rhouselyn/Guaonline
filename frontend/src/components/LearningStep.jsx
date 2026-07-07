@@ -102,7 +102,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                 <motion.h2
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-4xl font-bold font-display text-ink-700"
+                  className="text-3xl sm:text-4xl font-bold font-display text-ink-700"
                 >
                   {learningData.word}
                 </motion.h2>
@@ -129,7 +129,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {learningData.options.map((option, index) => (
                 <motion.button
                   key={index}
@@ -168,7 +168,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
                   <motion.h2
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-4xl font-bold font-display text-ink-700"
+                    className="text-3xl sm:text-4xl font-bold font-display text-ink-700"
                   >
                     {learningData.word}
                   </motion.h2>
