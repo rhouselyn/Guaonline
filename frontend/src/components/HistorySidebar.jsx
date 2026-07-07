@@ -186,7 +186,7 @@ function RecentItem({ record, onNavigate }) {
   )
 }
 
-function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListLang, onOpenFavorites, activeFavoriteLang, refreshTrigger }) {
+function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListLang, onOpenFavorites, activeFavoriteLang, refreshTrigger, inline, simple }) {
   const [expanded, setExpanded] = useState(true)
   const [records, setRecords] = useState([])
   const [menuState, setMenuState] = useState({ open: false, fileId: null, x: 0, y: 0 })
@@ -287,8 +287,176 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
   // 手机端选择会话后自动收起侧边栏
   const handleNavigate = useCallback((file_id, source_lang, target_lang, title) => {
     onNavigateToRecord(file_id, source_lang, target_lang, title)
-    if (!isDesktop) setExpanded(false)
-  }, [onNavigateToRecord, isDesktop])
+    // ponytail: 前端乐观重排 — 点击的条目立即成为「最近」。后端 touch_history_record
+    // 仅在 random-word/next-exercise 触发，这里先更新顺序，做题后自然持久化。
+    // 上限：刷新页面前生效，刷新后由后端 updated_at 决定顺序。
+    setRecords(prev => {
+      const idx = prev.findIndex(r => r.file_id === file_id)
+      if (idx === -1) return prev
+      const updated = { ...prev[idx], updated_at: new Date().toISOString() }
+      return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)]
+    })
+    if (!isDesktop && !inline) setExpanded(false)
+  }, [onNavigateToRecord, isDesktop, inline])
+
+  // ponytail: 抽出记录列表渲染，drawer 与 inline 复用，避免重复
+  const renderRecordsContent = () => {
+    if (records.length === 0) {
+      return (
+        <div className="px-4 py-12 text-center">
+          <div className="text-2xl mb-2">📚</div>
+          <div className="text-[13px] text-ink-400">{t.noHistory || '暂无学习记录'}</div>
+        </div>
+      )
+    }
+    if (simple) {
+      // Home 简单扁平列表：按最近排序，一条条堆叠
+      return (
+        <div className="space-y-0.5">
+          {sortedRecords.map(record => (
+            <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} />
+          ))}
+        </div>
+      )
+    }
+    return (
+      <>
+        <div className="mb-2">
+          <div className="px-4 py-1.5 mt-1">
+            <span className="text-[11px] font-bold text-ink-400 tracking-wide">{t.recent || '最近'}</span>
+          </div>
+          <div className="space-y-0.5 px-1">
+            {recentRecords.map(record => (
+              <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} />
+            ))}
+          </div>
+          {hasMoreRecent && (
+            <button
+              onClick={() => {
+                setRecentExpanded(prev => {
+                  if (prev && scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0
+                  return !prev
+                })
+              }}
+              className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-[11px] text-ink-400 hover:text-ink-600 transition-colors"
+            >
+              {recentExpanded ? (
+                <><ChevronUp className="w-3 h-3" />{t.collapse || '收起'}</>
+              ) : (
+                <><ChevronDown className="w-3 h-3" />{t.showMore || '显示更多'}</>
+              )}
+            </button>
+          )}
+          <div className="mx-4 my-2 border-t border-aged-200/60" />
+        </div>
+        {Object.entries(grouped).map(([lang, items], langIdx) => (
+          <div key={lang} className="mb-1">
+            <div className="flex items-center gap-1.5 px-4 py-1.5 mt-1">
+              <LangIcon langCode={lang} size="sm" />
+              <span className="text-[11px] font-bold text-ink-400 tracking-wide">{getLangLabel(lang)}</span>
+              <span className="text-[10px] text-aged-300">{items.length}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenFavorites && onOpenFavorites(lang) }}
+                className={`ml-auto p-1 rounded-md transition-all badge-ochre ${
+                  activeFavoriteLang === lang
+                    ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-retro-sm'
+                    : 'text-aged-300 hover:text-amber-400 hover:bg-amber-50'
+                }`}
+                title={t.favorites || '收藏'}
+              >
+                <Star className={`w-3.5 h-3.5 ${activeFavoriteLang === lang ? 'fill-current' : ''}`} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenWordList && onOpenWordList(lang) }}
+                className={`p-1 rounded-md transition-all badge-ochre ${
+                  activeWordListLang === lang
+                    ? 'bg-gradient-to-br ' + SIDEBAR_COLORS[langIdx % SIDEBAR_COLORS.length] + ' text-white shadow-retro-sm'
+                    : 'text-aged-300 hover:text-amber-500 hover:bg-amber-50'
+                }`}
+                title="Word list"
+              >
+                <Library className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-0.5 px-0.5">
+              {items.map((record) => (
+                <HistoryItem
+                  key={record.file_id}
+                  record={record}
+                  isRenaming={renamingId === record.file_id}
+                  renameValue={renameValue}
+                  onRenameStart={handleRenameStart}
+                  onRenameConfirm={handleRenameConfirm}
+                  onRenameCancel={handleRenameCancel}
+                  onRenameChange={setRenameValue}
+                  onNavigate={handleNavigate}
+                  onMenuOpen={handleMenuOpen}
+                  t={t}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </>
+    )
+  }
+
+  // ponytail: inline 模式 — 移动端直接渲染记录列表，无抽屉（Home/Profile 复用）
+  if (inline) {
+    return (
+      <div>
+        {renderRecordsContent()}
+        <AnimatePresence>
+          {menuState.open && (
+            <ContextMenu
+              x={menuState.x}
+              y={menuState.y}
+              onRename={() => handleRenameStart(menuState.fileId)}
+              onDelete={() => handleDelete(menuState.fileId)}
+              onClose={handleMenuClose}
+              t={t}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {deleteConfirm.open && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-ink-800/40 backdrop-blur-sm"
+              onClick={handleDeleteCancel}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-xl shadow-black/10 p-6 max-w-sm w-full mx-4"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-none bg-rust-50 flex items-center justify-center flex-shrink-0">
+                    <Trash2 className="w-5 h-5 text-rust-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-[15px] font-bold text-ink-800">{t.confirmDelete || '确认删除'}</h3>
+                    <p className="text-[13px] text-ink-500 mt-0.5 line-clamp-2">{deleteConfirm.title}</p>
+                  </div>
+                </div>
+                <p className="text-[13px] text-ink-500 mb-5 pl-[52px]">{t.deleteCannotUndo || '删除后不可恢复，确定要删除吗？'}</p>
+                <div className="flex gap-2.5 justify-end">
+                  <button onClick={handleDeleteCancel} className="btn-secondary px-4 py-2 text-[13px] rounded-sm border-2 border-aged-200 text-ink-600 hover:bg-parchment-100 transition-colors">{t.cancel || '取消'}</button>
+                  <button onClick={handleDeleteConfirm} className="px-4 py-2 text-[13px] rounded-sm bg-rust-400 hover:bg-rust-500 text-white font-bold transition-colors">{t.confirmDeleteAction || '删除'}</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -324,111 +492,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
               </div>
 
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
-                {records.length === 0 && (
-                  <div className="px-4 py-12 text-center">
-                    <div className="text-2xl mb-2">📚</div>
-                    <div className="text-[13px] text-ink-400">
-                      {t.noHistory || '暂无学习记录'}
-                    </div>
-                  </div>
-                )}
-
-                {records.length > 0 && (
-                  <div className="mb-2">
-                    <div className="px-4 py-1.5 mt-1">
-                      <span className="text-[11px] font-bold text-ink-400 tracking-wide">
-                        {t.recent || '最近'}
-                      </span>
-                    </div>
-                    <div className="space-y-0.5 px-1">
-                      {recentRecords.map(record => (
-                        <RecentItem
-                          key={record.file_id}
-                          record={record}
-                          onNavigate={handleNavigate}
-                        />
-                      ))}
-                    </div>
-                    {hasMoreRecent && (
-                      <button
-                        onClick={() => {
-                          setRecentExpanded(prev => {
-                            if (prev && scrollContainerRef.current) {
-                              scrollContainerRef.current.scrollTop = 0
-                            }
-                            return !prev
-                          })
-                        }}
-                        className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-[11px] text-ink-400 hover:text-ink-600 transition-colors"
-                      >
-                        {recentExpanded ? (
-                          <>
-                            <ChevronUp className="w-3 h-3" />
-                            {t.collapse || '收起'}
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown className="w-3 h-3" />
-                            {t.showMore || '显示更多'}
-                          </>
-                        )}
-                      </button>
-                    )}
-                    <div className="mx-4 my-2 border-t border-aged-200/60" />
-                  </div>
-                )}
-
-                {Object.entries(grouped).map(([lang, items], langIdx) => (
-                  <div key={lang} className="mb-1">
-                    <div className="flex items-center gap-1.5 px-4 py-1.5 mt-1">
-                      <LangIcon langCode={lang} size="sm" />
-                      <span className="text-[11px] font-bold text-ink-400 tracking-wide">
-                        {getLangLabel(lang)}
-                      </span>
-                      <span className="text-[10px] text-aged-300">{items.length}</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onOpenFavorites && onOpenFavorites(lang) }}
-                        className={`ml-auto p-1 rounded-md transition-all badge-ochre ${
-                          activeFavoriteLang === lang
-                            ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-retro-sm'
-                            : 'text-aged-300 hover:text-amber-400 hover:bg-amber-50'
-                        }`}
-                        title={t.favorites || '收藏'}
-                      >
-                        <Star className={`w-3.5 h-3.5 ${activeFavoriteLang === lang ? 'fill-current' : ''}`} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onOpenWordList && onOpenWordList(lang) }}
-                        className={`p-1 rounded-md transition-all badge-ochre ${
-                          activeWordListLang === lang
-                            ? 'bg-gradient-to-br ' + SIDEBAR_COLORS[langIdx % SIDEBAR_COLORS.length] + ' text-white shadow-retro-sm'
-                            : 'text-aged-300 hover:text-amber-500 hover:bg-amber-50'
-                        }`}
-                        title="Word list"
-                      >
-                        <Library className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-0.5 px-0.5">
-                      {items.map((record) => (
-                        <HistoryItem
-                          key={record.file_id}
-                          record={record}
-                          isRenaming={renamingId === record.file_id}
-                          renameValue={renameValue}
-                          onRenameStart={handleRenameStart}
-                          onRenameConfirm={handleRenameConfirm}
-                          onRenameCancel={handleRenameCancel}
-                          onRenameChange={setRenameValue}
-                          onNavigate={handleNavigate}
-                          onMenuOpen={handleMenuOpen}
-                          t={t}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                {renderRecordsContent()}
               </div>
 
               <div className="px-3 py-2 border-t border-aged-200/60 flex-shrink-0">

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
+import { useMediaQuery } from '../utils/useMediaQuery'
+import { auth } from '../utils/auth'
 
 const LANG_COLORS = {
   'en': '#3b82f6', 'fr': '#6366f1', 'pt': '#22c55e', 'de': '#eab308', 'ro': '#2563eb',
@@ -631,6 +633,15 @@ function ModeSelector({ mode, setMode, t }) {
 
 function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
   const navigate = useNavigate()
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  // ponytail: 复用 auth.getQuota() 显示额度（与 AccountMenu 同源），移动端在发送箭头左侧展示
+  const [quota, setQuota] = useState(() => auth.getQuota())
+  useEffect(() => {
+    const refresh = () => { const q = auth.getQuota(); if (q) setQuota(q) }
+    refresh()
+    const interval = setInterval(refresh, 30000)
+    return () => clearInterval(interval)
+  }, [])
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
   // 记住非直接输入模式（翻译/生成）的语言选择
@@ -675,6 +686,85 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
     if (inputMode === 'translate') return t.modeTranslatePlaceholder
     if (inputMode === 'generate') return t.modeGeneratePlaceholder
     return t.modeDirectPlaceholder
+  }
+
+  const available = quota?.available ?? 0
+  const max = quota?.tier_max ?? quota?.max ?? 200
+  const isUnlimited = max === -1
+  const isLow = !isUnlimited && typeof available === 'number' && available <= 10
+
+  // ponytail: 移动端布局 — 顶栏(logo+标题 / 学习语言) + 搜索式输入框(额度在发送箭头左侧)
+  if (!isDesktop) {
+    return (
+      <div className="flex flex-col w-full">
+        <div className="flex items-center justify-between pt-3 px-4 gap-2">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex items-center gap-2 cursor-pointer shrink-0"
+            onClick={() => navigate('/')}
+            title="返回首页"
+          >
+            <div className="w-9 h-9 bg-amber-400 rounded-md flex items-center justify-center shadow-retro border-2 border-amber-500">
+              <FrogLogo size={22} />
+            </div>
+            <h1 className="text-xl font-display font-bold text-ink-800 leading-tight" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+              {t.title || '呱邻国'}
+            </h1>
+          </motion.div>
+          <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
+        </div>
+
+        <div className="w-full px-3 pt-3">
+          <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
+            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
+            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
+            <div className="border-b border-aged-200/60 px-3 pt-2 pb-0">
+              <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
+            </div>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={getPlaceholder()}
+              rows={4}
+              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+            />
+            <div className="flex items-center justify-between px-3 pb-3">
+              <span className={`flex items-center gap-1 text-xs font-medium ${isLow ? 'text-rust-500' : 'text-amber-600'}`} title={t?.remainingQuota || '剩余额度'}>
+                <Zap className="w-3 h-3" />
+                {isUnlimited ? '∞' : `${available}/${max}`}
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onProcess}
+                disabled={loading || !text.trim()}
+                className={`p-2 rounded-sm transition-all duration-200 ${
+                  loading || !text.trim()
+                    ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
+                    : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
+                }`}
+              >
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <ArrowRight className="w-4 h-4" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

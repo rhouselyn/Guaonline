@@ -1423,27 +1423,19 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </div>
       </div>
 
-      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
+      {/* 手机端底部窄横杠分段指示器：左=句子翻译 右=单词分表，点击切换 */}
       {!isDesktop && (
-        <div className="flex bg-parchment-50 border-t border-aged-200 md:hidden">
+        <div className="flex gap-1 px-2 py-1 bg-parchment-50 border-t border-aged-200 md:hidden">
           <button
             onClick={() => switchPanel(0)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-              activePanel === 0 ? 'text-amber-600' : 'text-ink-400'
-            }`}
-          >
-            <Languages className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{t.sentTranslation || '句子'}</span>
-          </button>
+            aria-label={t.sentTranslation || '句子翻译'}
+            className={`h-1 flex-1 rounded-full transition-colors ${activePanel === 0 ? 'bg-amber-500' : 'bg-aged-200'}`}
+          />
           <button
             onClick={() => switchPanel(1)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-              activePanel === 1 ? 'text-amber-600' : 'text-ink-400'
-            }`}
-          >
-            <BookOpen className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{t.vocabList || '单词分表'}</span>
-          </button>
+            aria-label={t.vocabList || '单词分表'}
+            className={`h-1 flex-1 rounded-full transition-colors ${activePanel === 1 ? 'bg-amber-500' : 'bg-aged-200'}`}
+          />
         </div>
       )}
     </motion.div>

@@ -179,10 +179,11 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   }, [isOpen])
 
   // 实时预览：拖动滑块时立即应用当前设备对应的缩放到 documentElement
+  // 移动端基础 12.6px（桌面的 90%），与 LearningApp 保持一致
   useEffect(() => {
     if (!isOpen) return
     const scale = isDesktop ? localFontScaleDesktop : localFontScaleMobile
-    document.documentElement.style.fontSize = `${14 * scale}px`
+    document.documentElement.style.fontSize = `${(isDesktop ? 14 : 12.6) * scale}px`
   }, [isOpen, isDesktop, localFontScaleMobile, localFontScaleDesktop])
 
   useEffect(() => {
