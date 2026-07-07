@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Trash2, PanelLeftClose, PanelLeftOpen, Library, Star } from 'lucide-react'
+import { useMediaQuery } from '../utils/useMediaQuery'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 
@@ -280,20 +281,46 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
     setMenuState(prev => ({ ...prev, open: false }))
   }, [])
 
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+
+  const handleNavigate = useCallback((...args) => {
+    onNavigateToRecord(...args)
+    if (!isDesktop) setExpanded(false)
+  }, [isDesktop, onNavigateToRecord])
+
   const SIDEBAR_WIDTH = 260
 
   return (
     <>
+      {/* 手机浮动展开按钮 */}
+      {!isDesktop && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="fixed left-3 top-3 z-30 w-10 h-10 flex items-center justify-center rounded-md bg-parchment-50 border-2 border-aged-200 shadow-retro text-ink-500 hover:text-ink-700 hover:border-aged-300 transition-colors md:hidden"
+          title={t.historyTitle || '学习记录'}
+          aria-label={t.historyTitle || '学习记录'}
+        >
+          <PanelLeftOpen className="w-4.5 h-4.5" />
+        </button>
+      )}
       <div className="flex h-full">
+        {/* 手机抽屉遮罩 */}
+        {!isDesktop && expanded && (
+          <div className="mobile-drawer-overlay md:hidden" onClick={() => setExpanded(false)} />
+        )}
         <AnimatePresence>
           {expanded && (
             <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: SIDEBAR_WIDTH, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
+              initial={isDesktop ? { width: 0, opacity: 0 } : { x: '-100%', opacity: 0 }}
+              animate={isDesktop ? { width: SIDEBAR_WIDTH, opacity: 1 } : { x: 0, opacity: 1 }}
+              exit={isDesktop ? { width: 0, opacity: 0 } : { x: '-100%', opacity: 0 }}
               transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-              className="h-full overflow-hidden flex flex-col bg-parchment-100/50 border-r border-aged-200/60"
-              style={{ minWidth: 0 }}
+              className={
+                isDesktop
+                  ? "h-full overflow-hidden flex flex-col bg-parchment-100/50 border-r border-aged-200/60"
+                  : "fixed left-0 top-0 h-full z-50 flex flex-col bg-parchment-100 border-r-2 border-aged-200 shadow-warm-lg"
+              }
+              style={isDesktop ? { minWidth: 0, width: SIDEBAR_WIDTH } : { width: SIDEBAR_WIDTH, maxWidth: '85vw' }}
             >
               <div className="px-3 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
                 <span className="font-display text-[11px] font-bold text-ink-700 uppercase tracking-wider">
@@ -329,7 +356,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
                         <RecentItem
                           key={record.file_id}
                           record={record}
-                          onNavigate={onNavigateToRecord}
+                          onNavigate={handleNavigate}
                         />
                       ))}
                     </div>
@@ -405,7 +432,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
                           onRenameConfirm={handleRenameConfirm}
                           onRenameCancel={handleRenameCancel}
                           onRenameChange={setRenameValue}
-                          onNavigate={onNavigateToRecord}
+                          onNavigate={handleNavigate}
                           onMenuOpen={handleMenuOpen}
                           t={t}
                         />
@@ -424,7 +451,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
           )}
         </AnimatePresence>
 
-        {!expanded && (
+        {!expanded && isDesktop && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -476,7 +503,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
               grouped[lang].slice(0, 3).map((record) => (
                 <button
                   key={record.file_id}
-                  onClick={() => onNavigateToRecord(record.file_id, record.source_lang, record.target_lang, record.title)}
+                  onClick={() => handleNavigate(record.file_id, record.source_lang, record.target_lang, record.title)}
                   className="w-9 h-9 flex items-center justify-center rounded-sm hover:bg-aged-200/70 text-[10px] font-bold text-ink-400 hover:text-ink-600 transition-colors"
                   title={record.title}
                 >
