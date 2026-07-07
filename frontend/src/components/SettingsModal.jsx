@@ -170,6 +170,15 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     }
   }, [isOpen])
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
   const handleSave = async () => {
     setSaving(true)
     setSaved(false)
@@ -360,7 +369,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-800/40 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-ink-800/40 backdrop-blur-sm"
         onClick={onClose}
       >
         <motion.div
@@ -368,7 +377,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.15 }}
-          className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-xl w-[580px] h-[520px] overflow-hidden flex flex-col"
+          className="bg-parchment-50 border-0 sm:border-2 border-aged-200 rounded-none sm:rounded-md shadow-retro-xl w-full h-full sm:w-[580px] sm:h-[520px] overflow-hidden flex flex-col"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -386,9 +395,9 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           </div>
 
           {/* Body: Sidebar + Content */}
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
             {/* Left Sidebar */}
-            <div className="w-[130px] shrink-0 border-r border-aged-200/60 bg-parchment-100/40 py-2">
+            <div className="flex flex-row overflow-x-auto sm:flex-col sm:w-[130px] sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-aged-200/60 bg-parchment-100/40 py-2">
               {SECTIONS.map(key => {
                 const Icon = sectionIcons[key]
                 const isActive = activeSection === key
@@ -396,10 +405,10 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
                   <button
                     key={key}
                     onClick={() => setActiveSection(key)}
-                    className={`w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                    className={`sm:w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
                       isActive
-                        ? 'bg-amber-50/80 text-amber-600 border-r-2 border-amber-400'
-                        : 'text-ink-500 hover:text-ink-700 hover:bg-parchment-50/60'
+                        ? 'bg-amber-50/80 text-amber-600 border-r-2 border-amber-400 shrink-0'
+                        : 'text-ink-500 hover:text-ink-700 hover:bg-parchment-50/60 shrink-0'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
