@@ -15,9 +15,17 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
   const scrollContainerRef = useRef(null)
-  const touchStartX = useRef(0)
-  const touchStartY = useRef(0)
-  const touchStartTime = useRef(0)
+  // 滑动状态
+  const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false })
+
+  // 切换到指定面板（带平滑滚动）
+  const switchPanel = useCallback((idx) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const pageWidth = container.clientWidth
+    container.scrollTo({ left: idx * pageWidth, behavior: 'smooth' })
+    setActivePanel(idx)
+  }, [])
   const [expandedWord, setExpandedWord] = useState(null)
   const [wordDetailCache, setWordDetailCache] = useState({})
   const [loadingWords, setLoadingWords] = useState({})
@@ -568,11 +576,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }, 150)
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
-    if (!isDesktop && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ left: scrollContainerRef.current.clientWidth, behavior: 'smooth' })
-      setActivePanel(1)
-    }
-  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop])
+    if (!isDesktop) switchPanel(1)
+  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -985,6 +990,34 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </motion.button>
       </div>
 
+      {/* 手机端 Tab 式切换器 */}
+      {!isDesktop && (
+        <div className="flex gap-1 p-1 mb-2 bg-aged-100/60 rounded-lg md:hidden">
+          <button
+            onClick={() => switchPanel(0)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
+              activePanel === 0
+                ? 'bg-parchment-50 text-amber-700 shadow-retro-sm'
+                : 'text-ink-500 hover:text-ink-700'
+            }`}
+          >
+            <Languages className="w-3.5 h-3.5" />
+            {t.sentTranslation || '句子翻译'}
+          </button>
+          <button
+            onClick={() => switchPanel(1)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
+              activePanel === 1
+                ? 'bg-parchment-50 text-amber-700 shadow-retro-sm'
+                : 'text-ink-500 hover:text-ink-700'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            {t.vocabulary || '词汇表'}
+          </button>
+        </div>
+      )}
+
       <div
         ref={scrollContainerRef}
         onScroll={(e) => {
@@ -994,28 +1027,29 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         }}
         onTouchStart={(e) => {
           if (isDesktop) return
-          touchStartX.current = e.touches[0].clientX
-          touchStartY.current = e.touches[0].clientY
-          touchStartTime.current = Date.now()
+          const t = e.touches[0]
+          touchState.current = { x: t.clientX, y: t.clientY, t: Date.now(), scrolling: false }
         }}
         onTouchEnd={(e) => {
-          if (isDesktop) return
-          const dx = e.changedTouches[0].clientX - touchStartX.current
-          const dy = e.changedTouches[0].clientY - touchStartY.current
-          const dt = Date.now() - touchStartTime.current
-          // 横向位移大于纵向（避免误触垂直滚动）且滑动距离或速度达阈值
-          if (Math.abs(dx) < Math.abs(dy)) return
+          if (isDesktop || touchState.current.scrolling) return
+          const t = e.changedTouches[0]
+          const dx = t.clientX - touchState.current.x
+          const dy = t.clientY - touchState.current.y
+          const dt = Date.now() - touchState.current.t
+          // 横向位移必须明显大于纵向，避免误触垂直滚动
+          if (Math.abs(dx) < Math.abs(dy) * 1.5) return
           const container = scrollContainerRef.current
           if (!container) return
           const pageWidth = container.clientWidth
           const currentIdx = Math.round(container.scrollLeft / pageWidth)
-          // 距离超过 1/4 页面，或速度超过 0.5px/ms
-          const isSwipe = Math.abs(dx) > pageWidth * 0.25 || (dt > 0 && Math.abs(dx) / dt > 0.5)
+          // 更灵敏的触发：距离 15% 或速度 0.3px/ms
+          const isSwipe = Math.abs(dx) > pageWidth * 0.15 || (dt > 0 && Math.abs(dx) / dt > 0.3)
           if (!isSwipe) return
           const targetIdx = dx < 0 ? Math.min(1, currentIdx + 1) : Math.max(0, currentIdx - 1)
           if (targetIdx === currentIdx) return
-          container.scrollTo({ left: targetIdx * pageWidth, behavior: 'smooth' })
-          setActivePanel(targetIdx)
+          touchState.current.scrolling = true
+          switchPanel(targetIdx)
+          setTimeout(() => { touchState.current.scrolling = false }, 350)
         }}
         className="flex gap-0 md:gap-6 flex-1 min-h-0 md:overflow-hidden touch-scroll-x"
       >
