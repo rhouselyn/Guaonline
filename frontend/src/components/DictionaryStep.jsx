@@ -854,6 +854,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }
   }, [])
 
+  // 手机端去掉 tab-warm 滑块样式（shadow/border），改用简洁文字
+  const tabActiveCls = isDesktop ? 'tab-warm-active' : 'text-ink-700 font-bold'
+  const tabInactiveCls = isDesktop ? 'tab-warm-inactive' : 'text-ink-400'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -959,7 +963,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
           disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
-          className="btn-primary flex items-center gap-2 shrink-0"
+          className="btn-primary flex items-center gap-2 shrink-0 py-2 px-4 md:py-3 md:px-6"
         >
           {(loading || preprocessStatus) ? (
             <>
@@ -1012,15 +1016,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       >
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
-              <div className="flex items-center gap-3">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleShowOriginal}>
-                      <span className={!showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.sentTranslation}</span>
+                      <span className={!showOriginal ? tabActiveCls : tabInactiveCls}>{t.sentTranslation}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.showOriginal}</span>
+                      <span className={showOriginal ? tabActiveCls : tabInactiveCls}>{t.showOriginal}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1109,15 +1113,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
-              <div className="flex items-center gap-3">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleGlobalVocab}>
-                      <span className={!showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.vocabList}</span>
+                      <span className={!showGlobalVocab ? tabActiveCls : tabInactiveCls}>{t.vocabList}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.globalVocabList}</span>
+                      <span className={showGlobalVocab ? tabActiveCls : tabInactiveCls}>{t.globalVocabList}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1423,7 +1427,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             }`}
           >
             <BookOpen className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{t.vocabulary || '词汇'}</span>
+            <span className="text-[10px] font-medium">{t.vocabList || '单词分表'}</span>
           </button>
         </div>
       )}

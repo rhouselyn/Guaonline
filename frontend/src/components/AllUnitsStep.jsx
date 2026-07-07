@@ -235,9 +235,9 @@ function AllUnitsStep({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="w-full"
       onTouchStart={(e) => {
         if (isDesktop) return
@@ -322,7 +322,7 @@ function AllUnitsStep({
       <div className="max-w-3xl mx-auto">
         <div className="mb-6 text-center">
           <h2 className="text-xl font-bold font-display text-ink-800">
-            {t.learningUnits || '学习单元'}
+            {tabs[activeTab].label}
           </h2>
           <p className="text-xs text-ink-400 mt-1">{t.completeUnitsInOrder || '按顺序完成单元，解锁下一单元'}</p>
         </div>
