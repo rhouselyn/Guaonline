@@ -230,6 +230,11 @@ body {
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   overscroll-behavior-x: contain;
+  scrollbar-width: none; /* Firefox 隐藏滚动条 */
+  -ms-overflow-style: none; /* IE10+ 隐藏滚动条 */
+}
+.touch-scroll-x::-webkit-scrollbar {
+  display: none; /* Chrome/Safari 隐藏滚动条 */
 }
 
 /* snap 子项：占满父容器宽度，snap 起点对齐 */

@@ -1016,7 +1016,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       >
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-3 py-2 md:px-5 md:py-3.5 md:border-b border-aged-200/80 bg-parchment-50/60">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
@@ -1113,7 +1113,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-3 py-2 md:px-5 md:py-3.5 md:border-b border-aged-200/80 bg-parchment-50/60">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
