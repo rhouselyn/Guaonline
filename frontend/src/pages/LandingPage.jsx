@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { auth } from '../utils/auth';
 import {
   ArrowRight, Globe, PenTool, Brain, Star, Volume2, BarChart3,
@@ -245,6 +246,7 @@ function SectionTitle({ children, sub }) {
 export default function LandingPage() {
   const [user, setUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     auth.fetchUser().then(u => { if (u) setUser(u); }).catch(() => {});
@@ -302,14 +304,46 @@ export default function LandingPage() {
               {user ? '进入学习' : '登录'}
             </a>
           </div>
+          {/* 手机汉堡按钮 */}
+          <button
+            onClick={() => setMobileMenuOpen(v => !v)}
+            className="sm:hidden w-10 h-10 flex items-center justify-center text-[#3d3929] hover:bg-[#d4c9a8]/40 rounded-md transition-colors"
+            aria-label="菜单"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            )}
+          </button>
         </div>
+        {/* 手机下拉菜单 */}
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="sm:hidden absolute top-16 left-0 right-0 bg-[#faf8f0] border-b-2 border-[#d4c9a8] shadow-retro-lg z-40 overflow-hidden"
+          >
+            <div className="flex flex-col px-6 py-4 gap-1">
+              <button onClick={() => { scrollTo('modes'); setMobileMenuOpen(false); }} className="btn-ghost text-left">模式</button>
+              <button onClick={() => { scrollTo('exercises'); setMobileMenuOpen(false); }} className="btn-ghost text-left">练习</button>
+              <button onClick={() => { scrollTo('comparison'); setMobileMenuOpen(false); }} className="btn-ghost text-left">对比</button>
+              <button onClick={() => { scrollTo('features'); setMobileMenuOpen(false); }} className="btn-ghost text-left">功能</button>
+              <button onClick={() => { scrollTo('pricing'); setMobileMenuOpen(false); }} className="btn-ghost text-left">定价</button>
+              <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="btn-ghost text-left">GitHub</a>
+              <div className="border-t border-[#d4c9a8] my-1" />
+              <a href={user ? '/learn' : '/login'} onClick={() => setMobileMenuOpen(false)} className="btn-primary block text-center">{user ? '进入学习' : '登录'}</a>
+            </div>
+          </motion.div>
+        )}
       </nav>
 
       {/* Hero
           ponytail: 首屏文本使用原生 HTML + CSS 动画，无 framer-motion 依赖。
           LCP 元素（描述段落）首帧即绘制，H1/副标题用 CSS slide-up 错峰呈现。
           下方视口外区块使用 .reveal + IntersectionObserver，零 JS 动画运行时。 */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      <section className="relative min-h-screen min-h-[100svh] flex items-center justify-center overflow-hidden pt-16">
         <AlgorithmicArtBackground />
         <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
           <div className="flex justify-center mb-8 hero-fade-in" style={{ animationDelay: '0ms' }}>
@@ -352,7 +386,7 @@ export default function LandingPage() {
       </section>
 
       {/* 痛点洞察 */}
-      <section className="py-24 px-6 bg-[#f0ead6]/30 relative">
+      <section className="py-24 px-4 sm:px-6 bg-[#f0ead6]/30 relative">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-6xl mx-auto relative">
@@ -380,7 +414,7 @@ export default function LandingPage() {
       </section>
 
       {/* 三种模式 - 解决方案 */}
-      <section id="modes" className="py-24 px-6 bg-[#faf8f0] relative">
+      <section id="modes" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="max-w-6xl mx-auto">
           <SectionTitle sub="你的素材，你做主">
             三种<span className="text-[#d4a853]">模式</span>
@@ -407,7 +441,7 @@ export default function LandingPage() {
       </section>
 
       {/* 使用流程 */}
-      <section className="py-24 px-6 bg-[#f0ead6]/30 relative">
+      <section className="py-24 px-4 sm:px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-5xl mx-auto">
           <SectionTitle sub="从输入到掌握，六步搞定">
             使用<span className="text-[#d4a853]">流程</span>
@@ -432,7 +466,7 @@ export default function LandingPage() {
       </section>
 
       {/* 练习体系 */}
-      <section id="exercises" className="py-24 px-6 bg-[#faf8f0] relative">
+      <section id="exercises" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="max-w-6xl mx-auto">
           <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">六大题型，从认到用</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -480,7 +514,7 @@ export default function LandingPage() {
       </section>
 
       {/* 对比多邻国 */}
-      <section id="comparison" className="py-24 px-6 bg-[#3d3929] text-[#faf8f0] relative overflow-hidden">
+      <section id="comparison" className="py-24 px-4 sm:px-6 bg-[#3d3929] text-[#faf8f0] relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative">
@@ -491,14 +525,14 @@ export default function LandingPage() {
           </SectionTitle>
           <div className="space-y-4">
             {COMPARISON.map((row, i) => (
-              <div key={i} className="reveal flex items-center gap-4 md:gap-8" style={{ transitionDelay: `${i * 100}ms` }}>
-                <div className="flex-1 text-right">
+              <div key={i} className="reveal flex items-center gap-2 sm:gap-4 md:gap-8" style={{ transitionDelay: `${i * 100}ms` }}>
+                <div className="flex-1 min-w-0 text-right">
                   <span className="text-[#b5ae8e] text-sm md:text-base line-through decoration-[#8b7e5e]/40">{row.duo}</span>
                 </div>
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#d4a853] flex items-center justify-center">
                   <ArrowRight className="w-4 h-4 text-[#3d3929]" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <span className="text-[#faf8f0] text-sm md:text-base font-medium">{row.gua}</span>
                 </div>
               </div>
@@ -508,7 +542,7 @@ export default function LandingPage() {
       </section>
 
       {/* 特色功能 */}
-      <section id="features" className="py-24 px-6 bg-[#faf8f0] relative">
+      <section id="features" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.08 }} />
         <div className="max-w-6xl mx-auto relative">
@@ -533,7 +567,7 @@ export default function LandingPage() {
       </section>
 
       {/* 目标用户 */}
-      <section id="users" className="py-24 px-6 bg-[#f0ead6]/30 relative">
+      <section id="users" className="py-24 px-4 sm:px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-6xl mx-auto">
           <SectionTitle sub="留学备考、阅读理解辅助、职场外语、小语种学习">谁需要呱邻国？</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -553,7 +587,7 @@ export default function LandingPage() {
       </section>
 
       {/* 语言云 */}
-      <section className="py-16 px-6 bg-[#3d3929] relative overflow-hidden">
+      <section className="py-16 px-4 sm:px-6 bg-[#3d3929] relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative text-center">
@@ -572,7 +606,7 @@ export default function LandingPage() {
       </section>
 
       {/* 定价 */}
-      <section id="pricing" className="py-24 px-6 bg-[#faf8f0] relative">
+      <section id="pricing" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-5xl mx-auto relative">
@@ -627,7 +661,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-6 bg-[#3d3929] text-[#faf8f0] text-center relative overflow-hidden">
+      <section className="py-20 px-4 sm:px-6 bg-[#3d3929] text-[#faf8f0] text-center relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.04 }} />
         <div className="relative max-w-2xl mx-auto">
@@ -650,7 +684,7 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ：以问答形式覆盖长尾搜索意图（替代原关键词堆砌带） */}
-      <section className="py-12 px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="常见问题">
+      <section className="py-12 px-4 sm:px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="常见问题">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl font-bold text-[#3d3929] mb-8 text-center" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
             常见问题
@@ -677,7 +711,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="py-8 px-6 border-t border-[#d4c9a8] bg-[#faf8f0]">
+      <footer id="contact" className="py-8 px-4 sm:px-6 border-t border-[#d4c9a8] bg-[#faf8f0]">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <FrogLogo size={24} />
