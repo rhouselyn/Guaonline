@@ -392,7 +392,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
                     className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-parchment-50/80 transition-colors text-left cursor-pointer"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-sm font-bold font-display text-ink-800 ${displayMode === 2 && expandedWord !== word.word ? 'invisible' : ''}`}>{word.word}</span>
                         {word.ipa && (
                           <span className={`text-xs text-ink-400 ipa-font ${displayMode === 2 && expandedWord !== word.word ? 'invisible' : ''}`}>
@@ -564,7 +564,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
                 </div>
               </div>
 
-              <div className="max-h-[420px] overflow-y-auto">
+              <div className="max-h-[60vh] sm:max-h-[420px] overflow-y-auto">
                 {renderWordList()}
               </div>
             </div>

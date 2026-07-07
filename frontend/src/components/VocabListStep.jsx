@@ -189,7 +189,7 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-parchment-50 border-2 border-aged-200/80 rounded-md shadow-retro-sm overflow-hidden flex flex-col max-w-2xl max-h-[85vh] w-full">
+      <div className="bg-parchment-50 border-2 border-aged-200/80 rounded-md shadow-retro-sm overflow-hidden flex flex-col max-w-2xl max-h-[90vh] w-full">
         <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
