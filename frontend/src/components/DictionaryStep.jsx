@@ -1419,6 +1419,53 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         </div>
       </div>
+
+      {/* 手机端底部导航栏：Tab 切换 + 开始学习 */}
+      {!isDesktop && (
+        <div className="flex items-center gap-2 p-2 bg-parchment-50/95 backdrop-blur-md border-t-2 border-aged-200 shadow-lg md:hidden">
+          <button
+            onClick={() => switchPanel(0)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-bold transition-all duration-200 ${
+              activePanel === 0
+                ? 'bg-amber-100 text-amber-700'
+                : 'text-ink-500 hover:bg-parchment-100'
+            }`}
+          >
+            <Languages className="w-4 h-4" />
+            <span>{t.sentTranslation || '句子'}</span>
+          </button>
+          <button
+            onClick={() => switchPanel(1)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-bold transition-all duration-200 ${
+              activePanel === 1
+                ? 'bg-amber-100 text-amber-700'
+                : 'text-ink-500 hover:bg-parchment-100'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>{t.vocabulary || '词汇'}</span>
+          </button>
+          <div className="flex-1" />
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={onStartLearning}
+            disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
+            className="btn-primary flex items-center gap-1.5 px-4 py-2.5 shrink-0"
+          >
+            {(loading || preprocessStatus) ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t.preparing}
+              </>
+            ) : (
+              <>
+                <Shuffle className="w-4 h-4" />
+                {t.startLearning || '开始学习'}
+              </>
+            )}
+          </motion.button>
+        </div>
+      )}
     </motion.div>
   )
 }
