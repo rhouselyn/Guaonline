@@ -24,6 +24,9 @@ class UserPreferencesUpdate(BaseModel):
     only_new_words: Optional[bool] = None
     auto_update: Optional[bool] = None
     tts_engine: Optional[str] = None
+    # 字体缩放：移动端 / 桌面端分别保存，默认 1.0（学习页基础字号 14px）
+    font_scale_mobile: Optional[float] = None
+    font_scale_desktop: Optional[float] = None
 
 
 @router.get("/user-preferences")
@@ -58,6 +61,10 @@ async def update_user_preferences(req: UserPreferencesUpdate, current_user: Toke
             current["auto_update"] = req.auto_update
         if req.tts_engine is not None:
             current["tts_engine"] = req.tts_engine
+        if req.font_scale_mobile is not None:
+            current["font_scale_mobile"] = req.font_scale_mobile
+        if req.font_scale_desktop is not None:
+            current["font_scale_desktop"] = req.font_scale_desktop
         storage.save_user_preferences(current, user_id=current_user.user_id)
         return current
     except Exception as e:
