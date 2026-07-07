@@ -5,12 +5,16 @@ import WordDetail from './WordDetail'
 import SentenceDetail from './SentenceDetail'
 import FavoriteButton from './FavoriteButton'
 import { groupVocab } from '../utils/vocab'
+import { useMediaQuery } from '../utils/useMediaQuery'
 import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
 function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '' }) {
   const saved = dictStateRef?.current || {}
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
+  const scrollContainerRef = useRef(null)
   const [expandedWord, setExpandedWord] = useState(null)
   const [wordDetailCache, setWordDetailCache] = useState({})
   const [loadingWords, setLoadingWords] = useState({})
@@ -839,7 +843,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       className="flex flex-col gap-3 w-full"
       style={{ height: '100%' }}
     >
-      <div className="flex items-center gap-3 px-1">
+      <div className="flex items-center gap-2 md:gap-3 flex-wrap px-1">
         <button
           onClick={onBack}
           className="btn-ghost p-2 -ml-1.5"
@@ -860,7 +864,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         {fileTitle && !editingTitle && (
           <button
             onClick={handleTitleClick}
-            className="flex items-center gap-1.5 max-w-[250px] group"
+            className="flex items-center gap-1.5 max-w-[150px] md:max-w-[250px] group"
           >
             <span className="truncate text-base font-bold text-ink-600 group-hover:text-ink-800 transition-colors">{fileTitle}</span>
             <Pencil className="w-2.5 h-2.5 text-aged-300 group-hover:text-ink-400 shrink-0 transition-colors" />
@@ -874,7 +878,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             onChange={e => setTitleInput(e.target.value)}
             onBlur={handleTitleSave}
             onKeyDown={handleTitleKeyDown}
-            className="text-[13px] font-bold text-ink-600 bg-transparent border-b border-aged-300 px-1 py-0.5 max-w-[250px] focus:outline-none focus:border-amber-400 transition-colors"
+            className="text-[13px] font-bold text-ink-600 bg-transparent border-b border-aged-300 px-1 py-0.5 max-w-[150px] md:max-w-[250px] focus:outline-none focus:border-amber-400 transition-colors"
           />
         )}
 
@@ -898,7 +902,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
                   {safeProcessingInfo.current}/{safeProcessingInfo.total}
                 </span>
-                <div className="progress-warm w-24">
+                <div className="progress-warm w-16 md:w-24">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${progress}%` }}
@@ -915,7 +919,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
                   {wordGenProgress.completed}/{wordGenProgress.total}
                 </span>
-                <div className="progress-warm w-24">
+                <div className="progress-warm w-16 md:w-24">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${wordGenProgress.total > 0 ? (wordGenProgress.completed / wordGenProgress.total * 100) : 0}%` }}
@@ -952,12 +956,28 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </motion.button>
       </div>
 
-      <div className="flex gap-6 flex-1 min-h-0" style={{ overflow: 'hidden' }}>
-        <div className="w-1/2 flex flex-col min-h-0" style={{ overflow: 'hidden' }}>
+      {/* 手机横向滑动指示器 */}
+      {!isDesktop && (
+        <div className="flex justify-center gap-2 py-2 md:hidden">
+          <span className={`w-2 h-2 rounded-full transition-colors ${activePanel === 0 ? 'bg-amber-400' : 'bg-aged-300'}`} />
+          <span className={`w-2 h-2 rounded-full transition-colors ${activePanel === 1 ? 'bg-amber-400' : 'bg-aged-300'}`} />
+        </div>
+      )}
+
+      <div
+        ref={scrollContainerRef}
+        onScroll={(e) => {
+          if (isDesktop) return
+          const idx = Math.round(e.target.scrollLeft / e.target.clientWidth)
+          if (idx !== activePanel) setActivePanel(idx)
+        }}
+        className="flex gap-0 md:gap-6 flex-1 min-h-0 md:overflow-hidden touch-scroll-x"
+      >
+        <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 shrink-0" style={{ minWidth: '140px' }}>
+                <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleShowOriginal}>
@@ -1050,11 +1070,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         </div>
 
-        <div className="w-1/2 flex flex-col min-h-0" style={{ overflow: 'hidden' }}>
+        <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 shrink-0" style={{ minWidth: '140px' }}>
+                <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleGlobalVocab}>
