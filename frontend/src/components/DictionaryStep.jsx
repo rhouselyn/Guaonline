@@ -17,13 +17,28 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const scrollContainerRef = useRef(null)
   // 滑动状态
   const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false })
+  const panelScrollRaf = useRef(null)
 
-  // 切换到指定面板（带平滑滚动）
+  // 切换到指定面板（快速动画，移动端追求即切即到）
   const switchPanel = useCallback((idx) => {
     const container = scrollContainerRef.current
     if (!container) return
     const pageWidth = container.clientWidth
-    container.scrollTo({ left: idx * pageWidth, behavior: 'smooth' })
+    const target = idx * pageWidth
+    if (panelScrollRaf.current) cancelAnimationFrame(panelScrollRaf.current)
+    const start = container.scrollLeft
+    const dist = target - start
+    if (dist === 0) { setActivePanel(idx); return }
+    const duration = 160
+    const t0 = performance.now()
+    const easeOut = (p) => 1 - Math.pow(1 - p, 3)
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / duration)
+      container.scrollLeft = start + dist * easeOut(p)
+      if (p < 1) panelScrollRaf.current = requestAnimationFrame(step)
+      else panelScrollRaf.current = null
+    }
+    panelScrollRaf.current = requestAnimationFrame(step)
     setActivePanel(idx)
   }, [])
   const [expandedWord, setExpandedWord] = useState(null)
@@ -1010,7 +1025,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           if (targetIdx === currentIdx) return
           touchState.current.scrolling = true
           switchPanel(targetIdx)
-          setTimeout(() => { touchState.current.scrolling = false }, 350)
+          setTimeout(() => { touchState.current.scrolling = false }, 180)
         }}
         className="flex gap-0 md:gap-6 flex-1 min-h-0 md:overflow-hidden touch-scroll-x"
       >
