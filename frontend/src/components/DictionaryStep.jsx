@@ -15,6 +15,17 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
   const scrollContainerRef = useRef(null)
+  // 滑动状态
+  const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false })
+
+  // 切换到指定面板（带平滑滚动）
+  const switchPanel = useCallback((idx) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const pageWidth = container.clientWidth
+    container.scrollTo({ left: idx * pageWidth, behavior: 'smooth' })
+    setActivePanel(idx)
+  }, [])
   const [expandedWord, setExpandedWord] = useState(null)
   const [wordDetailCache, setWordDetailCache] = useState({})
   const [loadingWords, setLoadingWords] = useState({})
@@ -565,11 +576,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }, 150)
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
-    if (!isDesktop && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ left: scrollContainerRef.current.clientWidth, behavior: 'smooth' })
-      setActivePanel(1)
-    }
-  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop])
+    if (!isDesktop) switchPanel(1)
+  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -776,6 +784,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
+    // 手机端：底部已有微信式 Tab，分页指示器删掉
+    if (!isDesktop) {
+      return null
+    }
+    // 桌面端：原有数字分页器
     return (
       <div className="flex items-center justify-center gap-1 py-1.5 border-t border-aged-200/60 bg-parchment-50/40">
         <button
@@ -840,6 +853,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       }
     }
   }, [])
+
+  // 手机端去掉 tab-warm 滑块样式（shadow/border），改用简洁文字
+  const tabActiveCls = isDesktop ? 'tab-warm-active' : 'text-ink-700 font-bold'
+  const tabInactiveCls = isDesktop ? 'tab-warm-inactive' : 'text-ink-400'
 
   return (
     <motion.div
@@ -946,7 +963,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
           disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
-          className="btn-primary flex items-center gap-2 shrink-0"
+          className="btn-primary flex items-center gap-2 shrink-0 py-2 px-4 md:py-3 md:px-6"
         >
           {(loading || preprocessStatus) ? (
             <>
@@ -956,20 +973,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           ) : (
             <>
               <Shuffle className="w-3.5 h-3.5" />
-              {t.startLearning || '开始学习'}
+              <span>{t.startLearning || '开始学习'}</span>
             </>
           )}
         </motion.button>
       </div>
-
-      {/* 手机横向滑动滑块指示器 */}
-      {!isDesktop && (
-        <div className="flex justify-center py-2 md:hidden">
-          <div className="relative w-16 h-1 bg-aged-200 rounded-full overflow-hidden">
-            <div className={`absolute top-0 left-0 h-full w-1/2 bg-amber-400 rounded-full transition-transform duration-200 ${activePanel === 1 ? 'translate-x-full' : ''}`} />
-          </div>
-        </div>
-      )}
 
       <div
         ref={scrollContainerRef}
@@ -978,19 +986,45 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           const idx = Math.round(e.target.scrollLeft / e.target.clientWidth)
           if (idx !== activePanel) setActivePanel(idx)
         }}
+        onTouchStart={(e) => {
+          if (isDesktop) return
+          const t = e.touches[0]
+          touchState.current = { x: t.clientX, y: t.clientY, t: Date.now(), scrolling: false }
+        }}
+        onTouchEnd={(e) => {
+          if (isDesktop || touchState.current.scrolling) return
+          const t = e.changedTouches[0]
+          const dx = t.clientX - touchState.current.x
+          const dy = t.clientY - touchState.current.y
+          const dt = Date.now() - touchState.current.t
+          // 横向位移必须明显大于纵向，避免误触垂直滚动
+          if (Math.abs(dx) < Math.abs(dy) * 1.5) return
+          const container = scrollContainerRef.current
+          if (!container) return
+          const pageWidth = container.clientWidth
+          const currentIdx = Math.round(container.scrollLeft / pageWidth)
+          // 更灵敏的触发：距离 15% 或速度 0.3px/ms
+          const isSwipe = Math.abs(dx) > pageWidth * 0.15 || (dt > 0 && Math.abs(dx) / dt > 0.3)
+          if (!isSwipe) return
+          const targetIdx = dx < 0 ? Math.min(1, currentIdx + 1) : Math.max(0, currentIdx - 1)
+          if (targetIdx === currentIdx) return
+          touchState.current.scrolling = true
+          switchPanel(targetIdx)
+          setTimeout(() => { touchState.current.scrolling = false }, 350)
+        }}
         className="flex gap-0 md:gap-6 flex-1 min-h-0 md:overflow-hidden touch-scroll-x"
       >
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
-              <div className="flex items-center gap-3">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleShowOriginal}>
-                      <span className={!showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.sentTranslation}</span>
+                      <span className={!showOriginal ? tabActiveCls : tabInactiveCls}>{t.sentTranslation}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showOriginal ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.showOriginal}</span>
+                      <span className={showOriginal ? tabActiveCls : tabInactiveCls}>{t.showOriginal}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1079,15 +1113,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
         <div className="w-full md:w-1/2 snap-item flex flex-col min-h-0 md:overflow-hidden">
           <div className="bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro-sm overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
-              <div className="flex items-center gap-3">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
                   <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleGlobalVocab}>
-                      <span className={!showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.vocabList}</span>
+                      <span className={!showGlobalVocab ? tabActiveCls : tabInactiveCls}>{t.vocabList}</span>
                       <span className="text-aged-300 mx-1.5">/</span>
-                      <span className={showGlobalVocab ? 'tab-warm-active' : 'tab-warm-inactive'}>{t.globalVocabList}</span>
+                      <span className={showGlobalVocab ? tabActiveCls : tabInactiveCls}>{t.globalVocabList}</span>
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
@@ -1373,6 +1407,30 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         </div>
       </div>
+
+      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
+      {!isDesktop && (
+        <div className="flex bg-parchment-50 border-t border-aged-200 md:hidden">
+          <button
+            onClick={() => switchPanel(0)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              activePanel === 0 ? 'text-amber-600' : 'text-ink-400'
+            }`}
+          >
+            <Languages className="w-5 h-5" />
+            <span className="text-[10px] font-medium">{t.sentTranslation || '句子'}</span>
+          </button>
+          <button
+            onClick={() => switchPanel(1)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              activePanel === 1 ? 'text-amber-600' : 'text-ink-400'
+            }`}
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[10px] font-medium">{t.vocabList || '单词分表'}</span>
+          </button>
+        </div>
+      )}
     </motion.div>
   )
 }

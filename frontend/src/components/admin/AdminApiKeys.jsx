@@ -380,8 +380,8 @@ export default function AdminApiKeys() {
                   )}
                 </div>
               </div>
-              {/* key 核心属性：只读预览（点"编辑"改全局属性，含 title） */}
-              <div className="flex-1 min-w-0">
+              {/* key 核心属性：只读预览（点"编辑"改全局属性，含 title） - 手机端隐藏 */}
+              <div className="hidden sm:block flex-1 min-w-0">
                 <label className="text-[#e8d5b7]/60 text-xs">标题 / API Key（只读 · 改属性点"编辑"）</label>
                 <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">
                   {kdef.title && <span className="text-[#c9a96e] font-bold mr-1.5">{kdef.title}</span>}
@@ -389,19 +389,19 @@ export default function AdminApiKeys() {
                   {refCount > 1 && <span className="text-[#c9a96e]/60 text-xs">🔗 共享 {refCount} 处</span>}
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="hidden sm:block flex-1 min-w-0">
                 <label className="text-[#e8d5b7]/60 text-xs">Model</label>
                 <div className="bg-[#1a1a2e] text-[#e8d5b7]/80 border border-[#c9a96e]/20 rounded px-2 py-1 text-sm truncate">{kdef.model || '-'}</div>
               </div>
-              {/* per-pool 配置：行内可改 */}
-              <div className="w-24">
+              {/* per-pool 配置：行内可改 - 手机端隐藏 */}
+              <div className="hidden sm:block w-24">
                 <label className="text-[#e8d5b7]/60 text-xs">最大输出</label>
                 <input type="number" step="1" value={ref.max_tokens ?? defaultMaxTokens(activeTier)}
                   onChange={e => updateRefField(activeTier, activeSub, i, 'max_tokens', Number(e.target.value))}
                   onBlur={() => commitRefField(activeTier, activeSub)}
                   className="w-full bg-[#1a1a2e] text-[#e8d5b7] border border-[#c9a96e]/20 rounded px-2 py-1 text-sm" />
               </div>
-              <div className="w-16">
+              <div className="hidden sm:block w-16">
                 <label className="text-[#e8d5b7]/60 text-xs" title="SWRR 平滑加权轮询的权重，数值越大被选中概率越高">权重</label>
                 <input type="number" step="1" min="1" value={ref.weight ?? 1}
                   onChange={e => updateRefField(activeTier, activeSub, i, 'weight', Math.max(1, Number(e.target.value) || 1))}

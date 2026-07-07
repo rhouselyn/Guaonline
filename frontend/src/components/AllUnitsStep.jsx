@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Lock, Star, Headphones, Loader2, Home, BookOpen, PenTool, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { useMediaQuery } from '../utils/useMediaQuery';
 
 const UNITS_PER_PAGE = 30;
 
@@ -29,6 +30,13 @@ function AllUnitsStep({
   const [activeTab, setActiveTab] = useState(lastActiveTab || 0);
   const [phase1Page, setPhase1Page] = useState(0);
   const [phase2Page, setPhase2Page] = useState(0);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false });
+
+  const switchTab = (idx) => {
+    setActiveTab(idx);
+    onTabChange?.(idx);
+  };
 
   useEffect(() => {
     if (lastActiveTab !== undefined && lastActiveTab !== null) {
@@ -227,10 +235,30 @@ function AllUnitsStep({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="w-full"
+      onTouchStart={(e) => {
+        if (isDesktop) return
+        const t = e.touches[0]
+        touchState.current = { x: t.clientX, y: t.clientY, t: Date.now(), scrolling: false }
+      }}
+      onTouchEnd={(e) => {
+        if (isDesktop || touchState.current.scrolling) return
+        const t = e.changedTouches[0]
+        const dx = t.clientX - touchState.current.x
+        const dy = t.clientY - touchState.current.y
+        const dt = Date.now() - touchState.current.t
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return
+        const isSwipe = Math.abs(dx) > 40 || (dt > 0 && Math.abs(dx) / dt > 0.3)
+        if (!isSwipe) return
+        const targetIdx = dx < 0 ? Math.min(1, activeTab + 1) : Math.max(0, activeTab - 1)
+        if (targetIdx === activeTab) return
+        touchState.current.scrolling = true
+        switchTab(targetIdx)
+        setTimeout(() => { touchState.current.scrolling = false }, 350)
+      }}
     >
       <div className="flex items-center gap-1 sm:gap-2 flex-wrap mb-6">
         <button
@@ -294,7 +322,7 @@ function AllUnitsStep({
       <div className="max-w-3xl mx-auto">
         <div className="mb-6 text-center">
           <h2 className="text-xl font-bold font-display text-ink-800">
-            {t.learningUnits || '学习单元'}
+            {tabs[activeTab].label}
           </h2>
           <p className="text-xs text-ink-400 mt-1">{t.completeUnitsInOrder || '按顺序完成单元，解锁下一单元'}</p>
         </div>
@@ -306,7 +334,7 @@ function AllUnitsStep({
           </div>
         ) : (
           <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden">
-            <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5">
+            <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5 hidden md:block">
               <div className="flex gap-1 relative">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-parchment-50 rounded-t-xl shadow-retro-sm"
@@ -342,7 +370,7 @@ function AllUnitsStep({
               </div>
             </div>
 
-            <div className="px-5 pb-5 pt-4">
+            <div className="px-5 pb-20 md:pb-5 pt-4">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -358,6 +386,28 @@ function AllUnitsStep({
           </div>
         )}
       </div>
+
+      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
+      {!isDesktop && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
+          {tabs.map((tab, i) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === i;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => switchTab(i)}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+                  isActive ? 'text-amber-600' : 'text-ink-400'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </motion.div>
   );
 }

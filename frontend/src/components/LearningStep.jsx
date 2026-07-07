@@ -1,10 +1,24 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Loader2, CheckCircle2, ChevronRight, Brain, BookOpen, Volume2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ArrowLeft, Loader2, CheckCircle2, ChevronRight, Brain, BookOpen, Volume2, Languages } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { speakText } from '../utils/speech'
+import { useMediaQuery } from '../utils/useMediaQuery'
 
 function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, onOptionSelect, onNextWord, onBack, onOpenVocabList, loading, t, sourceLang, skipListening, reviewMode, reviewIndex, wrongItemsCount }) {
   const speakTimerRef = useRef(null)
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  // 手机端学习模式：0=句子练习（题目），1=单词学习（单词卡）
+  const [activeMode, setActiveMode] = useState(showWordCard ? 1 : 0)
+  const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false })
+
+  // 父组件 showWordCard 变化时（如答对自动展示单词卡）同步本地模式
+  useEffect(() => {
+    setActiveMode(showWordCard ? 1 : 0)
+  }, [showWordCard])
+
+  const switchMode = (idx) => {
+    setActiveMode(idx)
+  }
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -54,7 +68,28 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-3xl mx-auto"
+      className="max-w-3xl mx-auto pb-16 md:pb-0"
+      onTouchStart={(e) => {
+        if (isDesktop) return
+        const t = e.touches[0]
+        touchState.current = { x: t.clientX, y: t.clientY, t: Date.now(), scrolling: false }
+      }}
+      onTouchEnd={(e) => {
+        if (isDesktop || touchState.current.scrolling) return
+        const t = e.changedTouches[0]
+        const dx = t.clientX - touchState.current.x
+        const dy = t.clientY - touchState.current.y
+        const dt = Date.now() - touchState.current.t
+        // 横向位移必须明显大于纵向，避免误触垂直滚动
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return
+        const isSwipe = Math.abs(dx) > 40 || (dt > 0 && Math.abs(dx) / dt > 0.3)
+        if (!isSwipe) return
+        const targetIdx = dx < 0 ? Math.min(1, activeMode + 1) : Math.max(0, activeMode - 1)
+        if (targetIdx === activeMode) return
+        touchState.current.scrolling = true
+        switchMode(targetIdx)
+        setTimeout(() => { touchState.current.scrolling = false }, 350)
+      }}
     >
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
@@ -89,7 +124,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       </div>
 
       <AnimatePresence mode="wait">
-        {!showWordCard ? (
+        {activeMode === 0 ? (
           <motion.div
             key="question"
             initial={{ opacity: 0, y: 20 }}
@@ -341,6 +376,30 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
+      {!isDesktop && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
+          <button
+            onClick={() => switchMode(0)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              activeMode === 0 ? 'text-amber-600' : 'text-ink-400'
+            }`}
+          >
+            <Languages className="w-5 h-5" />
+            <span className="text-[10px] font-medium">句子练习</span>
+          </button>
+          <button
+            onClick={() => switchMode(1)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              activeMode === 1 ? 'text-amber-600' : 'text-ink-400'
+            }`}
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[10px] font-medium">单词学习</span>
+          </button>
+        </div>
+      )}
     </motion.div>
   )
 }
