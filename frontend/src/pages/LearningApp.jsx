@@ -6,6 +6,7 @@ import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
 import { auth } from '../utils/auth'
+import { useMediaQuery } from '../utils/useMediaQuery'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AlertDialog from '../components/AlertDialog'
 import AccountMenu from '../components/AccountMenu'
@@ -118,6 +119,14 @@ function App() {
   const [favoriteLang, setFavoriteLang] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, onConfirm: null })
   const [alertDialog, setAlertDialog] = useState({ open: false, title: '', message: '' })
+  // 字体缩放：移动端 / 桌面端分别保存，学习页基础字号 14px
+  const [fontScaleMobile, setFontScaleMobile] = useState(1)
+  const [fontScaleDesktop, setFontScaleDesktop] = useState(1)
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+
+  // === 浏览器历史导航：每个 step 变化压入历史栈，支持回退/前进 ===
+  const isPopstateRef = useRef(false)
+  const lastHistoryStepRef = useRef('input')
 
   const showAlert = useCallback((message, title) => {
     setAlertDialog({ open: true, title: title || '', message })
@@ -148,8 +157,54 @@ function App() {
         setRecentLanguages(prefs.recent_languages)
       }
       if (prefs.page_size) setPageSize(prefs.page_size)
+      if (prefs.font_scale_mobile !== undefined && prefs.font_scale_mobile !== null) setFontScaleMobile(prefs.font_scale_mobile)
+      if (prefs.font_scale_desktop !== undefined && prefs.font_scale_desktop !== null) setFontScaleDesktop(prefs.font_scale_desktop)
     }).catch(() => {})
   }, [])
+
+  // === 字体缩放：应用到 documentElement，学习页基础字号 14px（比默认 16px 小）===
+  // 依赖 showSettings：设置弹窗关闭时重新应用已保存值，撤销弹窗内的实时预览
+  useEffect(() => {
+    const scale = isDesktop ? fontScaleDesktop : fontScaleMobile
+    document.documentElement.style.fontSize = `${14 * scale}px`
+    return () => {
+      // 离开学习页时恢复浏览器默认 16px
+      document.documentElement.style.fontSize = ''
+    }
+  }, [isDesktop, fontScaleMobile, fontScaleDesktop, showSettings])
+
+  // === 浏览器历史导航：popstate 监听（回退/前进）===
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const targetStep = event.state?.step
+      if (targetStep && targetStep !== lastHistoryStepRef.current) {
+        isPopstateRef.current = true
+        lastHistoryStepRef.current = targetStep
+        // 关闭可能打开的弹窗，避免历史导航后残留
+        setConfirmDialog({ isOpen: false, onConfirm: null })
+        setAlertDialog({ open: false, title: '', message: '' })
+        setStep(targetStep)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    // 初始化当前历史条目的 state，使 popstate 能读到 step
+    window.history.replaceState({ step: 'input' }, '')
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // === 浏览器历史导航：step 变化时压入历史栈 ===
+  useEffect(() => {
+    // 来自 popstate 的变化不重复压栈
+    if (isPopstateRef.current) {
+      isPopstateRef.current = false
+      lastHistoryStepRef.current = step
+      return
+    }
+    if (step !== lastHistoryStepRef.current) {
+      lastHistoryStepRef.current = step
+      window.history.pushState({ step }, '')
+    }
+  }, [step])
 
   useEffect(() => {
     if (!currentFileId) return
@@ -1636,7 +1691,7 @@ function App() {
           </div>
         )}
       </main>
-      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} />
+      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

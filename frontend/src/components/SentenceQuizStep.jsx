@@ -83,53 +83,54 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
       exit={{ opacity: 0, y: -20 }}
       className="max-w-3xl mx-auto"
     >
-      <div className="flex items-center justify-between gap-2 mb-6 sm:mb-8">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-4 sm:mb-8">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             onClick={onBack}
-            className="flex items-center gap-2 btn-ghost"
+            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.95 }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            {t.back}
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {totalItemsInUnit > 0 && (
-            <span className="text-sm text-ink-500 font-medium">{(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}</span>
+            <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">{(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}</span>
           )}
           {onOpenVocabList && (
             <motion.button
               onClick={onOpenVocabList}
-              className="flex items-center gap-2 btn-ghost"
+              className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
               whileHover={{ scale: 1.05, x: 2 }}
               whileTap={{ scale: 0.95 }}
             >
-              <BookOpen className="w-4 h-4" />
-              {t.vocabList || '单词表'}
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">{t.vocabList || '单词表'}</span>
             </motion.button>
           )}
         </div>
       </div>
 
       <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-500 rounded-none text-sm font-medium mb-4"
+            className="inline-flex items-center gap-2 px-3 py-1 sm:px-4 sm:py-1.5 bg-amber-50 text-amber-500 rounded-none text-xs sm:text-sm font-medium mb-3 sm:mb-4"
           >
-            <Languages className="w-4 h-4" />
+            <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {t.translationQuiz || '翻译题'}
           </motion.div>
-          <div className="flex items-center justify-center gap-2">
+          {/* 句子翻译：单行显示，过长时横向滚动，发音按钮始终可见 */}
+          <div className="flex items-center gap-2">
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="text-lg text-ink-600"
+              className="text-sm sm:text-lg text-ink-600 whitespace-nowrap overflow-x-auto flex-1 min-w-0 py-1 text-left"
             >
               {quizData.original_sentence}
             </motion.p>
@@ -137,9 +138,9 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
               whileHover={{ scale: 1.15 }}
               whileTap={{ scale: 0.9 }}
               onClick={(e) => { e.stopPropagation(); speakText(quizData.original_sentence, sourceLang) }}
-              className="p-2 text-amber-500 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors"
+              className="p-1.5 sm:p-2 text-amber-500 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors shrink-0"
             >
-              <Volume2 className="w-5 h-5" />
+              <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </motion.button>
           </div>
         </div>

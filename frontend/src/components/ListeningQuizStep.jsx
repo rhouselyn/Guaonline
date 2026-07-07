@@ -89,43 +89,43 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
       exit={{ opacity: 0, y: -20 }}
       className="max-w-3xl mx-auto"
     >
-      <div className="flex items-center justify-between gap-2 mb-6 sm:mb-8">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-4 sm:mb-8">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             onClick={onBack}
-            className="flex items-center gap-2 btn-ghost"
+            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.95 }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            {t.back}
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {totalItemsInUnit > 0 && (
-            <span className="text-sm text-ink-500 font-medium">{t.step || '第'} {stepInUnit} / {totalItemsInUnit} {t.question || '题'}</span>
+            <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">{t.step || '第'} {stepInUnit} / {totalItemsInUnit} {t.question || '题'}</span>
           )}
           {!isChecked && !isSkipped && (
             <motion.button
               onClick={handleSkipListening}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-ink-400 hover:text-amber-500 hover:bg-amber-50 rounded-sm transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs font-bold text-ink-400 hover:text-amber-500 hover:bg-amber-50 rounded-sm transition-colors whitespace-nowrap"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               title={t.skipListening || '跳过听力'}
             >
-              <SkipForward className="w-3.5 h-3.5" />
-              {t.skip || '跳过'}
+              <SkipForward className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+              <span className="truncate">{t.skip || '跳过'}</span>
             </motion.button>
           )}
           {onOpenVocabList && (
             <motion.button
               onClick={onOpenVocabList}
-              className="flex items-center gap-2 btn-ghost"
+              className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
               whileHover={{ scale: 1.05, x: 2 }}
               whileTap={{ scale: 0.95 }}
             >
-              <BookOpen className="w-4 h-4" />
-              {t.vocabList || '单词表'}
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">{t.vocabList || '单词表'}</span>
             </motion.button>
           )}
         </div>

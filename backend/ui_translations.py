@@ -183,6 +183,12 @@ UI_TRANSLATION_SCHEMA = {
     "monthlyQuotaInfo": {"desc": "Monthly quota info for basic tier, {0}=monthly", "zh": "每月 {0} 句额度", "en": "{0} sentences per month"},
     "unlimitedQuota": {"desc": "Unlimited quota label", "zh": "无限额度", "en": "Unlimited"},
     "rateLimitExceeded": {"desc": "Rate limit exceeded message", "zh": "请求过于频繁，请稍后再试", "en": "Too many requests, please try again later"},
+    "fontSize": {"desc": "Font size settings section title", "zh": "字体大小", "en": "Font Size"},
+    "fontScaleMobile": {"desc": "Mobile font scale label", "zh": "手机端字号", "en": "Mobile Font Scale"},
+    "fontScaleDesktop": {"desc": "Desktop font scale label", "zh": "电脑端字号", "en": "Desktop Font Scale"},
+    "fontScaleDesc": {"desc": "Font scale setting description", "zh": "学习页面字号缩放，移动端与桌面端分别保存", "en": "Scale learning page fonts; mobile and desktop saved separately"},
+    "fontScaleSmall": {"desc": "Small end of font scale", "zh": "小", "en": "Small"},
+    "fontScaleLarge": {"desc": "Large end of font scale", "zh": "大", "en": "Large"},
 }
 
 TRANSLATION_PROMPT = """You are a professional UI translator. Translate the following UI strings into {target_lang_name} ({target_lang_code}).

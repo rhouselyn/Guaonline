@@ -91,21 +91,21 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
         setTimeout(() => { touchState.current.scrolling = false }, 350)
       }}
     >
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-4 sm:mb-8">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={onBack}
-            className="flex items-center gap-2 btn-ghost"
+            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
           >
-            <ArrowLeft className="w-4 h-4" />
-            {t.back}
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {totalItemsInUnit > 0 && (
-            <span className="text-sm text-ink-500 font-medium">
+            <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">
               {(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}
             </span>
           )}
@@ -114,10 +114,10 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               onClick={onOpenVocabList}
-              className="flex items-center gap-2 btn-ghost"
+              className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
             >
-              <BookOpen className="w-4 h-4" />
-              {t.vocabList || '单词表'}
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">{t.vocabList || '单词表'}</span>
             </motion.button>
           )}
         </div>
@@ -130,7 +130,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm"
           >
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-2">
@@ -195,7 +195,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-8 shadow-retro-sm"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm"
           >
             <div className="flex items-start justify-between mb-8">
               <div>
