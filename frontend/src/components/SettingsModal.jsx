@@ -124,7 +124,7 @@ function NativeLangSelector({ value, onChange, recentLangs = [] }) {
   )
 }
 
-const SECTIONS = ['general', 'nativeLang', 'fontSize']
+const SECTIONS = ['general', 'nativeLang']
 
 const slideVariants = {
   enter: (dir) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -250,13 +250,11 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
   const sectionLabels = {
     general: t.settingsGeneral || '通用',
     nativeLang: t.settingsNativeLang || '母语',
-    fontSize: t.fontSize || '字体',
   }
 
   const sectionIcons = {
     general: Settings,
     nativeLang: Languages,
-    fontSize: Type,
   }
 
   const renderGeneralSection = () => (
@@ -329,6 +327,42 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         </div>
       </div>
 
+      {/* Font Size - 单滑块自适应当前设备，后端按设备分别保存，用户无感知 */}
+      <div>
+        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
+          <Type className="w-3 h-3" />
+          {t.fontSize || '字体大小'}
+        </label>
+        <div className="p-3 rounded-sm border-2 border-aged-200 bg-parchment-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-ink-400">{t.fontScaleDesc || '调整学习页面字号'}</span>
+            <span className="text-[11px] font-bold text-amber-500 tabular-nums">{Math.round((isDesktop ? localFontScaleDesktop : localFontScaleMobile) * 100)}%</span>
+          </div>
+          <div className="relative">
+            <input
+              type="range"
+              min={0.8}
+              max={1.4}
+              step={0.05}
+              value={isDesktop ? localFontScaleDesktop : localFontScaleMobile}
+              onChange={e => {
+                const v = Number(e.target.value)
+                if (isDesktop) setLocalFontScaleDesktop(v)
+                else setLocalFontScaleMobile(v)
+              }}
+              className="w-full h-2 rounded-none appearance-none cursor-pointer bg-parchment-100"
+              style={{
+                background: `linear-gradient(to right, #C08A3A 0%, #C08A3A ${(((isDesktop ? localFontScaleDesktop : localFontScaleMobile) - 0.8) / (1.4 - 0.8)) * 100}%, #F5ECD7 ${(((isDesktop ? localFontScaleDesktop : localFontScaleMobile) - 0.8) / (1.4 - 0.8)) * 100}%, #F5ECD7 100%)`
+              }}
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-[10px] text-aged-300">{t.fontScaleSmall || '小'}</span>
+              <span className="text-[10px] text-aged-300">{t.fontScaleLarge || '大'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Learning Options */}
       <div className="space-y-3 pt-2 border-t border-aged-200/60">
         <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
@@ -382,70 +416,10 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     </div>
   )
 
-  const FontScaleSlider = ({ label, value, onChange, isCurrent }) => (
-    <div className={`p-3 rounded-sm border-2 transition-colors ${isCurrent ? 'border-amber-300 bg-amber-50/40' : 'border-aged-200 bg-parchment-50'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-ink-700 flex items-center gap-1.5">
-          {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-          {label}
-        </span>
-        <span className="text-[11px] font-bold text-amber-500 tabular-nums">{Math.round(value * 100)}%</span>
-      </div>
-      <div className="relative">
-        <input
-          type="range"
-          min={0.8}
-          max={1.4}
-          step={0.05}
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          className="w-full h-2 rounded-none appearance-none cursor-pointer bg-parchment-100"
-          style={{
-            background: `linear-gradient(to right, #C08A3A 0%, #C08A3A ${((value - 0.8) / (1.4 - 0.8)) * 100}%, #F5ECD7 ${((value - 0.8) / (1.4 - 0.8)) * 100}%, #F5ECD7 100%)`
-          }}
-        />
-        <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-aged-300">{t.fontScaleSmall || '小'}</span>
-          <span className="text-[10px] text-aged-300">{t.fontScaleLarge || '大'}</span>
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderFontSizeSection = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="label-warm flex items-center gap-1.5 text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">
-          <Type className="w-3 h-3" />
-          {t.fontSize || '字体大小'}
-        </label>
-        <p className="text-[10px] text-ink-400 mb-3">{t.fontScaleDesc || '学习页面字号缩放，移动端与桌面端分别保存'}</p>
-        <div className="space-y-3">
-          <FontScaleSlider
-            label={t.fontScaleMobile || '手机端字号'}
-            value={localFontScaleMobile}
-            onChange={setLocalFontScaleMobile}
-            isCurrent={!isDesktop}
-          />
-          <FontScaleSlider
-            label={t.fontScaleDesktop || '电脑端字号'}
-            value={localFontScaleDesktop}
-            onChange={setLocalFontScaleDesktop}
-            isCurrent={isDesktop}
-          />
-        </div>
-        <p className="text-[10px] text-ink-400 mt-3">
-          {isDesktop ? '当前预览：电脑端' : '当前预览：手机端'} · 14px × {Math.round((isDesktop ? localFontScaleDesktop : localFontScaleMobile) * 100)}% = {Math.round(14 * (isDesktop ? localFontScaleDesktop : localFontScaleMobile))}px
-        </p>
-      </div>
-    </div>
-  )
-
   const renderContent = () => {
     switch (activeSection) {
       case 'general': return renderGeneralSection()
       case 'nativeLang': return renderNativeLangSection()
-      case 'fontSize': return renderFontSizeSection()
       default: return null
     }
   }

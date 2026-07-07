@@ -216,7 +216,7 @@ function AllUnitsStep({
           />
         </div>
 
-        <div className="flex flex-wrap gap-2.5 justify-center">
+        <div className="grid gap-2.5 justify-center grid-cols-[repeat(auto-fill,5rem)]">
           {pageUnits.map((unit, pageIdx) => {
             const globalIdx = startIdx + pageIdx;
             return renderUnitCard(
