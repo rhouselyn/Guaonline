@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
+import { auth } from '../utils/auth'
+import { useMediaQuery } from '../utils/useMediaQuery'
 
 const LANG_COLORS = {
   'en': '#3b82f6', 'fr': '#6366f1', 'pt': '#22c55e', 'de': '#eab308', 'ro': '#2563eb',
@@ -631,10 +633,21 @@ function ModeSelector({ mode, setMode, t }) {
 
 function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
   const navigate = useNavigate()
+  const isDesktop = useMediaQuery('(min-width: 768px)')
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
   // 记住非直接输入模式（翻译/生成）的语言选择
   const nonDirectModeLangRef = useRef(null)
+  const [quota, setQuota] = useState(() => auth.getQuota())
+
+  // 刷新额度（与 AccountMenu 保持一致）
+  useEffect(() => {
+    const refresh = () => { const q = auth.getQuota(); if (q) setQuota(q) }
+    refresh()
+    auth.fetchUser().then(() => setQuota(auth.getQuota())).catch(() => {})
+    const interval = setInterval(refresh, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   // 当 recentLanguages 加载后，初始化 nonDirectModeLangRef
   // 排除母语（uiLang），因为翻译/生成模式的学习语言不应默认为母语
@@ -677,6 +690,102 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
     return t.modeDirectPlaceholder
   }
 
+  const available = quota?.available ?? 0
+  const max = quota?.tier_max ?? quota?.max ?? 200
+  const isUnlimited = max === -1
+
+  // 额度小标（移动端紧贴 logo 右侧）
+  const QuotaBadge = () => (
+    <span
+      className={`inline-flex items-center gap-1 text-xs font-medium ${available <= 10 && !isUnlimited ? 'text-rust-500' : 'text-amber-600'}`}
+      title={t?.remainingQuota || '剩余额度'}
+    >
+      <Zap className="w-3.5 h-3.5" />
+      {isUnlimited ? '∞' : available}
+    </span>
+  )
+
+  const InputBox = () => (
+    <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
+      {/* 角标装饰 */}
+      <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
+      <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
+      <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
+      <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
+      {/* Mode tabs at top of input */}
+      <div className="border-b border-aged-200/60 px-3 pt-2 pb-0">
+        <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
+      </div>
+
+      {/* Textarea area */}
+      <div className="relative">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={getPlaceholder()}
+          rows={isDesktop ? 4 : 3}
+          className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+        />
+
+        {/* Submit button inside textarea, bottom-right */}
+        <div className="flex items-center justify-end px-3 pb-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onProcess}
+            disabled={loading || !text.trim()}
+            className={`p-2 rounded-sm transition-all duration-200 ${
+              loading || !text.trim()
+                ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
+                : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
+            }`}
+          >
+            <AnimatePresence mode="wait">
+              {loading ? (
+                <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </motion.span>
+              ) : (
+                <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <ArrowRight className="w-4 h-4" />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // === 移动端：输入模式 + 输入框置顶，logo + 额度紧凑显示 ===
+  if (!isDesktop) {
+    return (
+      <div className="flex flex-col w-full gap-2 pt-2 px-3">
+        {/* logo + 额度行 */}
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 bg-amber-400 rounded-md flex items-center justify-center shadow-retro-sm border-2 border-amber-500 relative shrink-0">
+            <FrogLogo size={22} />
+          </div>
+          <h1 className="text-lg font-display font-bold text-ink-800 leading-tight"
+            style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+            {t.title || '呱邻国'}
+          </h1>
+          <div className="flex-1" />
+          <QuotaBadge />
+        </div>
+
+        {/* 语言选择 */}
+        <div className="flex items-center gap-2">
+          <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
+        </div>
+
+        {/* 输入框 */}
+        <InputBox />
+      </div>
+    )
+  }
+
+  // === 桌面端：保持原有布局 ===
   return (
     <div className="flex flex-col h-full w-full">
       {/* Top-left: language selector */}
@@ -727,55 +836,7 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
 
       {/* Bottom area - input box */}
       <div className="w-full max-w-2xl mx-auto pb-4 px-4">
-        <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
-          {/* 角标装饰 */}
-          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
-          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
-          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
-          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
-          {/* Mode tabs at top of input */}
-          <div className="border-b border-aged-200/60 px-3 pt-2 pb-0">
-            <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
-          </div>
-
-          {/* Textarea area */}
-          <div className="relative">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={getPlaceholder()}
-              rows={4}
-              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
-            />
-
-            {/* Submit button inside textarea, bottom-right */}
-            <div className="flex items-center justify-end px-3 pb-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onProcess}
-                disabled={loading || !text.trim()}
-                className={`p-2 rounded-sm transition-all duration-200 ${
-                  loading || !text.trim()
-                    ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
-                    : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
-                }`}
-              >
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </motion.span>
-                  ) : (
-                    <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <ArrowRight className="w-4 h-4" />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
-            </div>
-          </div>
-        </div>
+        <InputBox />
       </div>
     </div>
   )

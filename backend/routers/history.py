@@ -108,6 +108,21 @@ async def get_history(current_user: TokenData = Depends(require_auth)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/history/{file_id}/touch")
+async def touch_history(file_id: str, current_user: TokenData = Depends(require_auth)):
+    """更新历史记录的 updated_at（点击条目进入时调用，使其成为"最近条目"）。"""
+    try:
+        records = storage.load_history(user_id=current_user.user_id)
+        if not any(r.get("file_id") == file_id for r in records):
+            raise HTTPException(status_code=404, detail="Record not found")
+        storage.touch_history_record(file_id)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/history/{file_id}")
 async def delete_history(file_id: str, current_user: TokenData = Depends(require_auth)):
     try:

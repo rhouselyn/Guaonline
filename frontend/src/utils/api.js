@@ -167,6 +167,12 @@ export const api = {
     return response.data;
   },
 
+  // 更新历史记录的 updated_at（成为"最近条目"）
+  touchHistory: async (fileId) => {
+    const response = await axios.post(`${baseUrl}/api/history/${fileId}/touch`);
+    return response.data;
+  },
+
   getUnitStars: async (fileId) => {
     const response = await axios.get(`${baseUrl}/api/learn/${fileId}/unit-stars`);
     return response.data;

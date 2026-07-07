@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2, Home, ListChecks, User, Zap, LogOut, X } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -122,6 +122,9 @@ function App() {
   // 字体缩放：移动端 / 桌面端分别保存，学习页基础字号 14px
   const [fontScaleMobile, setFontScaleMobile] = useState(1)
   const [fontScaleDesktop, setFontScaleDesktop] = useState(1)
+  // 移动端"个人"面板
+  const [showPersonalPanel, setShowPersonalPanel] = useState(false)
+  const [navQuota, setNavQuota] = useState(() => auth.getQuota())
   const isDesktop = useMediaQuery('(min-width: 768px)')
 
   // === 浏览器历史导航：每个 step 变化压入历史栈，支持回退/前进 ===

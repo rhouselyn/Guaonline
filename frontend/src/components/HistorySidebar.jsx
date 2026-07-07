@@ -186,7 +186,7 @@ function RecentItem({ record, onNavigate }) {
   )
 }
 
-function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListLang, onOpenFavorites, activeFavoriteLang, refreshTrigger }) {
+function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListLang, onOpenFavorites, activeFavoriteLang, refreshTrigger, inline }) {
   const [expanded, setExpanded] = useState(true)
   const [records, setRecords] = useState([])
   const [menuState, setMenuState] = useState({ open: false, fileId: null, x: 0, y: 0 })
@@ -225,6 +225,41 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
 
   const recentRecords = sortedRecords.slice(0, recentExpanded ? Math.max(8, 3 + 5 * Math.ceil((sortedRecords.length - 3) / 5)) : 3)
   const hasMoreRecent = sortedRecords.length > 3
+
+  // 内联渲染（移动端主页：直接堆叠显示历史记录，无抽屉/折叠）
+  if (inline) {
+    return (
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {records.length === 0 && (
+          <div className="px-4 py-10 text-center">
+            <div className="text-2xl mb-2">📚</div>
+            <div className="text-[13px] text-ink-400">
+              {t.noHistory || '暂无学习记录'}
+            </div>
+          </div>
+        )}
+
+        {records.length > 0 && (
+          <div className="px-2">
+            <div className="px-2 py-1.5">
+              <span className="text-[11px] font-bold text-ink-400 tracking-wide">
+                {t.historyTitle || '学习记录'}
+              </span>
+            </div>
+            <div className="space-y-px">
+              {sortedRecords.map((record) => (
+                <RecentItem
+                  key={record.file_id}
+                  record={record}
+                  onNavigate={onNavigateToRecord}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const handleDelete = async (fileId) => {
     const record = records.find(r => r.file_id === fileId)
