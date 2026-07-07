@@ -776,6 +776,26 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
+    // 手机端：圆点指示器（当前页为高亮圆点，其他为细线）
+    if (!isDesktop) {
+      return (
+        <div className="flex items-center justify-center gap-1.5 py-2 border-t border-aged-200/60 bg-parchment-50/40">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              aria-label={`第 ${p} 页`}
+              className={`h-1.5 rounded-full transition-all duration-200 ${
+                currentPage === p
+                  ? 'w-4 bg-amber-500'
+                  : 'w-1.5 bg-aged-300 hover:bg-aged-400'
+              }`}
+            />
+          ))}
+        </div>
+      )
+    }
+    // 桌面端：原有数字分页器
     return (
       <div className="flex items-center justify-center gap-1 py-1.5 border-t border-aged-200/60 bg-parchment-50/40">
         <button
@@ -961,15 +981,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           )}
         </motion.button>
       </div>
-
-      {/* 手机横向滑动滑块指示器 */}
-      {!isDesktop && (
-        <div className="flex justify-center py-2 md:hidden">
-          <div className="relative w-16 h-1 bg-aged-200 rounded-full overflow-hidden">
-            <div className={`absolute top-0 left-0 h-full w-1/2 bg-amber-400 rounded-full transition-transform duration-200 ${activePanel === 1 ? 'translate-x-full' : ''}`} />
-          </div>
-        </div>
-      )}
 
       <div
         ref={scrollContainerRef}
