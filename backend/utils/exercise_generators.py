@@ -406,6 +406,11 @@ def _detect_missing_and_bold(sentence, sentence_words, translation_result, sourc
     if isinstance(translation_result, dict) and "translation" in translation_result:
         for token in translation_result["translation"]:
             if isinstance(token, dict) and token.get("text"):
+                # ponytail: 空壳 placeholder（validate 填的，meaning/phonetic/morphology 全空）不算覆盖。
+                # 首次处理在 validate 前跑，无空壳不受影响；进入条目补漏旧数据时，空壳词（your/tie 等）
+                # 才会被识别为漏词触发补漏。这是唯一的盲区修复，不引入新检测逻辑。
+                if not (token.get("meaning") or token.get("phonetic") or token.get("morphology")):
+                    continue
                 t = token["text"].lower()
                 covered.add(t)
                 if ' ' in t:
@@ -472,16 +477,24 @@ async def _fill_missing_words(sentence, sentence_words, translation_result, sour
         )
         if remaining_entries:
             if isinstance(translation_result, dict) and "translation" in translation_result:
-                existing_lower = set()
-                for token in translation_result["translation"]:
-                    if isinstance(token, dict) and token.get("text"):
-                        existing_lower.add(token["text"].lower())
+                # ponytail: 合并补漏条目。existing 是空壳（meaning 等全空）时用新条目字段填充，
+                # 不追加——否则去重会被空壳 text（=原词）挡住，新条目进不去，空壳仍在。
+                # 首次处理无空壳，走追加分支不受影响。
                 for entry in remaining_entries:
-                    if isinstance(entry, dict) and entry.get("text"):
-                        key = entry["text"].lower()
-                        if key not in existing_lower:
-                            translation_result["translation"].append(entry)
-                            existing_lower.add(key)
+                    if not (isinstance(entry, dict) and entry.get("text")):
+                        continue
+                    key = entry["text"].lower()
+                    target = None
+                    for token in translation_result["translation"]:
+                        if isinstance(token, dict) and token.get("text", "").lower() == key:
+                            target = token
+                            break
+                    if target is None:
+                        translation_result["translation"].append(entry)
+                    elif not (target.get("meaning") or target.get("phonetic") or target.get("morphology")):
+                        for f in ("phonetic", "morphology", "meaning"):
+                            if entry.get(f):
+                                target[f] = entry[f]
         t_retry_end = time.time()
         if idx_label:
             print(f"[TIMING] {idx_label} 第 {retry_count} 次补漏: {t_retry_end - t_retry_start:.3f}s")
