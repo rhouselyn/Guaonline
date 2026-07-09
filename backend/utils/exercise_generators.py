@@ -422,6 +422,8 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
 
     seen = set()
     unique_vocab = []
+    # ponytail: first-wins 但合并空字段——若首现是空壳 placeholder，后现的完整条目可补齐其释义/音标/词性，
+    # 避免"your/tie 等被 LLM 漏掉的词在 A 句是空壳、在 B 句有完整释义时空壳胜出"。
     for entry in all_vocab:
         word = entry.get("word", "")
         cleaned = strip_edge_punctuation(word)
@@ -434,6 +436,13 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
         if word not in seen and word:
             seen.add(word)
             unique_vocab.append(entry)
+        else:
+            # 已存在：用当前条目的非空字段补齐已保留条目的空字段
+            prev = next((e for e in unique_vocab if e.get("word", "").lower() == word), None)
+            if prev:
+                for field in ("ipa", "meaning", "morphology"):
+                    if not prev.get(field) and entry.get(field):
+                        prev[field] = entry[field]
     all_vocab = unique_vocab
 
     all_words_lower = set(entry.get("word", "").lower() for entry in all_vocab)
@@ -697,7 +706,11 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
                 for token in sentence_translation_result["translation"]:
                     if isinstance(token, dict) and "text" in token:
-                        translation_words.add(token["text"].lower())
+                        # ponytail: 空壳 placeholder（validate_and_complete_translation 填的、
+                        # 无释义/音标/词性的占位条目）不算"已翻译"，需让 missing_words 检测捕获，
+                        # 进而触发 _gateway_process_remaining_words 补救调用真正生成内容。
+                        if token.get("phonetic") or token.get("morphology") or token.get("meaning"):
+                            translation_words.add(token["text"].lower())
 
             if source_lang in NO_SPACE_LANGUAGES:
                 def _norm(text):
@@ -728,17 +741,33 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 print(f"[TIMING] 句子 {idx+1} 遗漏单词补充LLM调用: {t_missing_end - t_missing_start:.3f}s")
                 if remaining_entries:
                     if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                        translation_text_lower = []
+                        # ponytail: 用补救结果原地替换空壳 placeholder（按 text 匹配），
+                        # 而非"已存在则跳过"的追加——否则 first-wins 去重会保留空壳、丢弃完整条目。
+                        remaining_by_word = {}
+                        for entry in remaining_entries:
+                            if isinstance(entry, dict) and "text" in entry and entry["text"]:
+                                remaining_by_word[entry["text"].lower()] = entry
+
+                        for token in sentence_translation_result["translation"]:
+                            if not isinstance(token, dict) or "text" not in token:
+                                continue
+                            key = token["text"].lower()
+                            if key in remaining_by_word:
+                                complete = remaining_by_word.pop(key)
+                                # 原地填充：完整字段优先，保留 placeholder 已有 text
+                                token["phonetic"] = complete.get("phonetic", "") or token.get("phonetic", "")
+                                token["morphology"] = complete.get("morphology", "") or token.get("morphology", "")
+                                token["meaning"] = complete.get("meaning", "") or token.get("meaning", "")
+
+                        # 追加剩余未匹配到 placeholder 的条目（如 LLM 返回了归一化后不同的词形）
+                        existing_lower = set()
                         for token in sentence_translation_result["translation"]:
                             if isinstance(token, dict) and "text" in token:
-                                translation_text_lower.append(token["text"].lower())
-
-                        for entry in remaining_entries:
-                            if isinstance(entry, dict) and "text" in entry:
-                                word = entry["text"]
-                                if word.lower() not in translation_text_lower:
-                                    sentence_translation_result["translation"].append(entry)
-                                    translation_text_lower.append(word.lower())
+                                existing_lower.add(token["text"].lower())
+                        for key, entry in remaining_by_word.items():
+                            if key not in existing_lower:
+                                sentence_translation_result["translation"].append(entry)
+                                existing_lower.add(key)
 
                     print(f"[DEBUG] 补充了 {len(remaining_entries)} 个遗漏单词")
 

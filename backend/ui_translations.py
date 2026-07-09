@@ -25,6 +25,7 @@ UI_TRANSLATION_SCHEMA = {
     "originalSent": {"desc": "Label for original sentence", "zh": "原文例句", "en": "Original Sentence"},
     "sentDetail": {"desc": "Label for sentence detail view", "zh": "句子详情", "en": "Sentence Details"},
     "original": {"desc": "Label for original text", "zh": "原文", "en": "Original"},
+    "prompt": {"desc": "Label for user's input prompt shown at top of original-text view (used in auto-translate / free-generate modes)", "zh": "提示词", "en": "Prompt"},
     "translation": {"desc": "Label for translation", "zh": "翻译", "en": "Translation"},
     "grammar": {"desc": "Label for grammar explanation", "zh": "语法详解", "en": "Grammar Explanation"},
     "loading": {"desc": "Loading state text", "zh": "加载中...", "en": "Loading..."},
