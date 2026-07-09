@@ -412,107 +412,61 @@ async def _gateway_process_remaining_words(user_id, tier, words, source_lang, ta
     return []
 
 
-async def _llm_check_missing(user_id, tier, sentence, translation_result, source_lang, context_sentences=None):
-    """由 LLM 判断原句中是否有词未被 translation_result 覆盖，并直接产出加粗句。
+def _detect_missing_and_bold(sentence, sentence_words, translation_result, source_lang):
+    """程序逐词匹配：找出原句中未被 translation_result 覆盖的词，
+    连续遗漏的词合并为一个整体，并在原句中把这些遗漏部分用 ** 整体加粗。
 
-    完全不依赖程序分词/匹配——分词、覆盖判断、合并决策、加粗位置全部由 LLM 完成。
-    返回 {"has_missing": bool, "missing_words": [str], "bolded_sentence": str}。
-    - missing_words: 遗漏的词或词组（原句中的形式；连续遗漏词可合并为一个词组）
-    - bolded_sentence: 原句中把遗漏处用 ** 包裹后的结果（无遗漏则与原句相同）
+    返回 (missing_spans, bolded_sentence)：
+    - missing_spans: 遗漏词/词组列表（原句中的形式，连续词合并为一个字符串）
+    - bolded_sentence: 原句中把每段遗漏整体用 ** 包裹后的结果
     """
-    source_lang_name = get_lang_name(source_lang)
-
-    existing_tokens = []
+    covered = set()
     if isinstance(translation_result, dict) and "translation" in translation_result:
         for token in translation_result["translation"]:
             if isinstance(token, dict) and token.get("text"):
-                existing_tokens.append(token["text"])
+                t = token["text"].lower()
+                covered.add(t)
+                if ' ' in t:
+                    for part in t.split():
+                        covered.add(part.lower())
 
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": "check_coverage",
-            "description": f"检查 {source_lang_name} 原句中的词是否都被现有 token 覆盖，找出遗漏并加粗",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "has_missing": {"type": "boolean", "description": "原句中是否存在未被现有 token 覆盖的词"},
-                    "missing_words": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "原句中未被覆盖的词或词组。遵循源语言自然词边界；若连续多个词都未被覆盖且合并为一个表达更自然（如 your tie 都漏时合并为 'your tie'），则作为一个词组返回。无遗漏时返回空数组",
-                    },
-                    "bolded_sentence": {
-                        "type": "string",
-                        "description": "把原句中遗漏的词/词组用 ** 包裹后的结果（如 'Tie **your** shoes'）。加粗标记 ** 只是提示，不是原文内容。无遗漏时必须原样返回原句，不加任何 **",
-                    },
-                },
-                "required": ["has_missing", "missing_words", "bolded_sentence"],
-            },
-        },
-    }]
+    # 无空格语言：无法逐词匹配，保持不报（与原行为一致）
+    if source_lang in NO_SPACE_LANGUAGES:
+        return [], sentence
 
-    context_section = ""
-    if context_sentences:
-        before = context_sentences.get("before", [])
-        after = context_sentences.get("after", [])
-        parts = []
-        if before:
-            parts.append("前文：\n" + "\n".join(before))
-        if after:
-            parts.append("后文：\n" + "\n".join(after))
-        if parts:
-            context_section = "\n【上下文】\n" + "\n".join(parts) + "\n"
-
-    system_prompt = f"""你是 {source_lang_name} 语言专家。判断原句中的词是否都已被现有 token 列表覆盖。
-
-【判断规则】
-1. 遵循 {source_lang_name} 的自然词边界——什么是"一个词"由该语言自身规则决定
-2. 现有 token 可能是单词或多词表达；多词表达的每个组成部分都算"已覆盖"
-3. 只关心实词和功能词是否被覆盖，纯标点不算遗漏
-4. 若某个词被现有 token 的变体/屈折形式覆盖，也算已覆盖（大小写不敏感）
-
-【合并规则】
-若连续多个词都未被覆盖，且把它们合并为一个多词表达更自然（例如 your 和 tie 都漏了，合并为 'your tie'），则作为一个词组返回，加粗时也作为一个整体加粗（**your tie**）。
-
-【输出约束】
-- bolded_sentence 无遗漏时必须与原句完全相同（不加任何 **）
-- 加粗标记 ** 只是"必须包含"的提示，不是原文内容
-- 除了工具调用的 JSON 外，不要输出任何其他文本"""
-
-    user_content = f"{context_section}\n【原句】\n{sentence}\n\n【现有 token 列表】\n{json.dumps(existing_tokens, ensure_ascii=False)}"
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
-    ]
-
-    response = await gateway.call(
-        user_id, tier, messages,
-        temperature=0.0,
-        request_type="check_coverage", tools=tools,
-    )
-
-    try:
-        choice = response.get("choices", [{}])[0]
-        message = choice.get("message", {})
-        tool_calls = message.get("tool_calls", [])
-        if tool_calls:
-            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
-            result = json.loads(arguments_str)
+    # 标记每个原文词是否被覆盖
+    flags = []
+    for w in sentence_words:
+        w_clean = strip_edge_punctuation(w).lower()
+        if not w_clean or is_punctuation_only(w):
+            flags.append(None)  # 标点/空：不参与，也不打断连续
+        elif w_clean in covered:
+            flags.append(False)
         else:
-            content = message.get("content", "")
-            if not content:
-                return {"has_missing": False, "missing_words": [], "bolded_sentence": sentence}
-            result = json.loads(content)
-        return {
-            "has_missing": bool(result.get("has_missing", False)),
-            "missing_words": result.get("missing_words", []) or [],
-            "bolded_sentence": result.get("bolded_sentence", sentence) or sentence,
-        }
-    except Exception as e:
-        print(f"[WARN] _llm_check_missing parse failed: {e}")
-        return {"has_missing": False, "missing_words": [], "bolded_sentence": sentence}
+            flags.append(True)
+
+    # 合并连续遗漏词为一段（None 视为不阻断，但不并入 span）
+    missing_spans = []
+    cur = []
+    for w, f in zip(sentence_words, flags):
+        if f is True:
+            cur.append(strip_edge_punctuation(w))
+        else:
+            if cur:
+                missing_spans.append(' '.join(cur))
+                cur = []
+    if cur:
+        missing_spans.append(' '.join(cur))
+
+    # 在原句中按 span 整体加粗（span 可能是多词，按词长降序避免子串误匹配）
+    bolded = sentence
+    for span in sorted(missing_spans, key=len, reverse=True):
+        if not span:
+            continue
+        pattern = re.compile(r'(?<![\w*])' + re.escape(span) + r'(?![\w*])', re.IGNORECASE)
+        bolded = pattern.sub(lambda m: f'**{m.group(0)}**', bolded)
+
+    return missing_spans, bolded
 
 
 def _finalize_pipeline(file_id, sentence_translations, total_sentences,
@@ -811,20 +765,26 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_llm_end = time.time()
             print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
 
-            # ponytail: 漏词检测 + 加粗重译循环——全部由 LLM 完成，程序不做任何分词/匹配。
-            # LLM 常跳过常见词（your/tie 等）。用 _llm_check_missing 让 LLM 自己判断原句哪些词
-            # 未被现有 token 覆盖、是否要合并连续遗漏词为词组、并产出加粗句。再把加粗句整句重
-            # 交给 LLM 翻译，循环直到 LLM 判定无遗漏或达到重试上限。最后 validate 对齐顺序/补空壳。
+            t_extract_start = time.time()
+            sentence_words = text_processor.extract_words(sentence, source_lang)
+            t_extract_end = time.time()
+            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
+
+            # ponytail: 程序逐词匹配漏词 → 把没匹配到的部分整体加粗 → 复用同一个 LLM prompt 重译。
+            # LLM 常跳过常见词（your/tie 等）。检测在 validate 之前，基于 LLM 原始输出比对，
+            # 不被 validate 填的空壳干扰。连续遗漏词合并为一个整体 span 加粗（如 your tie 都漏
+            # → **your tie**），重译 prompt 复用 _gateway_process_text_with_dictionary。
+            # 循环直到没有漏词或达到重试上限，最后 validate 对齐顺序/补空壳。
             MAX_RETRY = 2
             retry_count = 0
-            check = await _llm_check_missing(user_id, tier, sentence, sentence_translation_result, source_lang, context_sentences)
-            while check["has_missing"] and retry_count < MAX_RETRY:
+            missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
+            while missing_spans and retry_count < MAX_RETRY:
                 retry_count += 1
-                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次重译，漏词: {check['missing_words']}")
+                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次重译，漏词: {missing_spans}")
                 t_retry_start = time.time()
                 retry_result = await _gateway_process_text_with_dictionary(
-                    user_id, tier, check["bolded_sentence"], source_lang, target_lang, context_sentences,
-                    missing_words_hint=check["missing_words"]
+                    user_id, tier, bolded, source_lang, target_lang, context_sentences,
+                    missing_words_hint=missing_spans
                 )
                 # 复用 process_translation 的标点过滤逻辑（重译结果未经 process_translation）
                 if isinstance(retry_result, dict) and 'translation' in retry_result:
@@ -843,10 +803,10 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 sentence_translation_result = retry_result
                 t_retry_end = time.time()
                 print(f"[TIMING] 句子 {idx+1} 第 {retry_count} 次加粗重译: {t_retry_end - t_retry_start:.3f}s")
-                check = await _llm_check_missing(user_id, tier, sentence, sentence_translation_result, source_lang, context_sentences)
+                missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
 
-            if check["has_missing"]:
-                print(f"[DEBUG] 句子 {idx+1} 加粗重译后仍有漏词(将留空壳): {check['missing_words']}")
+            if missing_spans:
+                print(f"[DEBUG] 句子 {idx+1} 加粗重译后仍有漏词(将留空壳): {missing_spans}")
             elif retry_count > 0:
                 print(f"[DEBUG] 句子 {idx+1} 加粗重译成功，无漏词")
 
