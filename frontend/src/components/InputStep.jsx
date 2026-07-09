@@ -694,11 +694,12 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
   const isUnlimited = max === -1
   const isLow = !isUnlimited && typeof available === 'number' && available <= 10
 
-  // ponytail: 移动端布局 — 顶栏(学习语言 左 / logo+标题 右) + Edge式三模式在框外 + 搜索框(额度在发送箭头左侧)
+  // ponytail: 移动端布局 — App 化重设计：顶栏(学习语言 左 / logo+标题 右) + Edge式三模式在框外 + 搜索框(额度在发送箭头左侧)
+  // 加大顶部安全区留白与各区块间距，正文/输入区内边距放宽，整体更有"呼吸感"。
   if (!isDesktop) {
     return (
-      <div className="flex flex-col w-full">
-        <div className="flex items-center justify-between pt-3 px-4 gap-2">
+      <div className="flex flex-col w-full safe-top">
+        <div className="flex items-center justify-between pt-4 px-5 gap-2">
           <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -718,11 +719,11 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
         </div>
 
         {/* Edge式：三模式在搜索框范围之外 */}
-        <div className="px-3 pt-3">
+        <div className="px-5 pt-5">
           <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
         </div>
 
-        <div className="w-full px-3 pt-2">
+        <div className="w-full px-5 pt-3">
           <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
             <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
@@ -733,9 +734,9 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
               onChange={(e) => setText(e.target.value)}
               placeholder={getPlaceholder()}
               rows={3}
-              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-2 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3.5 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
             />
-            <div className="flex items-center justify-between px-3 pb-3">
+            <div className="flex items-center justify-between px-4 pb-4 pt-1">
               <span className={`flex items-center gap-1 text-xs font-medium ${isLow ? 'text-rust-500' : 'text-amber-600'}`} title={t?.remainingQuota || '剩余额度'}>
                 <Zap className="w-3 h-3" />
                 {isUnlimited ? '∞' : `${available}/${max}`}
@@ -745,7 +746,7 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
                 whileTap={{ scale: 0.95 }}
                 onClick={onProcess}
                 disabled={loading || !text.trim()}
-                className={`p-2 rounded-sm transition-all duration-200 ${
+                className={`p-2.5 rounded-sm transition-all duration-200 ${
                   loading || !text.trim()
                     ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
                     : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'

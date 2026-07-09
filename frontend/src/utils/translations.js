@@ -213,7 +213,11 @@ export const translations = {
     fontSize: "字体大小",
     fontScaleDesc: "调整学习页面字号",
     fontScaleSmall: "小",
-    fontScaleLarge: "大"
+    fontScaleLarge: "大",
+    navHome: "主页",
+    navDetails: "条目",
+    navQuiz: "练习",
+    navProfile: "我的"
   },
   en: {
     title: "Gualingo",
@@ -428,6 +432,10 @@ export const translations = {
     fontSize: "Font Size",
     fontScaleDesc: "Adjust learning page font size",
     fontScaleSmall: "Small",
-    fontScaleLarge: "Large"
+    fontScaleLarge: "Large",
+    navHome: "Home",
+    navDetails: "Entry",
+    navQuiz: "Practice",
+    navProfile: "Me"
   }
 };

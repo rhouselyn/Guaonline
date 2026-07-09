@@ -62,7 +62,7 @@ function TranslationReconstructionStep({ data, onNext, onBack, onComplete, loadi
       exit={{ opacity: 0, y: -20 }}
       className="max-w-3xl mx-auto"
     >
-      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-4 sm:mb-8">
+      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-5 sm:mb-8">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             onClick={onBack}
@@ -92,7 +92,7 @@ function TranslationReconstructionStep({ data, onNext, onBack, onComplete, loadi
         </div>
       </div>
 
-      <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm">
+      <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-5 sm:p-8 shadow-retro-sm">
         <div className="text-center mb-6 sm:mb-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}

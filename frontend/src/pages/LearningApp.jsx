@@ -165,11 +165,13 @@ function App() {
   }, [])
 
   // === 字体缩放：应用到 documentElement ===
-  // 桌面端基础字号 14px；移动端基础字号 12.6px（桌面的 90%），fontScaleMobile 默认 1（100%）
+  // ponytail: 移动端基础字号 15px（原 12.6px）——更贴近原生 App 的正文字号（iOS 17pt / Material 16sp），
+  // 同时所有 rem-based 间距（px-4、py-2 等）会按比例放大，整体更"有呼吸感"。
+  // 桌面端保持 14px。fontScaleMobile / fontScaleDesktop 用户可调。
   // 依赖 showSettings：设置弹窗关闭时重新应用已保存值，撤销弹窗内的实时预览
   useEffect(() => {
     const scale = isDesktop ? fontScaleDesktop : fontScaleMobile
-    document.documentElement.style.fontSize = `${(isDesktop ? 14 : 12.6) * scale}px`
+    document.documentElement.style.fontSize = `${(isDesktop ? 14 : 15) * scale}px`
     return () => {
       // 离开学习页时恢复浏览器默认 16px
       document.documentElement.style.fontSize = ''
@@ -1438,7 +1440,7 @@ function App() {
           </div>
         ) : step === 'input' ? (
           // ponytail: 移动端主页 — 输入框在顶部 + 历史记录在下方堆叠
-          <div className="h-full overflow-y-auto pb-16">
+          <div className="h-full overflow-y-auto pb-nav-safe">
             {wordListLang ? (
               <WordListPanel sourceLang={wordListLang} t={t} onBack={() => setWordListLang(null)} pageSize={pageSize} />
             ) : favoriteLang ? (
@@ -1466,7 +1468,7 @@ function App() {
                   setInputMode={setInputMode}
                   recentLanguages={recentLanguages}
                 />
-                <div className="px-3 mt-4">
+                <div className="px-5 mt-5">
                   <HistorySidebar inline onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
                 </div>
               </>
@@ -1474,7 +1476,8 @@ function App() {
           </div>
         ) : step === 'profile' ? (
           // ponytail: 移动端个人页 — 头像/账号/设置/退出 + 学习记录（最近/语言/进度/单词表/收藏）
-          <div className="h-full overflow-y-auto pb-16 px-4 py-4">
+          // App 化：顶部留安全区+页标题，更大的头像与卡片留白，按钮触控区加大
+          <div className="h-full overflow-y-auto pb-nav-safe px-5 pt-5 safe-top">
             {(() => {
               const user = auth.getUser()
               const q = auth.getQuota()
@@ -1485,31 +1488,36 @@ function App() {
               const tierLabel = { free: t.freeTier || '免费版', basic: t.basicTier || '基础版', pro: t.proTier || '专业版' }[user?.tier] || user?.tier || ''
               return (
                 <div className="max-w-md mx-auto">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center text-lg font-bold shrink-0">
+                  <h1 className="text-xl font-bold text-ink-800 mb-5" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+                    {t.navProfile || '我的'}
+                  </h1>
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-retro-sm">
                       {user ? (user.name || user.email)[0].toUpperCase() : '?'}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink-800 truncate">{user?.email || ''}</p>
-                      <p className="text-xs text-amber-600 mt-0.5">{tierLabel}</p>
+                      <p className="text-base font-medium text-ink-800 truncate">{user?.email || ''}</p>
+                      <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-600 text-xs font-bold">
+                        {tierLabel}
+                      </span>
                     </div>
                   </div>
                   {!isUnlimited && (
-                    <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-3 mb-3">
-                      <div className="flex items-center justify-between mb-1.5">
+                    <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 mb-4">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-xs text-ink-500 flex items-center gap-1"><Zap className="w-3 h-3" />{t.remainingQuota || '剩余额度'}</span>
-                        <span className={`text-xs font-bold ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>{available} / {max}</span>
+                        <span className={`text-xs font-bold tabular-nums ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>{available} / {max}</span>
                       </div>
-                      <div className="w-full h-1.5 bg-parchment-200 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${isLow ? 'bg-rust-400' : 'bg-amber-400'}`} style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }} />
+                      <div className="w-full h-2 bg-parchment-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-500 ${isLow ? 'bg-rust-400' : 'bg-amber-400'}`} style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }} />
                       </div>
                     </div>
                   )}
-                  <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-ink-700 hover:bg-parchment-100 transition-colors mb-2">
+                  <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-ink-700 hover:bg-parchment-100 transition-colors mb-3">
                     <Settings className="w-4 h-4 text-ink-400" />
                     {t.settings || '设置'}
                   </button>
-                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
+                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
                     <LogOut className="w-4 h-4" />
                     {t.logout || '退出登录'}
                   </button>
@@ -1518,7 +1526,7 @@ function App() {
             })()}
           </div>
         ) : (
-          <div ref={learningContainerRef} className={`h-full overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 ${showMobileNav ? 'pb-16' : ''}`}>
+          <div ref={learningContainerRef} className={`h-full overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 ${showMobileNav ? 'pb-nav-safe' : ''}`}>
             <AnimatePresence mode="wait">
           {step === 'dictionary' && (
             <DictionaryStep
@@ -1817,28 +1825,38 @@ function App() {
           </div>
         )}
       </main>
-      {/* ponytail: 移动端底部导航 — 主页/条目详情/题目/个人，仅 logo 标识，当前页高亮 */}
+      {/* ponytail: 移动端底部导航 — App 化重设计：图标+文字垂直排列（微信/iOS 风），
+          更高触控区(56px)+底部安全区留白，活动项用色彩+顶部小圆点指示，避免大色块压抑。 */}
       {showMobileNav && (
-        <nav className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
-          {[
-            { key: 'home', icon: Home },
-            { key: 'details', icon: BookOpen },
-            { key: 'quiz', icon: ListChecks },
-            { key: 'profile', icon: User },
-          ].map(({ key, icon: Icon }) => {
-            const active = mobileTab === key
-            return (
-              <button
-                key={key}
-                onClick={() => handleMobileTab(key)}
-                className="flex-1 flex items-center justify-center py-2 transition-colors"
-              >
-                <span className={`flex items-center justify-center rounded-full transition-all duration-200 ${active ? 'w-11 h-8 bg-amber-400 text-white shadow-retro-sm' : 'w-8 h-8 text-aged-300'}`}>
-                  <Icon className={`transition-all duration-200 ${active ? 'w-5 h-5' : 'w-[18px] h-[18px]'}`} />
-                </span>
-              </button>
-            )
-          })}
+        <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom">
+          <div className="flex">
+            {[
+              { key: 'home', icon: Home, label: t.navHome || '主页' },
+              { key: 'details', icon: BookOpen, label: t.navDetails || '条目' },
+              { key: 'quiz', icon: ListChecks, label: t.navQuiz || '练习' },
+              { key: 'profile', icon: User, label: t.navProfile || '我的' },
+            ].map(({ key, icon: Icon, label }) => {
+              const active = mobileTab === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleMobileTab(key)}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors"
+                >
+                  <span className="relative flex items-center justify-center">
+                    {/* 活动项顶部小圆点指示器 */}
+                    {active && (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
+                    )}
+                    <Icon className={`transition-all duration-200 ${active ? 'w-[22px] h-[22px] text-amber-600' : 'w-5 h-5 text-aged-300'}`} />
+                  </span>
+                  <span className={`text-[10px] leading-none transition-colors ${active ? 'font-bold text-amber-600' : 'font-medium text-ink-400'}`}>
+                    {label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </nav>
       )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
