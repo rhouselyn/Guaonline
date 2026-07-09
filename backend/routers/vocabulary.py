@@ -43,7 +43,10 @@ def _mc_options_already_valid(cached: dict) -> bool:
 
 
 @router.get("/vocab/{file_id}")
-async def get_vocab(file_id: str):
+async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
+                    sort: str = "asc", include_total: bool = False):
+    """获取词汇表。ponytail: 支持 offset/limit/q/sort 服务端分页与搜索，按需返回当前页，
+    避免一次性传输全量数据拖慢首屏。limit<=0 表示返回全量（兼容旧调用）。"""
     try:
         vocab = storage.load_vocab(file_id)
         if isinstance(vocab, dict) and "vocab" in vocab:
@@ -56,9 +59,7 @@ async def get_vocab(file_id: str):
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
 
-        # ponytail: 原实现 for entry in vocab_list: storage.load_word_cache(file_id, word)
-        # N 个词 = N 次同步 SQLite（外加未命中时再 N 次 find_global_word_cache JOIN），
-        # 全部阻塞事件循环。改为：一次 SQL 取回该 file 全部 word_cache，内存匹配。
+        # 一次 SQL 取回该 file 全部 word_cache，内存匹配
         cached_map = storage.load_word_cache_batch(file_id)
 
         enriched_list = []
@@ -67,7 +68,6 @@ async def get_vocab(file_id: str):
             word = entry.get("word", "")
             cached = cached_map.get(word.lower()) if word else None
             if not cached and word:
-                # 当前文件无缓存，查全局缓存（少数词才会走到这里）
                 cached = storage.find_global_word_cache(word, source_lang)
             if cached:
                 if cached.get("enriched_meaning"):
@@ -84,16 +84,61 @@ async def get_vocab(file_id: str):
                     enriched_entry["memory_hint"] = cached["memory_hint"]
             enriched_list.append(enriched_entry)
 
-        return {"vocab": enriched_list}
+        # 服务端搜索过滤
+        if q:
+            ql = q.lower()
+            enriched_list = [
+                e for e in enriched_list
+                if ql in (e.get("word", "")).lower()
+                or ql in (e.get("meaning", "") or "").lower()
+                or ql in (e.get("context_meaning", "") or "").lower()
+                or ql in (e.get("enriched_meaning", "") or "").lower()
+            ]
+
+        # 服务端排序
+        enriched_list.sort(key=lambda e: e.get("word", "").lower(),
+                           reverse=(sort == "desc"))
+
+        total = len(enriched_list)
+        # limit<=0 表示全量（兼容旧调用与 LearningApp 需要全量的场景）
+        if limit and limit > 0:
+            enriched_list = enriched_list[offset: offset + limit]
+
+        resp = {"vocab": enriched_list}
+        if include_total:
+            resp["total"] = total
+        return resp
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Vocab not found: {str(e)}")
 
 
 @router.get("/sentences/{file_id}")
-async def get_sentences(file_id: str):
+async def get_sentences(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
+                        include_total: bool = False):
+    """获取句子翻译。ponytail: 支持 offset/limit/q 服务端分页与搜索。limit<=0 返回全量（兼容旧调用）。"""
     try:
         sentences = storage.load_pipeline_data(file_id)
-        return {"sentences": sentences}
+        if not isinstance(sentences, list):
+            sentences = []
+
+        # 服务端搜索过滤
+        if q:
+            ql = q.lower()
+            def _sent_text(s):
+                snt = (s.get("sentence", "") if isinstance(s, dict) else "") or ""
+                tr = s.get("translation_result", {}) if isinstance(s, dict) else {}
+                tt = tr.get("tokenized_translation", "") if isinstance(tr, dict) else ""
+                return (snt + " " + tt).lower()
+            sentences = [s for s in sentences if ql in _sent_text(s)]
+
+        total = len(sentences)
+        if limit and limit > 0:
+            sentences = sentences[offset: offset + limit]
+
+        resp = {"sentences": sentences}
+        if include_total:
+            resp["total"] = total
+        return resp
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Sentences not found: {str(e)}")
 
@@ -407,11 +452,21 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
 async def get_file_info(file_id: str):
     try:
         settings = storage.load_language_settings(file_id)
+        # ponytail: 返回 has_failed（是否存在 __failed 句子，供前端重进时触发续生成）
+        # 与 sentence_count（轻量计数，供前端展示总数而无需全量加载）。
+        pipeline = storage.load_pipeline_data(file_id)
+        has_failed = False
+        sentence_count = 0
+        if isinstance(pipeline, list):
+            sentence_count = len(pipeline)
+            has_failed = any(isinstance(sd, dict) and sd.get("__failed") for sd in pipeline)
         return {
             "source_lang": settings.get("source_lang", "en"),
             "target_lang": settings.get("target_lang", "zh"),
             "original_text": settings.get("original_text", ""),
-            "prompt": settings.get("prompt", "")
+            "prompt": settings.get("prompt", ""),
+            "has_failed": has_failed,
+            "sentence_count": sentence_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -10,7 +10,7 @@ import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
-function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '' }) {
+function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '', vocabLength = 0, sentenceLength = 0 }) {
   const saved = dictStateRef?.current || {}
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
@@ -62,6 +62,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [wordGenProgress, setWordGenProgress] = useState(null)
   const [meaningOverrides, setMeaningOverrides] = useState({})
   const [favoriteWords, setFavoriteWords] = useState([])
+  // ponytail: 按页自取的词汇/句子数据（替代全量 prop）。page/搜索/排序/生成进度变化时 refetch 当前页。
+  const [pagedVocab, setPagedVocab] = useState([])
+  const [vocabTotal, setVocabTotal] = useState(0)
+  const [vocabFetching, setVocabFetching] = useState(false)
+  const [pagedSent, setPagedSent] = useState([])
+  const [sentTotal, setSentTotal] = useState(0)
+  const [sentFetching, setSentFetching] = useState(false)
+  const [vocabSearchDebounced, setVocabSearchDebounced] = useState(vocabSearch)
+  const [sentenceSearchDebounced, setSentenceSearchDebounced] = useState(sentenceSearch)
+  const vocabFetchSeq = useRef(0)
   const vocabListRef = useRef(null)
   const sentenceListRef = useRef(null)
   const wordRefs = useRef({})
@@ -220,42 +230,68 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const safeSentenceTranslations = Array.isArray(sentenceTranslations) ? sentenceTranslations : []
   const safeProcessingInfo = processingInfo || { current: 0, total: 1 }
 
-  const filteredSentences = useMemo(() => {
-    if (!sentenceSearch.trim()) return safeSentenceTranslations
-    const q = sentenceSearch.toLowerCase()
-    return safeSentenceTranslations.filter(item => {
-      const sentence = (item.sentence || '').toLowerCase()
-      const translation = (item.translation_result?.tokenized_translation || '').toLowerCase()
-      const tokens = item.translation_result?.translation || []
-      const tokenTexts = tokens.filter(t => typeof t === 'object' && t.text).map(t => t.text.toLowerCase()).join(' ')
-      return sentence.includes(q) || translation.includes(q) || tokenTexts.includes(q)
-    })
-  }, [safeSentenceTranslations, sentenceSearch])
+  // ponytail: 搜索去抖——输入停 300ms 后才触发后端 fetch，避免每个按键都请求。
+  useEffect(() => {
+    const id = setTimeout(() => { setVocabSearchDebounced(vocabSearch); setVocabPage(1) }, 300)
+    return () => clearTimeout(id)
+  }, [vocabSearch])
+  useEffect(() => {
+    const id = setTimeout(() => { setSentenceSearchDebounced(sentenceSearch); setSentencePage(1) }, 300)
+    return () => clearTimeout(id)
+  }, [sentenceSearch])
 
-  const filteredVocab = useMemo(() => {
-    if (!vocabSearch.trim()) return vocab
-    const q = vocabSearch.toLowerCase()
-    return vocab.filter(w =>
-      w.word.toLowerCase().includes(q) ||
-      (w.enriched_meaning && w.enriched_meaning.toLowerCase().includes(q)) ||
-      (w.meaning && w.meaning.toLowerCase().includes(q)) ||
-      (w.context_meaning && w.context_meaning.toLowerCase().includes(q))
-    )
-  }, [vocab, vocabSearch])
+  // ponytail: 按页拉取词汇表（仅当前页 + total）。依赖 currentFileId/page/pageSize/搜索/排序/生成进度。
+  useEffect(() => {
+    if (!currentFileId || showGlobalVocab) return
+    let cancelled = false
+    const seq = ++vocabFetchSeq.current
+    setVocabFetching(true)
+    api.getVocab(currentFileId, {
+      offset: (vocabPage - 1) * pageSize,
+      limit: pageSize,
+      q: vocabSearchDebounced,
+      sort: sortOrder,
+      include_total: true
+    }).then(data => {
+      if (cancelled || seq !== vocabFetchSeq.current) return
+      setPagedVocab(Array.isArray(data.vocab) ? data.vocab : [])
+      setVocabTotal(typeof data.total === 'number' ? data.total : (Array.isArray(data.vocab) ? data.vocab.length : 0))
+    }).catch(() => {
+      if (cancelled || seq !== vocabFetchSeq.current) return
+      setPagedVocab([]); setVocabTotal(0)
+    }).finally(() => { if (!cancelled && seq === vocabFetchSeq.current) setVocabFetching(false) })
+    return () => { cancelled = true }
+  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength])
 
-  filteredVocabRef.current = filteredVocab
+  // ponytail: 按页拉取句子翻译（仅当前页 + total）。
+  const sentFetchSeq = useRef(0)
+  useEffect(() => {
+    if (!currentFileId) return
+    let cancelled = false
+    const seq = ++sentFetchSeq.current
+    setSentFetching(true)
+    api.getSentences(currentFileId, {
+      offset: (sentencePage - 1) * pageSize,
+      limit: pageSize,
+      q: sentenceSearchDebounced,
+      include_total: true
+    }).then(data => {
+      if (cancelled || seq !== sentFetchSeq.current) return
+      setPagedSent(Array.isArray(data.sentences) ? data.sentences : [])
+      setSentTotal(typeof data.total === 'number' ? data.total : (Array.isArray(data.sentences) ? data.sentences.length : 0))
+    }).catch(() => {
+      if (cancelled || seq !== sentFetchSeq.current) return
+      setPagedSent([]); setSentTotal(0)
+    }).finally(() => { if (!cancelled && seq === sentFetchSeq.current) setSentFetching(false) })
+    return () => { cancelled = true }
+  }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, sentenceLength])
+
+  filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
 
-  const pagedFilteredVocab = useMemo(() => {
-    const start = (vocabPage - 1) * pageSize
-    return filteredVocab.slice(start, start + pageSize)
-  }, [filteredVocab, vocabPage, pageSize])
-
-  const pagedFilteredSentences = useMemo(() => {
-    const start = (sentencePage - 1) * pageSize
-    return filteredSentences.slice(start, start + pageSize)
-  }, [filteredSentences, sentencePage, pageSize])
+  const pagedFilteredVocab = pagedVocab
+  const pagedFilteredSentences = pagedSent
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -287,16 +323,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return groupedGlobalVocab.map(([letter]) => letter)
   }, [groupedGlobalVocab])
 
-  const allLetterIndex = useMemo(() => {
-    return groupVocab(filteredVocab).map(([letter]) => letter)
-  }, [filteredVocab])
+  // ponytail: 字母索引基于当前页（不再跨页跳转，因后端分页无全量数据）
+  const allLetterIndex = letterIndex
+  const allGlobalLetterIndex = useMemo(() => groupVocab(filteredGlobalVocab).map(([letter]) => letter), [filteredGlobalVocab])
 
-  const allGlobalLetterIndex = useMemo(() => {
-    return groupVocab(filteredGlobalVocab).map(([letter]) => letter)
-  }, [filteredGlobalVocab])
-
-  const vocabTotalPages = useMemo(() => Math.max(1, Math.ceil(filteredVocab.length / pageSize)), [filteredVocab, pageSize])
-  const sentenceTotalPages = useMemo(() => Math.max(1, Math.ceil(filteredSentences.length / pageSize)), [filteredSentences, pageSize])
+  const vocabTotalPages = useMemo(() => Math.max(1, Math.ceil(vocabTotal / pageSize)), [vocabTotal, pageSize])
+  const sentenceTotalPages = useMemo(() => Math.max(1, Math.ceil(sentTotal / pageSize)), [sentTotal, pageSize])
   const globalVocabTotalPages = useMemo(() => Math.max(1, Math.ceil(filteredGlobalVocab.length / pageSize)), [filteredGlobalVocab, pageSize])
 
   useEffect(() => {
@@ -373,7 +405,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const initialRestoreDone = useRef(false)
   useEffect(() => {
     if (initialRestoreDone.current) return
-    if (!vocab.length && !sentenceTranslations.length) return
+    if (!pagedVocab.length && !pagedSent.length) return
     initialRestoreDone.current = true
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -391,7 +423,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         }
       })
     })
-  }, [vocab, sentenceTranslations])
+  }, [pagedVocab, pagedSent])
 
   const scrollToLetter = (letter) => {
     const el = document.getElementById(`dict-group-${letter}`)
@@ -402,25 +434,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       const stickyOffset = 32
       const scrollOffset = elRect.top - containerRect.top + container.scrollTop - stickyOffset
       container.scrollTo({ top: scrollOffset, behavior: 'smooth' })
-    } else {
-      // 字母不在当前页，先跳转到对应页面
-      const currentList = showGlobalVocab ? filteredGlobalVocab : filteredVocab
-      const letterLower = letter.toLowerCase()
-      const wordIdx = currentList.findIndex(w => w.word.charAt(0).toUpperCase() === letter || w.word.charAt(0).toLowerCase() === letterLower)
-      if (wordIdx >= 0) {
-        const targetPage = Math.floor(wordIdx / pageSize) + 1
-        const currentPage = showGlobalVocab ? globalVocabPage : vocabPage
-        if (targetPage !== currentPage) {
-          // 设置待跳转字母，页面切换后自动滚动
-          pendingScrollWord.current = `letter-${letter}`
-          if (showGlobalVocab) {
-            setGlobalVocabPage(targetPage)
-          } else {
-            setVocabPage(targetPage)
-          }
-        }
-      }
     }
+    // ponytail: 字母索引基于当前页，字母不在当前页则不再跨页跳转（后端分页无全量数据）
   }
 
   // 页面切换后滚动到目标字母
@@ -556,33 +571,26 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return
     }
 
-    const currentFilteredVocab = filteredVocabRef.current
-    const currentPage = vocabPageRef.current
-    const currentPageSize = pageSizeRef.current
-
+    // ponytail: 后端分页后无全量 vocab，改为「按词搜索」定位——把该词设为搜索词，
+    // 后端 /vocab?q=word 会返回含该词的当前页（通常第 1 页即命中），再展开。
     if (showGlobalVocab) {
       if (vocabListRef.current) {
         globalVocabScrollPos.current = vocabListRef.current.scrollTop
       }
       pendingScrollWord.current = wordKey
-      if (vocabSearch) setVocabSearch('')
-      const wordIdx = currentFilteredVocab.findIndex(w => w.word.toLowerCase() === wordKey.toLowerCase())
-      if (wordIdx >= 0) {
-        const targetPage = Math.floor(wordIdx / currentPageSize) + 1
-        if (targetPage !== currentPage) setVocabPage(targetPage)
-      }
       setShowGlobalVocab(false)
+      setVocabSearch(wordKey)
+      setVocabPage(1)
     } else {
-      if (vocabSearch) setVocabSearch('')
-      const wordIdx = currentFilteredVocab.findIndex(w => w.word.toLowerCase() === wordKey.toLowerCase())
-      if (wordIdx >= 0) {
-        const targetPage = Math.floor(wordIdx / currentPageSize) + 1
-        if (targetPage !== currentPage) {
-          setVocabPage(targetPage)
-          pendingScrollWord.current = wordKey
-        } else {
-          scrollToWord(wordKey, 0)
-        }
+      const currentFilteredVocab = filteredVocabRef.current
+      const onCurrentPage = currentFilteredVocab.some(w => w.word.toLowerCase() === wordKey.toLowerCase())
+      if (onCurrentPage) {
+        scrollToWord(wordKey, 0)
+      } else {
+        // 不在当前页：用该词搜索定位
+        setVocabSearch(wordKey)
+        setVocabPage(1)
+        pendingScrollWord.current = wordKey
       }
     }
 
@@ -801,9 +809,29 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
-    // 手机端：底部已有微信式 Tab，分页指示器删掉
+    // 手机端：简化分页器（上一页/页码/下一页），占满一行
     if (!isDesktop) {
-      return null
+      return (
+        <div className="flex items-center justify-between gap-2 py-1.5 px-3 border-t border-aged-200/60 bg-parchment-50/40">
+          <button
+            onClick={() => onPageChange(p => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+            className={`flex items-center gap-1 text-[12px] px-2 py-1 rounded-sm transition-colors ${currentPage <= 1 ? 'text-aged-200 cursor-not-allowed' : 'text-ink-500 hover:text-ink-700 active:bg-parchment-100'}`}
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>{t.prevPage || '上一页'}</span>
+          </button>
+          <span className="text-[11px] text-ink-400 tabular-nums">{currentPage} / {totalPages}</span>
+          <button
+            onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+            className={`flex items-center gap-1 text-[12px] px-2 py-1 rounded-sm transition-colors ${currentPage >= totalPages ? 'text-aged-200 cursor-not-allowed' : 'text-ink-500 hover:text-ink-700 active:bg-parchment-100'}`}
+          >
+            <span>{t.nextPage || '下一页'}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )
     }
     // 桌面端：原有数字分页器
     return (
@@ -990,7 +1018,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
-          disabled={loading || !!preprocessStatus || vocab.length === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
+          disabled={loading || !!preprocessStatus || vocabTotal === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
           className="btn-primary flex items-center gap-2 shrink-0 py-2 px-4 md:py-3 md:px-6"
         >
           {(loading || preprocessStatus) ? (
@@ -1058,7 +1086,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
-                    {filteredSentences.length}
+                    {sentTotal}
                   </span>
                 </div>
                 <div className="relative w-1/2 ml-auto">
@@ -1086,10 +1114,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                   )}
                   <pre className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText || safeSentenceTranslations.map(item => item.sentence || '').join('\n')}</pre>
                 </div>
-              ) : filteredSentences.length > 0 ? (
+              ) : pagedFilteredSentences.length > 0 ? (
                 <div className="divide-y divide-aged-200/60">
                   {pagedFilteredSentences.map((item, index) => {
-                    const originalIndex = safeSentenceTranslations.indexOf(item)
+                    const originalIndex = (sentencePage - 1) * pageSize + index
                     return (
                       <div key={originalIndex} ref={el => { sentenceRefs.current[originalIndex] = el }}>
                         <motion.div
@@ -1140,8 +1168,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 </div>
               ) : (
                 <div className="py-16 text-center">
-                  <Languages className="w-10 h-10 mx-auto mb-3 text-aged-200" />
-                  <p className="text-ink-400 text-sm">{sentenceSearch ? (t.noMatchingSentences || '没有找到匹配的句子') : (loading ? t.loading : (t.noSentencesYetHint || '暂无句子'))}</p>
+                  {sentFetching ? (
+                    <Loader2 className="w-7 h-7 mx-auto mb-3 text-aged-300 animate-spin" />
+                  ) : (
+                    <Languages className="w-10 h-10 mx-auto mb-3 text-aged-200" />
+                  )}
+                  <p className="text-ink-400 text-sm">{sentFetching ? t.loading : (sentenceSearch ? (t.noMatchingSentences || '没有找到匹配的句子') : (t.noSentencesYetHint || '暂无句子'))}</p>
                 </div>
               )}
             </div>
@@ -1163,7 +1195,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                     </span>
                   </h3>
                   <span className="badge-amber ml-1">
-                    {showGlobalVocab ? filteredGlobalVocab.length : filteredVocab.length}
+                    {showGlobalVocab ? filteredGlobalVocab.length : vocabTotal}
                   </span>
                 </div>
                 <div className="relative w-1/2 ml-auto">
@@ -1322,8 +1354,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               <>
               {groupedVocab.length === 0 ? (
                 <div className="py-16 text-center">
-                  <BookOpen className="w-10 h-10 mx-auto mb-3 text-aged-200" />
-                  <p className="text-ink-400 text-sm">{loading ? t.loading : (vocabSearch ? (t.noMatchFound || '没有找到匹配的单词') : (t.noWordsYetHint || '暂无单词'))}</p>
+                  {vocabFetching ? (
+                    <Loader2 className="w-7 h-7 mx-auto mb-3 text-aged-300 animate-spin" />
+                  ) : (
+                    <BookOpen className="w-10 h-10 mx-auto mb-3 text-aged-200" />
+                  )}
+                  <p className="text-ink-400 text-sm">{vocabFetching ? t.loading : (vocabSearch ? (t.noMatchFound || '没有找到匹配的单词') : (t.noWordsYetHint || '暂无单词'))}</p>
                 </div>
               ) : (
               <div className="space-y-3">

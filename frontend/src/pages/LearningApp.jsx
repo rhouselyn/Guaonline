@@ -69,6 +69,9 @@ function App() {
   const [displayVocab, setDisplayVocab] = useState([])
   const [sortOrder, setSortOrder] = useState('asc') // 'asc' 或 'desc'
   const [sentenceTranslations, setSentenceTranslations] = useState([])
+  // ponytail: 生成进度长度信号——DictionaryStep 按页自取，长度变化触发 refetch 当前页
+  const [vocabLength, setVocabLength] = useState(0)
+  const [sentenceLength, setSentenceLength] = useState(0)
   const [selectedWord, setSelectedWord] = useState(null)
   const [selectedSentence, setSelectedSentence] = useState(null)
   const [progress, setProgress] = useState(0)
@@ -352,15 +355,13 @@ function App() {
         const status = await api.getStatus(currentFileId)
         console.log('状态响应:', status)
 
-        // 强制更新词汇表和句子翻译，确保实时显示
+        // ponytail: 不再从轮询全量灌入 vocab/sentence_translations——DictionaryStep 已按页自取。
+        // 仅用长度变化作为 DictionaryStep 的「生成进度」refetch 触发信号（轻量）。
         if (status.vocab) {
-          console.log('更新词汇表，长度:', status.vocab.length)
-          setVocab([...status.vocab]) // 使用展开运算符强制更新
+          setVocabLength(status.vocab.length)
         }
-
         if (status.sentence_translations) {
-          console.log('更新句子翻译，数量:', status.sentence_translations.length)
-          setSentenceTranslations([...status.sentence_translations]) // 使用展开运算符强制更新
+          setSentenceLength(status.sentence_translations.length)
         }
 
         // 更新进度
@@ -407,9 +408,10 @@ function App() {
         }
 
         if (status.status === 'completed') {
-          console.log('处理完成，词汇表长度:', status.vocab.length)
-          setVocab([...status.vocab])
-          setSentenceTranslations([...status.sentence_translations])
+          console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
+          // ponytail: 不再全量灌入；用长度触发 DictionaryStep refetch 当前页
+          setVocabLength(status.vocab ? status.vocab.length : 0)
+          setSentenceLength(status.sentence_translations ? status.sentence_translations.length : 0)
           setProgress(100)
           setProcessingInfo(null)
           setLoading(false)
@@ -1232,27 +1234,18 @@ function App() {
       setCurrentFileId(fileId)
       setFileId(fileId)
       if (title) setFileTitle(title)
-      const vocabData = await api.getVocab(fileId)
-      const vocabList = vocabData.vocab || []
-      setVocab(vocabList)
-      const sentencesData = await api.getSentences(fileId)
-      const sentenceList = sentencesData.sentences || []
-      setSentenceTranslations(Array.isArray(sentenceList) ? sentenceList : [])
-      // 从后端获取持久化的原文与提示词
+      // ponytail: 不再全量加载 vocab/sentences——DictionaryStep 改为按页自取（/vocab、/sentences 带 offset/limit/q）。
+      // 入口只需 /info（原文、提示词、has_failed、sentence_count），大幅减少首屏传输与反序列化。
+      let infoData = {}
       try {
         const infoResp = await fetch(`/api/file/${fileId}/info`)
-        const infoData = await infoResp.json()
+        infoData = await infoResp.json()
         if (infoData.original_text) {
           setOriginalText(infoData.original_text)
-        } else if (Array.isArray(sentenceList) && sentenceList.length > 0) {
-          setOriginalText(sentenceList.map(s => s.sentence || '').filter(Boolean).join('\n'))
         }
         setEntryPrompt(infoData.prompt || '')
       } catch (e) {
-        // fallback: 从句子拼接
-        if (Array.isArray(sentenceList) && sentenceList.length > 0) {
-          setOriginalText(sentenceList.map(s => s.sentence || '').filter(Boolean).join('\n'))
-        }
+        // /info 失败不阻塞，原文留空
       }
       try {
         const [phase1UnitsData, phase2UnitsData, starsData] = await Promise.all([
@@ -1273,19 +1266,13 @@ function App() {
       }
 
       // 进入条目时不再手动 getStatus——下面的轮询 useEffect 在 currentFileId 变化时会立即拉一次。
-      // 这里只通过 setSkipPolling(false) 启用轮询；首次拉取会带回真实状态/进度/数据。
-      // 失败句子重试改由 useEffect 内部判定后触发（见 pollStatus 中 status.partial 分支）
       setSkipPolling(false)
 
-      // ponytail: 句子重进自动检测 __failed 标记并续生成（与单词详情无缓存即触发后台生成一致）。
-      // 后端重启后 processing_status 内存态丢失，原 pollStatus 的 partial 分支无法触发；
-      // 此处直接从已加载的 sentenceList 扫描 __failed 标记，命中即调 retry-sentences，
-      // 后端会恢复 processing 状态并启动后台重试，随后轮询自然接管进度展示。
+      // ponytail: 句子重进自动检测 __failed 并续生成。改用 /info 返回的 has_failed 标记，
+      // 无需全量加载 sentences 即可判断。命中即调 retry-sentences，后端恢复 processing 并启动后台重试。
       try {
-        const hasFailed = Array.isArray(sentenceList) && sentenceList.some(s => s && typeof s === 'object' && s.__failed)
-        if (hasFailed) {
+        if (infoData.has_failed) {
           api.retryFailedSentences(fileId).then(() => {
-            // 重试已启动，确保轮询开启以展示进度
             setSkipPolling(false)
           }).catch(() => {})
         }
@@ -1570,6 +1557,8 @@ function App() {
               dictStateRef={dictStateRef}
               originalText={originalText}
               entryPrompt={entryPrompt}
+              vocabLength={vocabLength}
+              sentenceLength={sentenceLength}
             />
           )}
           

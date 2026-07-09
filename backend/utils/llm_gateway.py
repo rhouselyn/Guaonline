@@ -234,6 +234,11 @@ class TierKeyPool:
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
             self.current_index += 1
+            # ponytail: 失败切 key 时把 last_switch_time 推进到「只差 0.01s 即可下一请求」，
+            # 使递归 call 的 wait_for_interval 只等 0.01s 就跳到下一个 key（而非 per-pool interval）。
+            # 原 mark_complete 在 active_count 归零时才更新 last_switch_time，失败路径未更新，
+            # 导致重试时仍要等满 interval（默认 1.0s），key 轮换被 per-pool 节流拖慢。
+            self.last_switch_time = time.time() - self.interval + 0.01
             if idx < len(self.ref_runtime):
                 rt = self.ref_runtime[idx]
                 rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
