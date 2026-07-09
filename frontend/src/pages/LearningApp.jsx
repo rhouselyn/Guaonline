@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2, Home, User, ListChecks, LogOut, Zap } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2, Home, User, ListChecks, LogOut, Zap, KeyRound, RefreshCw } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -27,6 +27,7 @@ import VocabListStep from '../components/VocabListStep'
 import HistorySidebar from '../components/HistorySidebar'
 import WordListPanel from '../components/WordListPanel'
 import SettingsModal from '../components/SettingsModal'
+import ChangePasswordModal from '../components/ChangePasswordModal'
 
 function FrogLogo({ size = 40 }) {
   return (
@@ -76,6 +77,7 @@ function App() {
   const [learningData, setLearningData] = useState(null)
   const [showWordCard, setShowWordCard] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const [selectedOption, setSelectedOption] = useState(null)
   const [isCorrect, setIsCorrect] = useState(null)
   const [units, setUnits] = useState([])
@@ -1396,15 +1398,7 @@ function App() {
               ) : (
                 <>
                   <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
-                    <AccountMenu t={t} />
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowSettings(true)}
-                      className="p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </motion.button>
+                    <AccountMenu t={t} onOpenSettings={() => setShowSettings(true)} onOpenChangePassword={() => setShowChangePassword(true)} />
                   </div>
                   {translatingUI && (
                     <div className="absolute inset-0 bg-parchment-50/80 backdrop-blur-sm z-20 flex items-center justify-center">
@@ -1487,41 +1481,40 @@ function App() {
               const isUnlimited = max === -1
               const isLow = !isUnlimited && typeof available === 'number' && available <= 10
               const tierLabel = { free: t.freeTier || '免费版', basic: t.basicTier || '基础版', pro: t.proTier || '专业版' }[user?.tier] || user?.tier || ''
+              // ponytail: App 化个人页 — 头像居中置顶 / 邮箱 / 付费计划 / 额度内联（不单独成块） / 菜单列表（设置·修改密码·切换账号·退出）
+              const menuItem = (Icon, label, onClick, danger = false) => (
+                <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm transition-colors ${danger ? 'text-rust-500 hover:bg-rust-50' : 'text-ink-700 hover:bg-parchment-100'}`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </button>
+              )
               return (
                 <div className="max-w-md mx-auto">
-                  <h1 className="text-xl font-bold text-ink-800 mb-5" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-                    {t.profileTitle || '我的'}
-                  </h1>
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-retro-sm">
+                  {/* 头像居中置顶 */}
+                  <div className="flex flex-col items-center pt-2 pb-6">
+                    <div className="w-20 h-20 rounded-full bg-amber-500 text-white flex items-center justify-center text-2xl font-bold shadow-retro-sm">
                       {user ? (user.name || user.email)[0].toUpperCase() : '?'}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-ink-800 truncate">{user?.email || ''}</p>
-                      <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-600 text-xs font-bold">
-                        {tierLabel}
-                      </span>
-                    </div>
-                  </div>
-                  {!isUnlimited && (
-                    <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-ink-500 flex items-center gap-1"><Zap className="w-3 h-3" />{t.remainingQuota || '剩余额度'}</span>
+                    <p className="mt-3 text-base font-medium text-ink-800 text-center break-all px-4">{user?.email || ''}</p>
+                    <span className="inline-block mt-2 px-3 py-0.5 rounded-full bg-amber-100/80 text-amber-600 text-xs font-bold">
+                      {tierLabel}
+                    </span>
+                    {/* 额度内联展示：不单独成块，与付费计划下方一行紧凑呈现 */}
+                    {!isUnlimited && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Zap className={`w-3.5 h-3.5 ${isLow ? 'text-rust-500' : 'text-amber-500'}`} />
+                        <span className="text-xs text-ink-500">{t.remainingQuota || '剩余额度'}</span>
                         <span className={`text-xs font-bold tabular-nums ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>{available} / {max}</span>
                       </div>
-                      <div className="w-full h-2 bg-parchment-200 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-500 ${isLow ? 'bg-rust-400' : 'bg-amber-400'}`} style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-ink-700 hover:bg-parchment-100 transition-colors mb-3">
-                    <Settings className="w-4 h-4 text-ink-400" />
-                    {t.settings || '设置'}
-                  </button>
-                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
-                    <LogOut className="w-4 h-4" />
-                    {t.logout || '退出登录'}
-                  </button>
+                    )}
+                  </div>
+                  {/* 菜单列表 */}
+                  <div className="space-y-3">
+                    {menuItem(Settings, t.settings || '设置', () => setShowSettings(true))}
+                    {menuItem(KeyRound, t.changePassword || '修改密码', () => setShowChangePassword(true))}
+                    {menuItem(RefreshCw, t.switchAccount || '切换账号', () => { auth.logout(); navigate('/login') })}
+                    {menuItem(LogOut, t.logout || '退出登录', () => { auth.logout(); navigate('/') }, true)}
+                  </div>
                 </div>
               )
             })()}
@@ -1855,6 +1848,7 @@ function App() {
         </nav>
       )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
+      <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} t={t} />
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

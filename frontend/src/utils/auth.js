@@ -86,6 +86,14 @@ export const auth = {
     }
   },
 
+  async changePassword(currentPassword, newPassword) {
+    const response = await axios.post('/api/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+
   isAdmin() {
     try {
       const tokens = this.getTokens();
