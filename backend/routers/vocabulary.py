@@ -452,6 +452,8 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 vocab = vocab["vocab"]
             if not isinstance(vocab, list):
                 continue
+            # ponytail: 一次取回该 file 全部 word_cache，替代下面逐词 load_word_cache 的 N+1
+            cached_map = storage.load_word_cache_batch(file_id)
             for entry in vocab:
                 if not isinstance(entry, dict):
                     continue
@@ -459,7 +461,7 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 if not word_key:
                     continue
                 if word_key not in merged:
-                    merged[word_key] = {"entry": dict(entry), "file_id": file_id}
+                    merged[word_key] = {"entry": dict(entry), "file_id": file_id, "cached": cached_map.get(word_key)}
 
         result = []
         for word_key, data in merged.items():
@@ -467,7 +469,7 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
             file_id = data["file_id"]
             word = entry.get("word", word_key)
 
-            cached = storage.load_word_cache(file_id, word)
+            cached = data.get("cached")
 
             ipa = entry.get("ipa", "")
             meaning = entry.get("meaning", "") or entry.get("context_meaning", "")

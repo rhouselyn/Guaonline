@@ -62,13 +62,17 @@ async def get_phase_units(file_id: str, phase_number: int):
             raise HTTPException(status_code=404, detail="No sentences found")
 
         if phase_number == 1:
-            current_index = storage.load_learning_progress(file_id)
-            max_index = storage.load_learning_max_progress(file_id)
+            # ponytail: 合并 load_learning_progress + load_learning_max_progress 为单次查询
+            current_index, max_index = storage.load_learning_progress_both(file_id)
 
             plan = storage.load_learning_plan(file_id)
             if not plan:
                 generate_and_save_learning_plan(file_id, vocab, storage.load_pipeline_data(file_id) or [])
                 plan = storage.load_learning_plan(file_id)
+
+            # ponytail: 一次取回该 file 全部 word_cache，替代逐词 load_word_cache 的 N+1。
+            # load_word_cache_batch 返回 {word_lower: word_info}，命中即视为已缓存。
+            cached_map = storage.load_word_cache_batch(file_id)
 
             phase1_units = []
             accumulated = 0
@@ -84,7 +88,7 @@ async def get_phase_units(file_id: str, phase_number: int):
                     vi = item.get("vocab_index")
                     if vi is not None and vi < len(vocab):
                         w = vocab[vi].get("word", "")
-                        if w and not storage.load_word_cache(file_id, w):
+                        if w and w.lower() not in cached_map:
                             all_words_cached = False
                             break
                 phase1_units.append({

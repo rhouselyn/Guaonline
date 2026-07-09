@@ -875,6 +875,66 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const tabActiveCls = isDesktop ? 'tab-warm-active' : 'text-ink-700 font-bold'
   const tabInactiveCls = isDesktop ? 'tab-warm-inactive' : 'text-ink-400'
 
+  // ponytail: 进度条渲染。桌面端内联在标题行（shrink-0）；
+  // 移动端单独占满一行（flex-1 的 bar 撑满），显示在标题行与"开始学习"下方。
+  const renderProgress = (fullWidth = false) => {
+    const active = preprocessStatus || (currentFileId && ((processingInfo && safeProcessingInfo.total > 0 && progress < 100) || (wordGenProgress && wordGenProgress.completed < wordGenProgress.total)))
+    if (!active) return null
+    const barCls = fullWidth ? 'progress-warm flex-1' : 'progress-warm w-16 md:w-24'
+    const rowCls = fullWidth ? 'flex items-center gap-2 w-full px-1' : 'flex items-center gap-2.5 shrink-0'
+    const innerCls = fullWidth ? 'flex items-center gap-2 w-full' : 'flex items-center gap-2'
+    return (
+      <div className={rowCls}>
+        {preprocessStatus ? (
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-none h-1.5 w-1.5 bg-blue-500"></span>
+            </span>
+            <span className="text-[11px] text-blue-500 font-medium truncate">
+              {preprocessStatus === 'detecting' ? (t.detectingLanguage || '识别语言中...') :
+               preprocessStatus === 'translating' ? (t.translating || '翻译中...') : (t.generating || '生成文本中...')}
+            </span>
+          </div>
+        ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
+          <div className={innerCls}>
+            <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
+              {safeProcessingInfo.current}/{safeProcessingInfo.total}
+            </span>
+            <div className={barCls}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="progress-warm-bar"
+              />
+            </div>
+            <span className="text-[10px] text-ink-400 whitespace-nowrap">
+              {t.processingSentences || '处理句子中...'}
+            </span>
+          </div>
+        ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
+          <div className={innerCls}>
+            <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
+              {wordGenProgress.completed}/{wordGenProgress.total}
+            </span>
+            <div className={barCls}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${wordGenProgress.total > 0 ? (wordGenProgress.completed / wordGenProgress.total * 100) : 0}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="progress-warm-bar"
+              />
+            </div>
+            <span className="text-[10px] text-amber-500 whitespace-nowrap">
+              {t.generatingWordDetails || '生成单词详情中...'}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -924,56 +984,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
         <div className="flex-1 min-w-0" />
 
-        {(preprocessStatus || (currentFileId && ((processingInfo && safeProcessingInfo.total > 0 && progress < 100) || (wordGenProgress && wordGenProgress.completed < wordGenProgress.total)))) && (
-          <div className="flex items-center gap-2.5 shrink-0">
-            {preprocessStatus ? (
-              <div className="flex items-center gap-1.5">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-none h-1.5 w-1.5 bg-blue-500"></span>
-                </span>
-                <span className="text-[11px] text-blue-500 font-medium truncate">
-                  {preprocessStatus === 'detecting' ? (t.detectingLanguage || '识别语言中...') : 
-                   preprocessStatus === 'translating' ? (t.translating || '翻译中...') : (t.generating || '生成文本中...')}
-                </span>
-              </div>
-            ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-                  {safeProcessingInfo.current}/{safeProcessingInfo.total}
-                </span>
-                <div className="progress-warm w-16 md:w-24">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="progress-warm-bar"
-                  />
-                </div>
-                <span className="text-[10px] text-ink-400 whitespace-nowrap">
-                  {t.processingSentences || '处理句子中...'}
-                </span>
-              </div>
-            ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
-                  {wordGenProgress.completed}/{wordGenProgress.total}
-                </span>
-                <div className="progress-warm w-16 md:w-24">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${wordGenProgress.total > 0 ? (wordGenProgress.completed / wordGenProgress.total * 100) : 0}%` }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="progress-warm-bar"
-                  />
-                </div>
-                <span className="text-[10px] text-amber-500 whitespace-nowrap">
-                  {t.generatingWordDetails || '生成单词详情中...'}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        )}
+        {isDesktop && renderProgress(false)}
 
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -995,6 +1006,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           )}
         </motion.button>
       </div>
+
+      {!isDesktop && renderProgress(true)}
 
       <div
         ref={scrollContainerRef}
@@ -1065,9 +1078,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 <div className="p-4">
                   {entryPrompt && (
                     <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50/80 p-3">
-                      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-700">
-                        <Brain className="w-3 h-3" />
-                        <span>{t.prompt || '提示词'}</span>
+                      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                        {t.prompt || '提示词'}
                       </div>
                       <pre className="text-[13px] text-amber-900 leading-relaxed whitespace-pre-wrap font-sans">{entryPrompt}</pre>
                     </div>
