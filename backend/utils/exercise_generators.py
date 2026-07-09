@@ -636,6 +636,10 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         t_split_end = time.time()
         print(f"[TIMING] 句子分割: {t_split_end - t_split_start:.3f}s, 共 {total_sentences} 个句子")
 
+        # 句子分割后立即保存到 DB，让前端能立即读到句子列表（翻译结果稍后增量补充）
+        initial_pipeline = [{"sentence": s, "translation_result": {}} for s in sentences]
+        storage.save_pipeline_data(file_id, initial_pipeline)
+
         _preserve2 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
         processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": total_sentences, **_preserve2}
 
@@ -804,6 +808,15 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 **_preserve3
             }
             print(f"[DEBUG] 更新状态: 进度 {progress}%, 已处理 {len(completed_indices)} 个句子, 词汇 {len(unique_partial)} 个")
+
+            # 增量更新 DB：把已翻译的句子写回 pipeline_data，前端 refetch 即可看到翻译结果
+            incremental_pipeline = []
+            for si in range(total_sentences):
+                if si in results_dict:
+                    incremental_pipeline.append(results_dict[si])
+                else:
+                    incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
+            storage.save_pipeline_data(file_id, incremental_pipeline)
 
         sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
 

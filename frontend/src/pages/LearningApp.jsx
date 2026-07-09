@@ -355,13 +355,17 @@ function App() {
         const status = await api.getStatus(currentFileId)
         console.log('状态响应:', status)
 
-        // ponytail: 不再从轮询全量灌入 vocab/sentence_translations——DictionaryStep 已按页自取。
-        // 仅用长度变化作为 DictionaryStep 的「生成进度」refetch 触发信号（轻量）。
+        // 用 total_sentences + current_sentence 作为 refetch 触发信号。
+        // 后端句子分割后立即写 DB，total_sentences > 0 即触发首次 refetch 显示句子列表；
+        // current_sentence 增加表示有新翻译完成，触发 refetch 补充翻译结果。
+        if (status.total_sentences !== undefined && status.total_sentences > 0) {
+          const signal = status.total_sentences * 1000 + (status.current_sentence || 0)
+          if (signal !== sentenceLength) {
+            setSentenceLength(signal)
+          }
+        }
         if (status.vocab) {
           setVocabLength(status.vocab.length)
-        }
-        if (status.sentence_translations) {
-          setSentenceLength(status.sentence_translations.length)
         }
 
         // 更新进度
@@ -409,9 +413,11 @@ function App() {
 
         if (status.status === 'completed') {
           console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
-          // ponytail: 不再全量灌入；用长度触发 DictionaryStep refetch 当前页
           setVocabLength(status.vocab ? status.vocab.length : 0)
-          setSentenceLength(status.sentence_translations ? status.sentence_translations.length : 0)
+          // 最终触发一次 refetch 确保拿到完整翻译结果
+          if (status.total_sentences) {
+            setSentenceLength(status.total_sentences * 1000 + (status.total_sentences + 1))
+          }
           setProgress(100)
           setProcessingInfo(null)
           setLoading(false)
@@ -561,6 +567,9 @@ function App() {
         // 直接输入模式：原文就是用户输入的文本，立即设置
         if (inputMode === 'direct') {
           setOriginalText(text.trim())
+        } else {
+          // translate/generate 模式：用户输入即为 prompt
+          setEntryPrompt(text.trim())
         }
         // 刷新额度信息
         auth.fetchUser().catch(() => {})
