@@ -68,7 +68,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-3xl mx-auto pb-16 md:pb-0"
+      className="max-w-3xl mx-auto pb-nav-safe md:pb-0"
       onTouchStart={(e) => {
         if (isDesktop) return
         const t = e.touches[0]
@@ -91,7 +91,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
         setTimeout(() => { touchState.current.scrolling = false }, 350)
       }}
     >
-      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-4 sm:mb-8">
+      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-5 sm:mb-8">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             initial={{ opacity: 0, x: -10 }}
@@ -130,7 +130,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-5 sm:p-8 shadow-retro-sm"
           >
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-2">
@@ -195,7 +195,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 sm:p-8 shadow-retro-sm"
+            className="bg-parchment-50 border-2 border-aged-200 rounded-md p-5 sm:p-8 shadow-retro-sm"
           >
             <div className="flex items-start justify-between mb-8">
               <div>
@@ -377,26 +377,32 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
         )}
       </AnimatePresence>
 
-      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
+      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列）—— 与主导航同风格：安全区留白 + 活动项顶部圆点指示 */}
       {!isDesktop && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom md:hidden">
           <button
             onClick={() => switchMode(0)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+            className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors relative ${
               activeMode === 0 ? 'text-amber-600' : 'text-ink-400'
             }`}
           >
+            {activeMode === 0 && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
+            )}
             <Languages className="w-5 h-5" />
-            <span className="text-[10px] font-medium">句子练习</span>
+            <span className={`text-[10px] leading-none ${activeMode === 0 ? 'font-bold' : 'font-medium'}`}>句子练习</span>
           </button>
           <button
             onClick={() => switchMode(1)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+            className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors relative ${
               activeMode === 1 ? 'text-amber-600' : 'text-ink-400'
             }`}
           >
+            {activeMode === 1 && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
+            )}
             <BookOpen className="w-5 h-5" />
-            <span className="text-[10px] font-medium">单词学习</span>
+            <span className={`text-[10px] leading-none ${activeMode === 1 ? 'font-bold' : 'font-medium'}`}>单词学习</span>
           </button>
         </div>
       )}

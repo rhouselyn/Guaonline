@@ -224,6 +224,24 @@ body {
   z-index: 40;
 }
 
+/* === 移动端 App 化：安全区适配（iPhone 刘海/底部 Home Indicator）=== */
+/* ponytail: 现代手机顶部有刘海/灵动岛、底部有 Home Indicator，
+   固定定位的顶栏/底栏需让出安全区，否则内容会被遮挡。 */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* 固定底栏专用：基础留白 + 安全区，避免底栏内容被 Home Indicator 压住 */
+.nav-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0px);
+}
+/* 内容区为固定底栏预留的滚动留白（底栏高度 + 安全区） */
+.pb-nav-safe {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* 横向滑动容器：snap 对齐 + 触摸滚动 */
 .touch-scroll-x {
   overflow-x: auto;
