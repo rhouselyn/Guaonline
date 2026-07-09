@@ -49,7 +49,8 @@ function LangIcon({ langCode, size = 'md' }) {
   })()
   const isAuto = langCode === 'auto'
   const code = isAuto ? 'AUTO' : langCode === 'zh-TW' ? 'TW' : langCode.substring(0, 2).toUpperCase()
-  const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : size === 'lg' ? 'w-8 h-8 text-xs' : 'w-7 h-7 text-[10px]'
+  // ponytail: auto 4 字符用更小字号才能完整显示
+  const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : size === 'lg' ? `w-9 h-9 ${isAuto ? 'text-[9px]' : 'text-sm'}` : 'w-7 h-7 text-[10px]'
   return (
     <span
       className={`inline-flex items-center justify-center rounded-sm font-bold text-white leading-none ${sizeClasses}`}
@@ -401,7 +402,7 @@ function LanguageSelector({ value, onChange, uiLang, inputMode, recentLanguages,
           className="flex items-center gap-1.5 text-base font-bold text-ink-700 hover:text-ink-900 transition-colors"
         >
           <span className="leading-none">
-            {isAuto ? <LangIcon langCode="auto" size="md" /> : <LangIcon langCode={value} size="md" />}
+            {isAuto ? <LangIcon langCode="auto" size="lg" /> : <LangIcon langCode={value} size="lg" />}
           </span>
           <span className="text-ink-800">{currentLabel}</span>
           {nativeLabel && nativeLabel !== currentLabel && (
@@ -731,8 +732,8 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={getPlaceholder()}
-              rows={4}
-              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+              rows={3}
+              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-2 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
             />
             <div className="flex items-center justify-between px-3 pb-3">
               <span className={`flex items-center gap-1 text-xs font-medium ${isLow ? 'text-rust-500' : 'text-amber-600'}`} title={t?.remainingQuota || '剩余额度'}>
