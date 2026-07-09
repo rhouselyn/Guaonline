@@ -64,6 +64,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [fileId, setFileId] = useState(null)
   const [originalText, setOriginalText] = useState('')
+  const [entryPrompt, setEntryPrompt] = useState('')
   const [vocab, setVocab] = useState([])
   const [displayVocab, setDisplayVocab] = useState([])
   const [sortOrder, setSortOrder] = useState('asc') // 'asc' 或 'desc'
@@ -530,6 +531,7 @@ function App() {
     setFileId(null)
     setFileTitle('')
     setOriginalText('')
+    setEntryPrompt('')
     // 重置字典状态，避免显示上一个条目的残留
     dictStateRef.current = { vocabPage: 1, sentencePage: 1, globalVocabPage: 1, vocabScrollPos: 0, sentenceTranslationScrollPos: 0, sentenceOriginalScrollPos: 0, globalVocabScrollPos: 0, vocabDisplayMode: 0, sentenceDisplayMode: 0, showOriginal: false, showGlobalVocab: false, vocabSearch: '', sentenceSearch: '' }
 
@@ -1225,6 +1227,7 @@ function App() {
     setProgress(0)
     setProcessingInfo(null)
     setOriginalText('')
+    setEntryPrompt('')
     try {
       setCurrentFileId(fileId)
       setFileId(fileId)
@@ -1235,7 +1238,7 @@ function App() {
       const sentencesData = await api.getSentences(fileId)
       const sentenceList = sentencesData.sentences || []
       setSentenceTranslations(Array.isArray(sentenceList) ? sentenceList : [])
-      // 从后端获取持久化的原文
+      // 从后端获取持久化的原文与提示词
       try {
         const infoResp = await fetch(`/api/file/${fileId}/info`)
         const infoData = await infoResp.json()
@@ -1244,6 +1247,7 @@ function App() {
         } else if (Array.isArray(sentenceList) && sentenceList.length > 0) {
           setOriginalText(sentenceList.map(s => s.sentence || '').filter(Boolean).join('\n'))
         }
+        setEntryPrompt(infoData.prompt || '')
       } catch (e) {
         // fallback: 从句子拼接
         if (Array.isArray(sentenceList) && sentenceList.length > 0) {
@@ -1272,6 +1276,22 @@ function App() {
       // 这里只通过 setSkipPolling(false) 启用轮询；首次拉取会带回真实状态/进度/数据。
       // 失败句子重试改由 useEffect 内部判定后触发（见 pollStatus 中 status.partial 分支）
       setSkipPolling(false)
+
+      // ponytail: 句子重进自动检测 __failed 标记并续生成（与单词详情无缓存即触发后台生成一致）。
+      // 后端重启后 processing_status 内存态丢失，原 pollStatus 的 partial 分支无法触发；
+      // 此处直接从已加载的 sentenceList 扫描 __failed 标记，命中即调 retry-sentences，
+      // 后端会恢复 processing 状态并启动后台重试，随后轮询自然接管进度展示。
+      try {
+        const hasFailed = Array.isArray(sentenceList) && sentenceList.some(s => s && typeof s === 'object' && s.__failed)
+        if (hasFailed) {
+          api.retryFailedSentences(fileId).then(() => {
+            // 重试已启动，确保轮询开启以展示进度
+            setSkipPolling(false)
+          }).catch(() => {})
+        }
+      } catch (e) {
+        // 检测失败不阻塞进入
+      }
 
       api.startWordGen(fileId).catch(() => {})
       setStep('dictionary')
@@ -1512,7 +1532,7 @@ function App() {
                   <div className="space-y-3">
                     {menuItem(Settings, t.settings || '设置', () => setShowSettings(true))}
                     {menuItem(KeyRound, t.changePassword || '修改密码', () => setShowChangePassword(true))}
-                    {menuItem(RefreshCw, t.switchAccount || '切换账号', () => { auth.logout(); navigate('/login') })}
+                    {menuItem(RefreshCw, t.switchAccount || '切换账号', () => { navigate('/login?switch=1') })}
                     {menuItem(LogOut, t.logout || '退出登录', () => { auth.logout(); navigate('/') }, true)}
                   </div>
                 </div>
@@ -1549,6 +1569,7 @@ function App() {
               pageSize={pageSize}
               dictStateRef={dictStateRef}
               originalText={originalText}
+              entryPrompt={entryPrompt}
             />
           )}
           

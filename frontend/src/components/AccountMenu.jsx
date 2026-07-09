@@ -126,7 +126,7 @@ export default function AccountMenu({ t, onOpenSettings, onOpenChangePassword })
           )}
           {menuItem(Settings, t?.settings || '设置', () => onOpenSettings && onOpenSettings())}
           {menuItem(KeyRound, t?.changePassword || '修改密码', () => onOpenChangePassword && onOpenChangePassword())}
-          {menuItem(RefreshCw, t?.switchAccount || '切换账号', () => { auth.logout(); navigate('/login'); })}
+          {menuItem(RefreshCw, t?.switchAccount || '切换账号', () => { navigate('/login?switch=1'); })}
           <div className="border-t border-aged-200" />
           {menuItem(LogOut, t?.logout || '退出登录', () => { auth.logout(); navigate('/'); }, true)}
         </div>

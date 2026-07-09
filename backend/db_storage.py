@@ -198,6 +198,15 @@ class DatabaseStorage:
         """)
         conn.commit()
 
+        # ponytail: 为已有 language_settings 表补 prompt 列（存储 generate/translate 模式的用户提示词）
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(language_settings)").fetchall()]
+            if "prompt" not in cols:
+                conn.execute("ALTER TABLE language_settings ADD COLUMN prompt TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
     # ── pipeline_data ──────────────────────────────────────
 
     def save_pipeline_data(self, file_id: str, data: Any):
@@ -384,28 +393,33 @@ class DatabaseStorage:
 
     # ── language_settings ──────────────────────────────────
 
-    def save_language_settings(self, file_id: str, source_lang: str, target_lang: str, original_text: str = None):
+    def save_language_settings(self, file_id: str, source_lang: str, target_lang: str, original_text: str = None, prompt: str = None):
         conn = self._get_conn()
-        # 获取已有记录的 original_text
-        existing = conn.execute("SELECT original_text FROM language_settings WHERE file_id = ?",
+        # 获取已有记录的 original_text / prompt
+        existing = conn.execute("SELECT original_text, prompt FROM language_settings WHERE file_id = ?",
                                 (file_id,)).fetchone()
         if original_text is None and existing and existing["original_text"]:
             original_text = existing["original_text"]
+        # prompt 为 None 时保留已有值（不覆盖）
+        if prompt is None and existing and existing["prompt"]:
+            prompt = existing["prompt"]
         conn.execute(
-            "INSERT OR REPLACE INTO language_settings (file_id, source_lang, target_lang, original_text, updated_at) "
-            "VALUES (?, ?, ?, ?, datetime('now'))",
-            (file_id, source_lang, target_lang, original_text)
+            "INSERT OR REPLACE INTO language_settings (file_id, source_lang, target_lang, original_text, prompt, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            (file_id, source_lang, target_lang, original_text, prompt)
         )
         conn.commit()
 
     def load_language_settings(self, file_id: str) -> Dict[str, str]:
         conn = self._get_conn()
-        row = conn.execute("SELECT source_lang, target_lang, original_text FROM language_settings WHERE file_id = ?",
+        row = conn.execute("SELECT source_lang, target_lang, original_text, prompt FROM language_settings WHERE file_id = ?",
                            (file_id,)).fetchone()
         if row:
             result = {"source_lang": row["source_lang"], "target_lang": row["target_lang"]}
             if row["original_text"]:
                 result["original_text"] = row["original_text"]
+            if row["prompt"]:
+                result["prompt"] = row["prompt"]
             return result
         return {"source_lang": "en", "target_lang": "zh"}
 

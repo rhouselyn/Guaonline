@@ -410,7 +410,8 @@ async def get_file_info(file_id: str):
         return {
             "source_lang": settings.get("source_lang", "en"),
             "target_lang": settings.get("target_lang", "zh"),
-            "original_text": settings.get("original_text", "")
+            "original_text": settings.get("original_text", ""),
+            "prompt": settings.get("prompt", "")
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -10,7 +10,7 @@ import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
-function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '' }) {
+function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '' }) {
   const saved = dictStateRef?.current || {}
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
@@ -1063,6 +1063,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <div className="flex-1 overflow-y-scroll min-h-0" ref={sentenceListRef} style={{ scrollbarGutter: 'stable' }}>
               {showOriginal ? (
                 <div className="p-4">
+                  {entryPrompt && (
+                    <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50/80 p-3">
+                      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                        <Brain className="w-3 h-3" />
+                        <span>{t.prompt || '提示词'}</span>
+                      </div>
+                      <pre className="text-[13px] text-amber-900 leading-relaxed whitespace-pre-wrap font-sans">{entryPrompt}</pre>
+                    </div>
+                  )}
                   <pre className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText || safeSentenceTranslations.map(item => item.sentence || '').join('\n')}</pre>
                 </div>
               ) : filteredSentences.length > 0 ? (
