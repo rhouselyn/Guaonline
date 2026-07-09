@@ -1324,8 +1324,9 @@ function App() {
     } else if (tab === 'profile') {
       setStep('profile')
     } else if (tab === 'details') {
-      // ponytail: 总是重新加载最近条目 — 修复 sentenceTranslations 被清空后卡 loading，且符合「点进去是最近条目」需求
-      handleLoadMostRecent()
+      // ponytail: 不再自动加载最近条目。若无当前条目则进入空默认态
+      // （auto 语言 / 无标题 / 开始学习禁用 / 句子与单词为空）；单词总表切换仍可显示完整聚合词表。
+      setStep('dictionary')
     } else if (tab === 'quiz') {
       if (currentFileId) setStep('all-units')
       else handleLoadMostRecent().then(() => setStep('all-units'))
@@ -1489,7 +1490,7 @@ function App() {
               return (
                 <div className="max-w-md mx-auto">
                   <h1 className="text-xl font-bold text-ink-800 mb-5" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-                    {t.navProfile || '我的'}
+                    {t.profileTitle || '我的'}
                   </h1>
                   <div className="flex items-center gap-4 mb-6">
                     <div className="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-retro-sm">
@@ -1825,34 +1826,28 @@ function App() {
           </div>
         )}
       </main>
-      {/* ponytail: 移动端底部导航 — App 化重设计：图标+文字垂直排列（微信/iOS 风），
-          更高触控区(56px)+底部安全区留白，活动项用色彩+顶部小圆点指示，避免大色块压抑。 */}
+      {/* ponytail: 移动端底部导航 — 纯图标（无文字）。
+          关键防抖：内层固定高度 h-14 + 图标恒定 w-6 h-6 + 顶部指示条始终渲染（仅颜色过渡），
+          彻底消除切换 tab 时因图标尺寸 transition 导致的"先下后上"浮动。 */}
       {showMobileNav && (
         <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom">
-          <div className="flex">
+          <div className="flex h-14">
             {[
-              { key: 'home', icon: Home, label: t.navHome || '主页' },
-              { key: 'details', icon: BookOpen, label: t.navDetails || '条目' },
-              { key: 'quiz', icon: ListChecks, label: t.navQuiz || '练习' },
-              { key: 'profile', icon: User, label: t.navProfile || '我的' },
-            ].map(({ key, icon: Icon, label }) => {
+              { key: 'home', icon: Home },
+              { key: 'details', icon: BookOpen },
+              { key: 'quiz', icon: ListChecks },
+              { key: 'profile', icon: User },
+            ].map(({ key, icon: Icon }) => {
               const active = mobileTab === key
               return (
                 <button
                   key={key}
                   onClick={() => handleMobileTab(key)}
-                  className="flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors"
+                  className="flex-1 flex items-center justify-center relative"
                 >
-                  <span className="relative flex items-center justify-center">
-                    {/* 活动项顶部小圆点指示器 */}
-                    {active && (
-                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
-                    )}
-                    <Icon className={`transition-all duration-200 ${active ? 'w-[22px] h-[22px] text-amber-600' : 'w-5 h-5 text-aged-300'}`} />
-                  </span>
-                  <span className={`text-[10px] leading-none transition-colors ${active ? 'font-bold text-amber-600' : 'font-medium text-ink-400'}`}>
-                    {label}
-                  </span>
+                  {/* 顶部指示条：始终存在，仅颜色/透明度变化，不触发 reflow */}
+                  <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${active ? 'bg-amber-500' : 'bg-transparent'}`} />
+                  <Icon className={`w-6 h-6 transition-colors duration-200 ${active ? 'text-amber-600' : 'text-aged-300'}`} />
                 </button>
               )
             })}

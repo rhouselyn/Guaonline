@@ -175,10 +175,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   useEffect(() => {
     if (!showGlobalVocab) return
     const lang = actualSourceLang && actualSourceLang !== 'auto' ? actualSourceLang : sourceLang
-    if (!lang) return
+    // ponytail: auto/空语言 → 不按语言过滤，返回全部语言的聚合词表（单词总表"完整"展示）。
+    // 后端 /word-list 无 source_lang 时聚合所有 record，传 'auto' 反而会过滤成空。
+    const queryLang = (lang && lang !== 'auto') ? lang : null
     let cancelled = false
     setGlobalVocabLoading(true)
-    api.getWordList(lang).then(data => {
+    api.getWordList(queryLang).then(data => {
       if (!cancelled) {
         setGlobalVocab(data.words || [])
         setGlobalVocabLoading(false)
@@ -1118,7 +1120,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               ) : (
                 <div className="py-16 text-center">
                   <Languages className="w-10 h-10 mx-auto mb-3 text-aged-200" />
-                  <p className="text-ink-400 text-sm">{sentenceSearch ? (t.noMatchingSentences || '没有找到匹配的句子') : t.loading}</p>
+                  <p className="text-ink-400 text-sm">{sentenceSearch ? (t.noMatchingSentences || '没有找到匹配的句子') : (loading ? t.loading : (t.noSentencesYetHint || '暂无句子'))}</p>
                 </div>
               )}
             </div>
@@ -1300,7 +1302,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               {groupedVocab.length === 0 ? (
                 <div className="py-16 text-center">
                   <BookOpen className="w-10 h-10 mx-auto mb-3 text-aged-200" />
-                  <p className="text-ink-400 text-sm">{loading ? t.loading : (vocabSearch ? (t.noMatchFound || '没有找到匹配的单词') : t.loading)}</p>
+                  <p className="text-ink-400 text-sm">{loading ? t.loading : (vocabSearch ? (t.noMatchFound || '没有找到匹配的单词') : (t.noWordsYetHint || '暂无单词'))}</p>
                 </div>
               ) : (
               <div className="space-y-3">
