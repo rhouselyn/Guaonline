@@ -21,6 +21,13 @@ class DatabaseStorage:
         # SQLite 连接（每个线程独立连接）
         self._local = threading.local()
         self._init_db()
+        # ponytail: 进程内读缓存。同一次"打开条目"会反复 load_pipeline_data/load_vocab/
+        # load_learning_plan/load_exercise_order（vocab接口、sentences接口、phase1、phase2、history 各调一遍），
+        # 缓存按 (table, file_id[, phase], updated_at) 失效，把 N 次大 JSON json.loads 压成 1 次。
+        # 写操作自动失效对应 key。返回值为缓存引用，调用方不得 mutate（现有调用均为只读）。
+        import threading as _t
+        self._cache = {}
+        self._cache_lock = _t.Lock()
 
     def _get_conn(self) -> sqlite3.Connection:
         if not hasattr(self._local, 'conn') or self._local.conn is None:
@@ -29,6 +36,35 @@ class DatabaseStorage:
             self._local.conn.execute("PRAGMA journal_mode=WAL")
             self._local.conn.execute("PRAGMA foreign_keys=ON")
         return self._local.conn
+
+    def _cached_json_load(self, cache_key, table, where_sql, params, value_col, default):
+        """通用 JSON 列缓存加载：先查 updated_at（轻量），命中且未变则返回缓存，否则查全量+反序列化+缓存。"""
+        conn = self._get_conn()
+        mrow = conn.execute(
+            f"SELECT updated_at FROM {table} WHERE {where_sql}", params
+        ).fetchone()
+        if mrow is None:
+            with self._cache_lock:
+                self._cache.pop(cache_key, None)
+            return default
+        updated_at = mrow["updated_at"]
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+        if cached and cached[0] == updated_at:
+            return cached[1]
+        vrow = conn.execute(
+            f"SELECT {value_col} FROM {table} WHERE {where_sql}", params
+        ).fetchone()
+        value = json.loads(vrow[value_col]) if vrow and vrow[value_col] else default
+        with self._cache_lock:
+            self._cache[cache_key] = (updated_at, value)
+        return value
+
+    def _invalidate(self, *cache_keys):
+        """写操作后失效缓存。"""
+        with self._cache_lock:
+            for k in cache_keys:
+                self._cache.pop(k, None)
 
     def _init_db(self):
         conn = self._get_conn()
@@ -198,6 +234,27 @@ class DatabaseStorage:
         """)
         conn.commit()
 
+        # ponytail: 为已有 language_settings 表补 prompt 列（存储 generate/translate 模式的用户提示词）
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(language_settings)").fetchall()]
+            if "prompt" not in cols:
+                conn.execute("ALTER TABLE language_settings ADD COLUMN prompt TEXT")
+                conn.commit()
+        except Exception:
+            pass
+
+        # ponytail: 二级索引（方案A）。原表只有 PRIMARY KEY，按 user_id / word 过滤会全表扫描。
+        # history.user_id：load_history / word-list 按 user_id 过滤+排序，最热点。
+        # word_cache.word：find_global_word_cache 索引失效时按 word 搜索。
+        # CREATE INDEX IF NOT EXISTS 启动时自动建，幂等，无需数据迁移。
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user_created ON history(user_id, created_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_word_cache_word ON word_cache(word)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_language_settings_source ON language_settings(source_lang)")
+            conn.commit()
+        except Exception:
+            pass
+
     # ── pipeline_data ──────────────────────────────────────
 
     def save_pipeline_data(self, file_id: str, data: Any):
@@ -207,13 +264,19 @@ class DatabaseStorage:
             (file_id, json.dumps(data, ensure_ascii=False))
         )
         conn.commit()
+        self._invalidate(("pipeline_data", file_id))
 
     def load_pipeline_data(self, file_id: str) -> Any:
+        return self._cached_json_load(
+            ("pipeline_data", file_id), "pipeline_data",
+            "file_id = ?", (file_id,), "data", {}
+        )
+
+    def pipeline_updated_at(self, file_id: str):
+        """ponytail: 轻量取 pipeline_data 的 updated_at，供外部派生缓存（如 eligible_count）做失效判断。"""
         conn = self._get_conn()
-        row = conn.execute("SELECT data FROM pipeline_data WHERE file_id = ?", (file_id,)).fetchone()
-        if row:
-            return json.loads(row["data"])
-        return {}
+        row = conn.execute("SELECT updated_at FROM pipeline_data WHERE file_id = ?", (file_id,)).fetchone()
+        return row["updated_at"] if row else None
 
     # ── vocab ──────────────────────────────────────────────
 
@@ -224,13 +287,13 @@ class DatabaseStorage:
             (file_id, json.dumps(vocab, ensure_ascii=False))
         )
         conn.commit()
+        self._invalidate(("vocab", file_id))
 
     def load_vocab(self, file_id: str) -> List[Dict]:
-        conn = self._get_conn()
-        row = conn.execute("SELECT vocab FROM vocab WHERE file_id = ?", (file_id,)).fetchone()
-        if row:
-            return json.loads(row["vocab"])
-        return []
+        return self._cached_json_load(
+            ("vocab", file_id), "vocab",
+            "file_id = ?", (file_id,), "vocab", []
+        )
 
     # ── cleaned_text ───────────────────────────────────────
 
@@ -259,6 +322,8 @@ class DatabaseStorage:
         except Exception:
             pass
         conn.commit()
+        # ponytail: 失效该 file 的 batch 缓存（单词条目变更后需重读）
+        self._invalidate(("word_cache_batch", file_id))
 
     def load_word_cache(self, file_id: str, word: str) -> Optional[Dict]:
         conn = self._get_conn()
@@ -272,8 +337,23 @@ class DatabaseStorage:
         """一次取回指定 file_id 下所有 word_cache 条目，返回 {word_lower: word_info}。
 
         ponytail: 替代 get_vocab 等端点里逐词 load_word_cache 的 N 次 DB 往返，
-        把 N 次同步 SQLite 压成 1 次。"""
+        把 N 次同步 SQLite 压成 1 次。带进程内缓存，按 MAX(updated_at) 失效，
+        save/delete/clear 自动失效。同一次打开条目 get_vocab + phase1 各调一次，缓存命中第二次。"""
+        # 缓存：用 MAX(updated_at) 做版本号
         conn = self._get_conn()
+        vrow = conn.execute(
+            "SELECT MAX(updated_at) AS ua FROM word_cache WHERE file_id = ?", (file_id,)
+        ).fetchone()
+        ua = vrow["ua"] if vrow and vrow["ua"] else None
+        cache_key = ("word_cache_batch", file_id)
+        if ua is None:
+            with self._cache_lock:
+                self._cache.pop(cache_key, None)
+            return {}
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+        if cached and cached[0] == ua:
+            return cached[1]
         rows = conn.execute(
             "SELECT word, word_info FROM word_cache WHERE file_id = ?",
             (file_id,)
@@ -284,6 +364,8 @@ class DatabaseStorage:
                 result[row["word"]] = json.loads(row["word_info"])
             except (json.JSONDecodeError, KeyError):
                 continue
+        with self._cache_lock:
+            self._cache[cache_key] = (ua, result)
         return result
 
     def delete_word_cache(self, file_id: str, word: str):
@@ -291,11 +373,13 @@ class DatabaseStorage:
         conn.execute("DELETE FROM word_cache WHERE file_id = ? AND word = ?",
                      (file_id, word.lower()))
         conn.commit()
+        self._invalidate(("word_cache_batch", file_id))
 
     def clear_word_cache(self, file_id: str):
         conn = self._get_conn()
         conn.execute("DELETE FROM word_cache WHERE file_id = ?", (file_id,))
         conn.commit()
+        self._invalidate(("word_cache_batch", file_id))
 
     # ── language_word_index ────────────────────────────────
 
@@ -384,28 +468,33 @@ class DatabaseStorage:
 
     # ── language_settings ──────────────────────────────────
 
-    def save_language_settings(self, file_id: str, source_lang: str, target_lang: str, original_text: str = None):
+    def save_language_settings(self, file_id: str, source_lang: str, target_lang: str, original_text: str = None, prompt: str = None):
         conn = self._get_conn()
-        # 获取已有记录的 original_text
-        existing = conn.execute("SELECT original_text FROM language_settings WHERE file_id = ?",
+        # 获取已有记录的 original_text / prompt
+        existing = conn.execute("SELECT original_text, prompt FROM language_settings WHERE file_id = ?",
                                 (file_id,)).fetchone()
         if original_text is None and existing and existing["original_text"]:
             original_text = existing["original_text"]
+        # prompt 为 None 时保留已有值（不覆盖）
+        if prompt is None and existing and existing["prompt"]:
+            prompt = existing["prompt"]
         conn.execute(
-            "INSERT OR REPLACE INTO language_settings (file_id, source_lang, target_lang, original_text, updated_at) "
-            "VALUES (?, ?, ?, ?, datetime('now'))",
-            (file_id, source_lang, target_lang, original_text)
+            "INSERT OR REPLACE INTO language_settings (file_id, source_lang, target_lang, original_text, prompt, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            (file_id, source_lang, target_lang, original_text, prompt)
         )
         conn.commit()
 
     def load_language_settings(self, file_id: str) -> Dict[str, str]:
         conn = self._get_conn()
-        row = conn.execute("SELECT source_lang, target_lang, original_text FROM language_settings WHERE file_id = ?",
+        row = conn.execute("SELECT source_lang, target_lang, original_text, prompt FROM language_settings WHERE file_id = ?",
                            (file_id,)).fetchone()
         if row:
             result = {"source_lang": row["source_lang"], "target_lang": row["target_lang"]}
             if row["original_text"]:
                 result["original_text"] = row["original_text"]
+            if row["prompt"]:
+                result["prompt"] = row["prompt"]
             return result
         return {"source_lang": "en", "target_lang": "zh"}
 
@@ -439,6 +528,18 @@ class DatabaseStorage:
             return row["max_index"] if row["max_index"] is not None else row["current_index"]
         return 0
 
+    def load_learning_progress_both(self, file_id: str):
+        """ponytail: 单次查询同时取 current_index 与 max_index，替代 phases.py 里
+        load_learning_progress + load_learning_max_progress 的两次冗余查询。"""
+        conn = self._get_conn()
+        row = conn.execute("SELECT current_index, max_index FROM learning_progress WHERE file_id = ?",
+                           (file_id,)).fetchone()
+        if row is not None:
+            current = row["current_index"]
+            max_idx = row["max_index"] if row["max_index"] is not None else row["current_index"]
+            return current, max_idx
+        return 0, 0
+
     # ── shuffled_order ─────────────────────────────────────
 
     def save_shuffled_order(self, file_id: str, shuffled_indices: List[int]):
@@ -466,14 +567,13 @@ class DatabaseStorage:
             (file_id, json.dumps(plan, ensure_ascii=False))
         )
         conn.commit()
+        self._invalidate(("learning_plan", file_id))
 
     def load_learning_plan(self, file_id: str) -> Optional[List[Dict]]:
-        conn = self._get_conn()
-        row = conn.execute("SELECT plan FROM learning_plan WHERE file_id = ?",
-                           (file_id,)).fetchone()
-        if row:
-            return json.loads(row["plan"])
-        return None
+        return self._cached_json_load(
+            ("learning_plan", file_id), "learning_plan",
+            "file_id = ?", (file_id,), "plan", None
+        )
 
     # ── phase_progress ─────────────────────────────────────
 
@@ -551,14 +651,13 @@ class DatabaseStorage:
             (file_id, phase, json.dumps(exercise_order, ensure_ascii=False))
         )
         conn.commit()
+        self._invalidate(("exercise_order", file_id, phase))
 
     def load_exercise_order(self, file_id: str, phase: int):
-        conn = self._get_conn()
-        row = conn.execute("SELECT exercise_order FROM exercise_order WHERE file_id = ? AND phase = ?",
-                           (file_id, phase)).fetchone()
-        if row:
-            return json.loads(row["exercise_order"])
-        return None
+        return self._cached_json_load(
+            ("exercise_order", file_id, phase), "exercise_order",
+            "file_id = ? AND phase = ?", (file_id, phase), "exercise_order", None
+        )
 
     # ── phase2_progress ────────────────────────────────────
 

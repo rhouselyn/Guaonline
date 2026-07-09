@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../utils/auth';
-import { User, Zap } from 'lucide-react';
+import { User, Zap, Settings, KeyRound, RefreshCw, LogOut } from 'lucide-react';
 
-export default function AccountMenu({ t }) {
+// ponytail: 桌面端右上角账号菜单。设置不再单独展出，统一收进头像下拉菜单。
+// 菜单项：设置 / 修改密码 / 切换账号 / 退出登录。
+export default function AccountMenu({ t, onOpenSettings, onOpenChangePassword }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [quota, setQuota] = useState(() => auth.getQuota());
@@ -61,6 +63,18 @@ export default function AccountMenu({ t }) {
       ? (t?.monthlyQuotaInfo || '每月 {0} 句额度').replace('{0}', '2000')
       : (t?.dailyRefillInfo || '每日恢复 {0} 句，上限 {1} 句').replace('{0}', '50').replace('{1}', '200');
 
+  const menuItem = (Icon, label, onClick, danger = false) => (
+    <button
+      onClick={() => { setOpen(false); onClick(); }}
+      className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors text-left ${
+        danger ? 'text-rust-500 hover:bg-rust-50' : 'text-ink-600 hover:bg-parchment-100'
+      }`}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      {label}
+    </button>
+  )
+
   return (
     <div className="relative" ref={menuRef}>
       <div className="flex items-center gap-2">
@@ -85,7 +99,7 @@ export default function AccountMenu({ t }) {
       </div>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-56 bg-parchment-50 border-2 border-aged-200 rounded-sm shadow-retro z-50">
+        <div className="absolute right-0 mt-1 w-56 bg-parchment-50 border-2 border-aged-200 rounded-sm shadow-retro z-50 overflow-hidden">
           <div className="px-4 py-3 border-b border-aged-200">
             <p className="text-sm font-medium text-ink-800">{user.email}</p>
             <p className="text-xs text-amber-600 mt-0.5">
@@ -110,12 +124,11 @@ export default function AccountMenu({ t }) {
               <p className="text-[10px] text-ink-400 mt-1">{refillInfo}</p>
             </div>
           )}
-          <button
-            onClick={() => { auth.logout(); setOpen(false); navigate('/'); }}
-            className="w-full text-left px-4 py-2 text-sm text-ink-600 hover:bg-parchment-100 transition-colors"
-          >
-            {t?.logout || '退出登录'}
-          </button>
+          {menuItem(Settings, t?.settings || '设置', () => onOpenSettings && onOpenSettings())}
+          {menuItem(KeyRound, t?.changePassword || '修改密码', () => onOpenChangePassword && onOpenChangePassword())}
+          {menuItem(RefreshCw, t?.switchAccount || '切换账号', () => { navigate('/login?switch=1'); })}
+          <div className="border-t border-aged-200" />
+          {menuItem(LogOut, t?.logout || '退出登录', () => { auth.logout(); navigate('/'); }, true)}
         </div>
       )}
     </div>

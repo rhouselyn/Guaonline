@@ -10,6 +10,34 @@ from auth.deps import require_auth, TokenData
 
 router = APIRouter(prefix="/api", tags=["history"])
 
+# ponytail: 派生缓存：eligible_count / expected_exercises 按 (file_id, pipeline_updated_at) 失效。
+# compute_file_progress 原本每条历史记录都 load_pipeline_data 全量反序列化只为算 eligible 句数，
+# 这里把"句数+预期练习数"按 pipeline 版本缓存，命中时直接跳过整列 JSON 反序列化。
+_eligible_cache = {}
+
+
+def _get_eligible_stats(file_id: str):
+    """返回 (eligible_count, expected_exercises)，带版本缓存。"""
+    ua = storage.pipeline_updated_at(file_id)
+    if ua is None:
+        return 0, 0
+    key = (file_id, ua)
+    cached = _eligible_cache.get(key)
+    if cached is not None:
+        return cached
+    sentences = storage.load_pipeline_data(file_id)
+    eligible = filter_eligible_sentences(sentences) if sentences else []
+    expected = 0
+    for s in eligible:
+        wc = len(s.get("sentence", "").split())
+        expected += 3 if wc >= 20 else (4 if wc >= 3 else 1)
+    _eligible_cache[key] = (len(eligible), expected)
+    # 简单清理：缓存膨胀时清掉旧版本
+    if len(_eligible_cache) > 500:
+        _eligible_cache.clear()
+        _eligible_cache[key] = (len(eligible), expected)
+    return len(eligible), expected
+
 
 def compute_file_progress(file_id: str) -> dict:
     try:
@@ -29,42 +57,32 @@ def compute_file_progress(file_id: str) -> dict:
             result["phase1"]["completed"] = completed
             result["phase1"]["total"] = len(plan)
 
-        sentences = storage.load_pipeline_data(file_id)
-        if sentences:
-            eligible = filter_eligible_sentences(sentences)
-            if eligible:
-                exercise_order = storage.load_exercise_order(file_id, 2)
-                exercises_per_sent = []
-                for s in eligible:
-                    wc = len(s.get("sentence", "").split())
-                    if wc >= 20:
-                        exercises_per_sent.append(3)
-                    elif wc >= 3:
-                        exercises_per_sent.append(4)
-                    else:
-                        exercises_per_sent.append(1)
-                expected_length = sum(exercises_per_sent)
+        # ponytail: 用版本缓存取 (eligible_count, expected_exercises)，跳过全量 load_pipeline_data。
+        # 仅当 exercise_order 已存在且长度匹配时需要 exercise_order 本身（仍是缓存 JSON 列）。
+        eligible_count, expected_length = _get_eligible_stats(file_id)
+        if eligible_count > 0:
+            exercise_order = storage.load_exercise_order(file_id, 2)
 
-                if exercise_order and len(exercise_order) == expected_length:
-                    total_exercises = len(exercise_order)
-                    unit_size = 10
-                    num_units = max(1, (total_exercises + unit_size - 1) // unit_size)
-                    max_exercise_index = storage.load_phase2_max_progress(file_id)
+            if exercise_order and len(exercise_order) == expected_length:
+                total_exercises = len(exercise_order)
+                unit_size = 10
+                num_units = max(1, (total_exercises + unit_size - 1) // unit_size)
+                max_exercise_index = storage.load_phase2_max_progress(file_id)
 
-                    completed = 0
-                    for i in range(num_units):
-                        end = min((i + 1) * unit_size, total_exercises)
-                        if max_exercise_index >= end:
-                            completed += 1
-                    result["phase2"]["completed"] = completed
-                    result["phase2"]["total"] = num_units
-                else:
-                    # exercise_order 尚未生成，从 eligible sentences 计算预期单元数
-                    unit_size = 10
-                    total_exercises = expected_length
-                    num_units = max(1, (total_exercises + unit_size - 1) // unit_size)
-                    result["phase2"]["completed"] = 0
-                    result["phase2"]["total"] = num_units
+                completed = 0
+                for i in range(num_units):
+                    end = min((i + 1) * unit_size, total_exercises)
+                    if max_exercise_index >= end:
+                        completed += 1
+                result["phase2"]["completed"] = completed
+                result["phase2"]["total"] = num_units
+            else:
+                # exercise_order 尚未生成，从 eligible sentences 计算预期单元数
+                unit_size = 10
+                total_exercises = expected_length
+                num_units = max(1, (total_exercises + unit_size - 1) // unit_size)
+                result["phase2"]["completed"] = 0
+                result["phase2"]["total"] = num_units
 
         return result
     except Exception:

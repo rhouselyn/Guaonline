@@ -40,8 +40,8 @@ export const api = {
   },
 
   // 获取词汇表
-  getVocab: async (fileId) => {
-    const response = await axios.get(`${baseUrl}/api/vocab/${fileId}`);
+  getVocab: async (fileId, params = {}) => {
+    const response = await axios.get(`${baseUrl}/api/vocab/${fileId}`, { params });
     return response.data;
   },
 
@@ -51,8 +51,8 @@ export const api = {
   },
 
   // 获取句子
-  getSentences: async (fileId) => {
-    const response = await axios.get(`${baseUrl}/api/sentences/${fileId}`);
+  getSentences: async (fileId, params = {}) => {
+    const response = await axios.get(`${baseUrl}/api/sentences/${fileId}`, { params });
     return response.data;
   },
 

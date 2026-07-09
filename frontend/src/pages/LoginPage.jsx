@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../utils/auth';
 import { ArrowLeft, Sparkles } from 'lucide-react';
@@ -75,6 +75,9 @@ function DotBackground() {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // ponytail: switch=1 表示从"切换账号"进入，此时原会话仍保留，返回应回到原账号学习页而非首页
+  const isSwitching = searchParams.get('switch') === '1';
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -125,14 +128,14 @@ export default function LoginPage() {
           transition={{ duration: 0.5, ease: 'easeOut' }}
           className="bg-[#faf8f0]/90 backdrop-blur-sm border-2 border-[#d4c9a8] rounded-lg p-5 sm:p-8 shadow-[4px_4px_0_#b5ae8e] relative"
         >
-          {/* 返回按钮 */}
+          {/* 返回按钮：切换账号模式下原会话仍在，返回学习页；否则回首页 */}
           <motion.button
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4 }}
-            onClick={() => navigate('/')}
+            onClick={() => navigate(isSwitching && auth.isLoggedIn() ? '/learn' : '/')}
             className="absolute top-4 left-4 p-1.5 text-[#8b7e5e] hover:text-[#3d3929] hover:bg-[#f0ead6] rounded transition-colors"
-            title="返回首页"
+            title={isSwitching ? '返回' : '返回首页'}
           >
             <ArrowLeft className="w-5 h-5" />
           </motion.button>

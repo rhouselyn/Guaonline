@@ -81,9 +81,14 @@ class TierKeyPool:
         self.lock = threading.RLock()  # RLock: admin status 端点持锁调用 is_key_busy 会再次获取同池锁
         self.batch_size = batch_size
         self.interval = interval
-        self.active_count = 0  # per-pool 在途并发（用于 batch 切换判断）
-        self.last_switch_time = 0
+        self.active_count = 0  # per-pool 在途并发（仅用于状态展示）
         self.consecutive_fail_start = None  # per-pool 连续失败起点
+        # ponytail: 漏桶限流门控——每 interval 秒只放一个请求进系统（放法 A）。
+        # 替代原 batch 节流（仅在 active_count 归零时卡 1s）。现在无论并发多少，
+        # 每两个请求进入系统的间隔恒为 interval（默认 0.1s = 每秒最多 10 个进系统），
+        # 进系统后仍并发跑、SWRR 轮换 key。门控用 asyncio.Lock 串行化放行时刻。
+        self._gate_lock = None  # 懒创建：首次用到时在事件循环里建 asyncio.Lock
+        self.last_dispatch_time = 0.0
         # SWRR 状态：每个 ref 的 current_weight
         self.swrr_weights: List[int] = []
         # per-ref 运行时状态（与 refs 平行，不持久化）
@@ -208,7 +213,6 @@ class TierKeyPool:
             self.consecutive_fail_start = None
             if self.active_count <= 0:
                 self.active_count = 0
-                self.last_switch_time = time.time()
                 self.current_index += 1
             if idx < len(self.ref_runtime):
                 rt = self.ref_runtime[idx]
@@ -234,6 +238,7 @@ class TierKeyPool:
             if self.consecutive_fail_start is None:
                 self.consecutive_fail_start = time.time()
             self.current_index += 1
+            # ponytail: 失败重试也走 acquire_slot 门控，统一按 interval 限速放行（不再单独 0.01s hack）。
             if idx < len(self.ref_runtime):
                 rt = self.ref_runtime[idx]
                 rt["active_in_flight"] = max(0, rt.get("active_in_flight", 0) - 1)
@@ -330,12 +335,22 @@ class TierKeyPool:
                     candidates.append(rlu)
         return min(candidates) if candidates else None
 
-    async def wait_for_interval(self):
-        with self.lock:
-            elapsed = time.time() - self.last_switch_time
-            remaining = self.interval - elapsed
-        if remaining > 0:
-            await asyncio.sleep(remaining)
+    async def acquire_slot(self):
+        """漏桶限流门控（放法 A）：每 interval 秒只放一个请求进系统。
+
+        用 asyncio.Lock 串行化放行时刻——所有请求排队过这道闸，相邻两个放行时刻
+        至少间隔 interval 秒。进系统后请求仍并发跑、SWRR 轮换 key，闸门只管进系统速率。
+        默认 interval=0.1s → 每秒最多 10 个请求进系统；失败重试也走同一道闸。
+        """
+        # 懒创建锁：__init__ 在模块加载时执行，此时可能无事件循环，故延后到首次调用。
+        if self._gate_lock is None:
+            self._gate_lock = asyncio.Lock()
+        async with self._gate_lock:
+            now = time.time()
+            wait = self.interval - (now - self.last_dispatch_time)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self.last_dispatch_time = time.time()
 
 
 class LLMGateway:
@@ -417,7 +432,7 @@ class LLMGateway:
         self.key_defs = data.get("keys", {})
         settings = _load_global_settings()
         batch_size = settings.get("batch_size", 3)
-        interval = settings.get("request_interval", 1.0)
+        interval = settings.get("request_interval", 0.1)
         new_pools = {}
         for tier, raw_tier in data.get("tier_keys", {}).items():
             tier_pools = {}
@@ -466,7 +481,7 @@ class LLMGateway:
         if not pool:
             raise Exception(f"No API Key configured for tier: {tier} (request_type={request_type})")
 
-        await pool.wait_for_interval()
+        await pool.acquire_slot()
 
         if pool.is_all_failed_too_long():
             raise Exception("服务暂时不可用，连续 10 分钟无有效输出，请检查 API Key 或稍后重试")

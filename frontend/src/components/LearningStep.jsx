@@ -377,32 +377,22 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
         )}
       </AnimatePresence>
 
-      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列）—— 与主导航同风格：安全区留白 + 活动项顶部圆点指示 */}
+      {/* 手机端底部 Tab 栏 — 纯图标，与主导航同风格防抖：固定高度 + 恒定图标尺寸 + 始终渲染的顶部指示条，消除切换浮动 */}
       {!isDesktop && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex h-14 bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom md:hidden">
           <button
             onClick={() => switchMode(0)}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors relative ${
-              activeMode === 0 ? 'text-amber-600' : 'text-ink-400'
-            }`}
+            className="flex-1 flex items-center justify-center relative"
           >
-            {activeMode === 0 && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
-            )}
-            <Languages className="w-5 h-5" />
-            <span className={`text-[10px] leading-none ${activeMode === 0 ? 'font-bold' : 'font-medium'}`}>句子练习</span>
+            <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${activeMode === 0 ? 'bg-amber-500' : 'bg-transparent'}`} />
+            <Languages className={`w-6 h-6 transition-colors duration-200 ${activeMode === 0 ? 'text-amber-600' : 'text-aged-300'}`} />
           </button>
           <button
             onClick={() => switchMode(1)}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors relative ${
-              activeMode === 1 ? 'text-amber-600' : 'text-ink-400'
-            }`}
+            className="flex-1 flex items-center justify-center relative"
           >
-            {activeMode === 1 && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
-            )}
-            <BookOpen className="w-5 h-5" />
-            <span className={`text-[10px] leading-none ${activeMode === 1 ? 'font-bold' : 'font-medium'}`}>单词学习</span>
+            <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${activeMode === 1 ? 'bg-amber-500' : 'bg-transparent'}`} />
+            <BookOpen className={`w-6 h-6 transition-colors duration-200 ${activeMode === 1 ? 'text-amber-600' : 'text-aged-300'}`} />
           </button>
         </div>
       )}

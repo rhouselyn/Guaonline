@@ -26,6 +26,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class User(UserBase):
     id: str
     tier: UserTier = UserTier.free

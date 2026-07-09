@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2, Home, User, ListChecks, LogOut, Zap } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2, Home, User, ListChecks, LogOut, Zap, KeyRound, RefreshCw } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -27,6 +27,7 @@ import VocabListStep from '../components/VocabListStep'
 import HistorySidebar from '../components/HistorySidebar'
 import WordListPanel from '../components/WordListPanel'
 import SettingsModal from '../components/SettingsModal'
+import ChangePasswordModal from '../components/ChangePasswordModal'
 
 function FrogLogo({ size = 40 }) {
   return (
@@ -63,10 +64,14 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [fileId, setFileId] = useState(null)
   const [originalText, setOriginalText] = useState('')
+  const [entryPrompt, setEntryPrompt] = useState('')
   const [vocab, setVocab] = useState([])
   const [displayVocab, setDisplayVocab] = useState([])
   const [sortOrder, setSortOrder] = useState('asc') // 'asc' 或 'desc'
   const [sentenceTranslations, setSentenceTranslations] = useState([])
+  // ponytail: 生成进度长度信号——DictionaryStep 按页自取，长度变化触发 refetch 当前页
+  const [vocabLength, setVocabLength] = useState(0)
+  const [sentenceLength, setSentenceLength] = useState(0)
   const [selectedWord, setSelectedWord] = useState(null)
   const [selectedSentence, setSelectedSentence] = useState(null)
   const [progress, setProgress] = useState(0)
@@ -76,6 +81,7 @@ function App() {
   const [learningData, setLearningData] = useState(null)
   const [showWordCard, setShowWordCard] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const [selectedOption, setSelectedOption] = useState(null)
   const [isCorrect, setIsCorrect] = useState(null)
   const [units, setUnits] = useState([])
@@ -349,15 +355,13 @@ function App() {
         const status = await api.getStatus(currentFileId)
         console.log('状态响应:', status)
 
-        // 强制更新词汇表和句子翻译，确保实时显示
+        // ponytail: 不再从轮询全量灌入 vocab/sentence_translations——DictionaryStep 已按页自取。
+        // 仅用长度变化作为 DictionaryStep 的「生成进度」refetch 触发信号（轻量）。
         if (status.vocab) {
-          console.log('更新词汇表，长度:', status.vocab.length)
-          setVocab([...status.vocab]) // 使用展开运算符强制更新
+          setVocabLength(status.vocab.length)
         }
-
         if (status.sentence_translations) {
-          console.log('更新句子翻译，数量:', status.sentence_translations.length)
-          setSentenceTranslations([...status.sentence_translations]) // 使用展开运算符强制更新
+          setSentenceLength(status.sentence_translations.length)
         }
 
         // 更新进度
@@ -404,9 +408,10 @@ function App() {
         }
 
         if (status.status === 'completed') {
-          console.log('处理完成，词汇表长度:', status.vocab.length)
-          setVocab([...status.vocab])
-          setSentenceTranslations([...status.sentence_translations])
+          console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
+          // ponytail: 不再全量灌入；用长度触发 DictionaryStep refetch 当前页
+          setVocabLength(status.vocab ? status.vocab.length : 0)
+          setSentenceLength(status.sentence_translations ? status.sentence_translations.length : 0)
           setProgress(100)
           setProcessingInfo(null)
           setLoading(false)
@@ -528,6 +533,7 @@ function App() {
     setFileId(null)
     setFileTitle('')
     setOriginalText('')
+    setEntryPrompt('')
     // 重置字典状态，避免显示上一个条目的残留
     dictStateRef.current = { vocabPage: 1, sentencePage: 1, globalVocabPage: 1, vocabScrollPos: 0, sentenceTranslationScrollPos: 0, sentenceOriginalScrollPos: 0, globalVocabScrollPos: 0, vocabDisplayMode: 0, sentenceDisplayMode: 0, showOriginal: false, showGlobalVocab: false, vocabSearch: '', sentenceSearch: '' }
 
@@ -1223,30 +1229,23 @@ function App() {
     setProgress(0)
     setProcessingInfo(null)
     setOriginalText('')
+    setEntryPrompt('')
     try {
       setCurrentFileId(fileId)
       setFileId(fileId)
       if (title) setFileTitle(title)
-      const vocabData = await api.getVocab(fileId)
-      const vocabList = vocabData.vocab || []
-      setVocab(vocabList)
-      const sentencesData = await api.getSentences(fileId)
-      const sentenceList = sentencesData.sentences || []
-      setSentenceTranslations(Array.isArray(sentenceList) ? sentenceList : [])
-      // 从后端获取持久化的原文
+      // ponytail: 不再全量加载 vocab/sentences——DictionaryStep 改为按页自取（/vocab、/sentences 带 offset/limit/q）。
+      // 入口只需 /info（原文、提示词、has_failed、sentence_count），大幅减少首屏传输与反序列化。
+      let infoData = {}
       try {
         const infoResp = await fetch(`/api/file/${fileId}/info`)
-        const infoData = await infoResp.json()
+        infoData = await infoResp.json()
         if (infoData.original_text) {
           setOriginalText(infoData.original_text)
-        } else if (Array.isArray(sentenceList) && sentenceList.length > 0) {
-          setOriginalText(sentenceList.map(s => s.sentence || '').filter(Boolean).join('\n'))
         }
+        setEntryPrompt(infoData.prompt || '')
       } catch (e) {
-        // fallback: 从句子拼接
-        if (Array.isArray(sentenceList) && sentenceList.length > 0) {
-          setOriginalText(sentenceList.map(s => s.sentence || '').filter(Boolean).join('\n'))
-        }
+        // /info 失败不阻塞，原文留空
       }
       try {
         const [phase1UnitsData, phase2UnitsData, starsData] = await Promise.all([
@@ -1267,9 +1266,19 @@ function App() {
       }
 
       // 进入条目时不再手动 getStatus——下面的轮询 useEffect 在 currentFileId 变化时会立即拉一次。
-      // 这里只通过 setSkipPolling(false) 启用轮询；首次拉取会带回真实状态/进度/数据。
-      // 失败句子重试改由 useEffect 内部判定后触发（见 pollStatus 中 status.partial 分支）
       setSkipPolling(false)
+
+      // ponytail: 句子重进自动检测 __failed 并续生成。改用 /info 返回的 has_failed 标记，
+      // 无需全量加载 sentences 即可判断。命中即调 retry-sentences，后端恢复 processing 并启动后台重试。
+      try {
+        if (infoData.has_failed) {
+          api.retryFailedSentences(fileId).then(() => {
+            setSkipPolling(false)
+          }).catch(() => {})
+        }
+      } catch (e) {
+        // 检测失败不阻塞进入
+      }
 
       api.startWordGen(fileId).catch(() => {})
       setStep('dictionary')
@@ -1324,8 +1333,9 @@ function App() {
     } else if (tab === 'profile') {
       setStep('profile')
     } else if (tab === 'details') {
-      // ponytail: 总是重新加载最近条目 — 修复 sentenceTranslations 被清空后卡 loading，且符合「点进去是最近条目」需求
-      handleLoadMostRecent()
+      // ponytail: 不再自动加载最近条目。若无当前条目则进入空默认态
+      // （auto 语言 / 无标题 / 开始学习禁用 / 句子与单词为空）；单词总表切换仍可显示完整聚合词表。
+      setStep('dictionary')
     } else if (tab === 'quiz') {
       if (currentFileId) setStep('all-units')
       else handleLoadMostRecent().then(() => setStep('all-units'))
@@ -1395,15 +1405,7 @@ function App() {
               ) : (
                 <>
                   <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
-                    <AccountMenu t={t} />
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowSettings(true)}
-                      className="p-2 text-ink-400 hover:text-ink-600 hover:bg-parchment-200/60 rounded-sm transition-colors"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </motion.button>
+                    <AccountMenu t={t} onOpenSettings={() => setShowSettings(true)} onOpenChangePassword={() => setShowChangePassword(true)} />
                   </div>
                   {translatingUI && (
                     <div className="absolute inset-0 bg-parchment-50/80 backdrop-blur-sm z-20 flex items-center justify-center">
@@ -1486,41 +1488,40 @@ function App() {
               const isUnlimited = max === -1
               const isLow = !isUnlimited && typeof available === 'number' && available <= 10
               const tierLabel = { free: t.freeTier || '免费版', basic: t.basicTier || '基础版', pro: t.proTier || '专业版' }[user?.tier] || user?.tier || ''
+              // ponytail: App 化个人页 — 头像居中置顶 / 邮箱 / 付费计划 / 额度内联（不单独成块） / 菜单列表（设置·修改密码·切换账号·退出）
+              const menuItem = (Icon, label, onClick, danger = false) => (
+                <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm transition-colors ${danger ? 'text-rust-500 hover:bg-rust-50' : 'text-ink-700 hover:bg-parchment-100'}`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </button>
+              )
               return (
                 <div className="max-w-md mx-auto">
-                  <h1 className="text-xl font-bold text-ink-800 mb-5" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-                    {t.navProfile || '我的'}
-                  </h1>
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-retro-sm">
+                  {/* 头像居中置顶 */}
+                  <div className="flex flex-col items-center pt-2 pb-6">
+                    <div className="w-20 h-20 rounded-full bg-amber-500 text-white flex items-center justify-center text-2xl font-bold shadow-retro-sm">
                       {user ? (user.name || user.email)[0].toUpperCase() : '?'}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-ink-800 truncate">{user?.email || ''}</p>
-                      <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-600 text-xs font-bold">
-                        {tierLabel}
-                      </span>
-                    </div>
-                  </div>
-                  {!isUnlimited && (
-                    <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-4 mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-ink-500 flex items-center gap-1"><Zap className="w-3 h-3" />{t.remainingQuota || '剩余额度'}</span>
+                    <p className="mt-3 text-base font-medium text-ink-800 text-center break-all px-4">{user?.email || ''}</p>
+                    <span className="inline-block mt-2 px-3 py-0.5 rounded-full bg-amber-100/80 text-amber-600 text-xs font-bold">
+                      {tierLabel}
+                    </span>
+                    {/* 额度内联展示：不单独成块，与付费计划下方一行紧凑呈现 */}
+                    {!isUnlimited && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Zap className={`w-3.5 h-3.5 ${isLow ? 'text-rust-500' : 'text-amber-500'}`} />
+                        <span className="text-xs text-ink-500">{t.remainingQuota || '剩余额度'}</span>
                         <span className={`text-xs font-bold tabular-nums ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>{available} / {max}</span>
                       </div>
-                      <div className="w-full h-2 bg-parchment-200 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-500 ${isLow ? 'bg-rust-400' : 'bg-amber-400'}`} style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-ink-700 hover:bg-parchment-100 transition-colors mb-3">
-                    <Settings className="w-4 h-4 text-ink-400" />
-                    {t.settings || '设置'}
-                  </button>
-                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-3 px-4 py-3.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
-                    <LogOut className="w-4 h-4" />
-                    {t.logout || '退出登录'}
-                  </button>
+                    )}
+                  </div>
+                  {/* 菜单列表 */}
+                  <div className="space-y-3">
+                    {menuItem(Settings, t.settings || '设置', () => setShowSettings(true))}
+                    {menuItem(KeyRound, t.changePassword || '修改密码', () => setShowChangePassword(true))}
+                    {menuItem(RefreshCw, t.switchAccount || '切换账号', () => { navigate('/login?switch=1') })}
+                    {menuItem(LogOut, t.logout || '退出登录', () => { auth.logout(); navigate('/') }, true)}
+                  </div>
                 </div>
               )
             })()}
@@ -1555,6 +1556,9 @@ function App() {
               pageSize={pageSize}
               dictStateRef={dictStateRef}
               originalText={originalText}
+              entryPrompt={entryPrompt}
+              vocabLength={vocabLength}
+              sentenceLength={sentenceLength}
             />
           )}
           
@@ -1825,34 +1829,28 @@ function App() {
           </div>
         )}
       </main>
-      {/* ponytail: 移动端底部导航 — App 化重设计：图标+文字垂直排列（微信/iOS 风），
-          更高触控区(56px)+底部安全区留白，活动项用色彩+顶部小圆点指示，避免大色块压抑。 */}
+      {/* ponytail: 移动端底部导航 — 纯图标（无文字）。
+          关键防抖：内层固定高度 h-14 + 图标恒定 w-6 h-6 + 顶部指示条始终渲染（仅颜色过渡），
+          彻底消除切换 tab 时因图标尺寸 transition 导致的"先下后上"浮动。 */}
       {showMobileNav && (
         <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom">
-          <div className="flex">
+          <div className="flex h-14">
             {[
-              { key: 'home', icon: Home, label: t.navHome || '主页' },
-              { key: 'details', icon: BookOpen, label: t.navDetails || '条目' },
-              { key: 'quiz', icon: ListChecks, label: t.navQuiz || '练习' },
-              { key: 'profile', icon: User, label: t.navProfile || '我的' },
-            ].map(({ key, icon: Icon, label }) => {
+              { key: 'home', icon: Home },
+              { key: 'details', icon: BookOpen },
+              { key: 'quiz', icon: ListChecks },
+              { key: 'profile', icon: User },
+            ].map(({ key, icon: Icon }) => {
               const active = mobileTab === key
               return (
                 <button
                   key={key}
                   onClick={() => handleMobileTab(key)}
-                  className="flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors"
+                  className="flex-1 flex items-center justify-center relative"
                 >
-                  <span className="relative flex items-center justify-center">
-                    {/* 活动项顶部小圆点指示器 */}
-                    {active && (
-                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-500" />
-                    )}
-                    <Icon className={`transition-all duration-200 ${active ? 'w-[22px] h-[22px] text-amber-600' : 'w-5 h-5 text-aged-300'}`} />
-                  </span>
-                  <span className={`text-[10px] leading-none transition-colors ${active ? 'font-bold text-amber-600' : 'font-medium text-ink-400'}`}>
-                    {label}
-                  </span>
+                  {/* 顶部指示条：始终存在，仅颜色/透明度变化，不触发 reflow */}
+                  <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${active ? 'bg-amber-500' : 'bg-transparent'}`} />
+                  <Icon className={`w-6 h-6 transition-colors duration-200 ${active ? 'text-amber-600' : 'text-aged-300'}`} />
                 </button>
               )
             })}
@@ -1860,6 +1858,7 @@ function App() {
         </nav>
       )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
+      <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} t={t} />
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

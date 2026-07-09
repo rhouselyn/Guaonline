@@ -28,6 +28,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 processing_status[file_id]["original_text"] = text
 
         # 1. 翻译/生成预处理
+        generation_succeeded = False  # ponytail: 跟踪 LLM 是否产出有效结果，决定额度按结果扣还是退预扣
         if mode == "translate":
             _preserve_tr = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", **_preserve_tr}
@@ -48,6 +49,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 translated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if translated:
                     text = translated
+                    generation_succeeded = True
             # 翻译完成后立即保存原文
             if file_id in processing_status:
                 processing_status[file_id]["original_text"] = text
@@ -69,6 +71,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 generated = response["choices"][0].get("message", {}).get("content", "").strip()
                 if generated:
                     text = generated
+                    generation_succeeded = True
             # 生成完成后立即保存原文
             if file_id in processing_status:
                 processing_status[file_id]["original_text"] = text
@@ -76,21 +79,28 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
 
         # 额度按实际处理句子数补扣：translate/generate 模式下，输入文本不等于最终处理文本，
         # 需要按生成/翻译后的实际句子数计算并补扣差额。
+        # ponytail: 仅当生成成功才按结果句数扣；生成失败则退还预扣，不扣提示词。
         if mode in ("translate", "generate") and user_id:
             try:
-                actual_sentences = text_processor.split_sentences(text.strip())
-                actual_count = max(1, min(len(actual_sentences), 50))
-                # consumed_quota 是 process-text 阶段按输入预估已扣的额度（translate/generate 模式下为最小预扣值）
-                extra = actual_count - consumed_quota
-                if extra > 0:
-                    from auth.quota import consume_quota, check_and_refill_quota
-                    qi = check_and_refill_quota(user_id)
-                    if qi.get("max") != -1 and qi.get("available", 0) < extra:
-                        # 额度不足以补扣，按可用额度扣减即可（不阻断已完成的处理）
-                        extra = max(0, qi.get("available", 0))
+                if generation_succeeded:
+                    actual_sentences = text_processor.split_sentences(text.strip())
+                    actual_count = max(1, min(len(actual_sentences), 50))
+                    # consumed_quota 是 process-text 阶段预扣的额度，按结果句数补差额
+                    extra = actual_count - consumed_quota
                     if extra > 0:
-                        consume_quota(user_id, extra)
-                        consumed_quota += extra
+                        from auth.quota import consume_quota, check_and_refill_quota
+                        qi = check_and_refill_quota(user_id)
+                        if qi.get("max") != -1 and qi.get("available", 0) < extra:
+                            # 额度不足以补扣，按可用额度扣减即可（不阻断已完成的处理）
+                            extra = max(0, qi.get("available", 0))
+                        if extra > 0:
+                            consume_quota(user_id, extra)
+                            consumed_quota += extra
+                else:
+                    # 生成失败：退还预扣的额度，提示词不计费
+                    from auth.quota import refund_quota
+                    refund_quota(user_id, consumed_quota)
+                    consumed_quota = 0
             except Exception as e:
                 print(f"[WARN] 额度补扣失败: {e}")
 
@@ -105,7 +115,10 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 source_lang = "en"
 
         # 3. 更新语言设置和历史记录
-        storage.save_language_settings(file_id, source_lang, target_lang, original_text=text)
+        # ponytail: translate/generate 模式保存用户提示词（original_text 入参即用户原始输入），
+        # direct 模式无提示词。prompt 单独存储，不覆盖 original_text（已存为生成/翻译结果）。
+        user_prompt = original_text if mode in ("translate", "generate") else None
+        storage.save_language_settings(file_id, source_lang, target_lang, original_text=text, prompt=user_prompt)
         # 同步更新 processing_status 中的 source_lang，让前端轮询能拿到
         if file_id in processing_status:
             processing_status[file_id]["source_lang"] = source_lang
@@ -294,16 +307,47 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
 
 @router.post("/process-text/{file_id}/retry-sentences")
 async def retry_sentences(file_id: str, background_tasks: BackgroundTasks, current_user: TokenData = Depends(require_auth)):
-    """重试此前失败的句子。仅当 processing_status 为 error+partial 且有 failed_sentences 时有意义。"""
+    """重试此前失败的句子。
+
+    ponytail: 原实现要求 processing_status 内存态存在且为 error+partial，否则 404/400。
+    问题：后端重启后 processing_status 全部丢失，用户重进条目无法触发续生成（与单词详情
+    的"无缓存即触发后台生成"行为不一致）。改为：内存态缺失时从 pipeline_data 检测 __failed
+    标记，命中则恢复 processing 状态并启动后台重试。这样句子重进即可像单词详情一样自动续生成。
+    """
     st = processing_status.get(file_id)
-    if not st:
-        raise HTTPException(status_code=404, detail="File not found")
-    if st.get("status") != "error" or not st.get("partial"):
-        raise HTTPException(status_code=400, detail="当前状态不支持重试失败句子")
+    if st:
+        if st.get("status") == "processing":
+            # 已在重试中，避免重复触发
+            return {"file_id": file_id, "status": "processing", "preprocess": st.get("preprocess")}
+        if st.get("status") != "error" or not st.get("partial"):
+            raise HTTPException(status_code=400, detail="当前状态不支持重试失败句子")
+        total = st.get("total_sentences", 0)
+        _preserve = {k: st[k] for k in ("original_text", "title") if k in st}
+    else:
+        # 内存态丢失（如后端重启）：从 pipeline_data 检测 __failed 标记
+        pipeline = storage.load_pipeline_data(file_id) or []
+        failed_indices = [i for i, sd in enumerate(pipeline) if isinstance(sd, dict) and sd.get("__failed")]
+        if not failed_indices:
+            raise HTTPException(status_code=404, detail="File not found")
+        total = len(pipeline)
+        # 从 language_settings 恢复原文/标题，供 retry_failed_sentences 使用
+        settings = storage.load_language_settings(file_id) or {}
+        _preserve = {}
+        if settings.get("original_text"):
+            _preserve["original_text"] = settings["original_text"]
+        # 标题从 history 取
+        try:
+            history = storage.load_history(user_id=current_user.user_id)
+            for r in history:
+                if r.get("file_id") == file_id:
+                    if r.get("title"):
+                        _preserve["title"] = r["title"]
+                    break
+        except Exception:
+            pass
     # 立即置为处理中，避免前端重复触发
-    _preserve = {k: st[k] for k in ("original_text", "title") if k in st}
     processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0,
-                                  "total_sentences": st.get("total_sentences", 0), "preprocess": "retrying", **_preserve}
+                                  "total_sentences": total, "preprocess": "retrying", **_preserve}
     background_tasks.add_task(retry_failed_sentences, file_id, current_user.user_id, current_user.tier.value)
     return {"file_id": file_id, "status": "processing", "preprocess": "retrying"}
 

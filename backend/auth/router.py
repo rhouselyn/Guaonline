@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 import bcrypt
-from auth.models import UserCreate, UserLogin, User, Token, UserTier
+from auth.models import UserCreate, UserLogin, User, Token, UserTier, PasswordChange
 from auth.jwt_utils import create_tokens, decode_token
 from auth.deps import require_auth, get_current_user, TokenData
 from auth.quota import init_quota, check_and_refill_quota, consume_quota
@@ -139,6 +139,25 @@ async def get_me(current_user: TokenData = Depends(require_auth)):
 @router.get("/quota")
 async def get_quota(current_user: TokenData = Depends(require_auth)):
     return check_and_refill_quota(current_user.user_id)
+
+
+@router.post("/change-password")
+async def change_password(data: PasswordChange, current_user: TokenData = Depends(require_auth)):
+    """修改密码：校验当前密码后更新为新密码。OAuth 用户（随机密码）无法用此接口改密。"""
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="新密码至少 6 位")
+    conn = _get_conn()
+    row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (current_user.user_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not _verify_password(data.current_password, row["password_hash"]):
+        conn.close()
+        raise HTTPException(status_code=400, detail="当前密码错误")
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (_hash_password(data.new_password), current_user.user_id))
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "密码修改成功"}
 
 
 # ── OAuth 配置 ──────────────────────────────────────────
