@@ -729,12 +729,12 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
             <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
             <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
-            <textarea
+            <input
+              type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={getPlaceholder()}
-              rows={3}
-              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3.5 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+              className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-3.5 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
             />
             <div className="flex items-center justify-between px-4 pb-4 pt-1">
               <span className={`flex items-center gap-1 text-xs font-medium ${isLow ? 'text-rust-500' : 'text-amber-600'}`} title={t?.remainingQuota || '剩余额度'}>
