@@ -347,168 +347,124 @@ function App() {
     reviewIndexRef.current = reviewIndex
   }, [reviewIndex])
 
-  // 轮询处理状态
+  // SSE 订阅处理状态（替代轮询）。ponytail: 后端 0.3s 内部轮询内存 dict + SSE 推送，
+  // 前端用 EventSource 订阅，收到 status 走原轮询同款处理逻辑。终态(completed/error)后端发 event:end 关连接。
   useEffect(() => {
-    // 退出条目（回到 input 步骤）时不轮询：只有当前条目内才继续 LLM 生成标题/语言/句子/单词等
     if (!currentFileId || skipPolling || step === 'input') return
 
-    console.log('开始轮询，文件ID:', currentFileId)
+    console.log('启动 SSE 订阅，文件ID:', currentFileId)
+    const token = auth.getAccessToken()
+    if (!token) return
 
-    let pollCount = 0
-    const maxPolls = 300 // 10分钟
-    let pollingInterval = null
+    let closed = false
+    let retryTimer = null
 
-    const pollStatus = async () => {
-      pollCount++
-      console.log(`第${pollCount}次轮询，文件ID: ${currentFileId}`)
+    // ponytail: status 处理逻辑抽出来——EventSource onmessage 和 error 重试后的 api.getStatus 都调它。
+    const handleStatusUpdate = (status) => {
+      if (!status || closed) return
+      console.log('SSE 状态:', status)
 
-      try {
-        const status = await api.getStatus(currentFileId)
-        console.log('状态响应:', status)
-
-        // 用 total_sentences + current_sentence 作为 refetch 触发信号。
-        // 后端句子分割后立即写 DB，total_sentences > 0 即触发首次 refetch 显示句子列表；
-        // current_sentence 增加表示有新翻译完成，触发 refetch 补充翻译结果。
-        if (status.total_sentences !== undefined && status.total_sentences > 0) {
-          const signal = status.total_sentences * 1000 + (status.current_sentence || 0)
-          if (signal !== sentenceLength) {
-            setSentenceLength(signal)
-          }
+      if (status.total_sentences !== undefined && status.total_sentences > 0) {
+        const signal = status.total_sentences * 1000 + (status.current_sentence || 0)
+        if (signal !== sentenceLength) {
+          setSentenceLength(signal)
         }
-        if (status.vocab) {
-          setVocabLength(status.vocab.length)
+      }
+      if (status.vocab) {
+        setVocabLength(status.vocab.length)
+      }
+      if (status.progress !== undefined) {
+        setProgress(status.progress)
+      }
+      if (status.preprocess === 'translating') {
+        setPreprocessStatus('translating')
+      } else if (status.preprocess === 'generating') {
+        setPreprocessStatus('generating')
+      } else if (status.preprocess === 'detecting') {
+        setPreprocessStatus('detecting')
+      } else if (status.preprocess === 'refilling') {
+        setPreprocessStatus('refilling')
+      } else {
+        setPreprocessStatus(null)
+      }
+      if (status.title) {
+        setFileTitle(status.title)
+      }
+      if (status.source_lang && status.source_lang !== 'auto') {
+        setDetectedLang(status.source_lang)
+        if (sourceLang !== 'auto') {
+          setSourceLang(status.source_lang)
         }
+      }
+      if (status.original_text) {
+        setOriginalText(status.original_text)
+      }
+      if (status.current_sentence !== undefined && status.total_sentences !== undefined) {
+        setProcessingInfo({
+          current: status.current_sentence,
+          total: status.total_sentences
+        })
+      }
 
-        // 更新进度
-        if (status.progress !== undefined) {
-          setProgress(status.progress)
+      if (status.status === 'completed') {
+        console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
+        setVocabLength(status.vocab ? status.vocab.length : 0)
+        if (status.total_sentences) {
+          setSentenceLength(status.total_sentences * 1000 + (status.total_sentences + 1))
         }
-
-        // 更新预处理状态
-        if (status.preprocess === 'translating') {
-          setPreprocessStatus('translating')
-        } else if (status.preprocess === 'generating') {
-          setPreprocessStatus('generating')
-        } else if (status.preprocess === 'detecting') {
-          setPreprocessStatus('detecting')
-        } else if (status.preprocess === 'refilling') {
-          setPreprocessStatus('refilling')
+        setProgress(100)
+        setProcessingInfo(null)
+        setLoading(false)
+        setSkipPolling(true)
+        setHistoryRefresh(v => v + 1)
+      } else if (status.status === 'error') {
+        console.error('处理错误:', status.error)
+        setLoading(false)
+        setPreprocessStatus(null)
+        const errMsg = status.error || ''
+        // 单句失败（partial）：自动触发重试并恢复订阅
+        if (status.partial && status.failed_sentences && status.failed_sentences.length > 0) {
+          const failedList = status.failed_sentences.map(f => `#${f.index + 1}`).join(', ')
+          showAlert(`${status.error || ''}\n失败句子：${failedList}\n已自动重试失败句子。`)
+          api.retryFailedSentences(currentFileId).catch(() => {})
+          // 恢复订阅：重置 skipPolling 触发本 useEffect 重跑
+          setTimeout(() => { if (!closed) setSkipPolling(false) }, 1500)
         } else {
-          setPreprocessStatus(null)
-        }
-
-        // 更新标题（后台任务生成后）
-        if (status.title) {
-          setFileTitle(status.title)
-        }
-
-        // 更新检测到的语言（auto模式检测完成后）
-        if (status.source_lang && status.source_lang !== 'auto') {
-          setDetectedLang(status.source_lang)
-          // 非auto模式下也更新 sourceLang
-          if (sourceLang !== 'auto') {
-            setSourceLang(status.source_lang)
-          }
-        }
-
-        // 更新完整原文（LLM翻译/生成后的文本）
-        if (status.original_text) {
-          setOriginalText(status.original_text)
-        }
-
-        // 更新处理信息
-        if (status.current_sentence !== undefined && status.total_sentences !== undefined) {
-          setProcessingInfo({
-            current: status.current_sentence,
-            total: status.total_sentences
-          })
-        }
-
-        if (status.status === 'completed') {
-          console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
-          setVocabLength(status.vocab ? status.vocab.length : 0)
-          // 最终触发一次 refetch 确保拿到完整翻译结果
-          if (status.total_sentences) {
-            setSentenceLength(status.total_sentences * 1000 + (status.total_sentences + 1))
-          }
-          setProgress(100)
-          setProcessingInfo(null)
-          setLoading(false)
-          setSkipPolling(true)
-          setHistoryRefresh(v => v + 1)
-          // 停止轮询
-          if (pollingInterval) {
-            clearInterval(pollingInterval)
-          }
-        } else if (status.status === 'error') {
-          console.error('处理错误:', status.error)
-          setLoading(false)
-          setSkipPolling(true)
-          setPreprocessStatus(null)
-          // 停止轮询
-          if (pollingInterval) {
-            clearInterval(pollingInterval)
-          }
-          const errMsg = status.error || ''
-          // 单句失败（partial）：自动触发重试并恢复轮询，避免必须重新进入条目
-          if (status.partial && status.failed_sentences && status.failed_sentences.length > 0) {
-            const failedList = status.failed_sentences.map(f => `#${f.index + 1}`).join(', ')
-            showAlert(`${status.error || ''}\n失败句子：${failedList}\n已自动重试失败句子。`)
-            api.retryFailedSentences(currentFileId).catch(() => {})
-            // 恢复轮询，等待重试完成
-            setSkipPolling(false)
-            pollCount = 0  // 重置计数，给重试新一轮 10 分钟
-          } else if (errMsg.includes('API Key') || errMsg.includes('Key')) {
-            setStep('input')
-            showAlert(t.processFailed || '处理失败，请重试')
-          } else {
-            setStep('input')
-            showAlert(t.processFailed || '处理失败，请重试')
-          }
-        } else if (pollCount >= maxPolls) {
-          console.error('轮询超时')
-          showAlert(t.processTimeout || '处理超时，请重试')
-          setLoading(false)
-          setSkipPolling(true)
-          // 停止轮询
-          if (pollingInterval) {
-            clearInterval(pollingInterval)
-          }
-        }
-      } catch (error) {
-        console.error('轮询错误:', error)
-        if (error.response && error.response.status === 404) {
-          // 后端重启或状态丢失，立即停止轮询
-          console.log('状态丢失(404)，停止轮询')
-          setLoading(false)
-          setSkipPolling(true)
-          if (pollingInterval) {
-            clearInterval(pollingInterval)
-          }
-        } else if (error.response && (error.response.status === 504 || error.response.status === 502 || error.response.status === 503)) {
-          console.log('后端繁忙，继续轮询...')
-        } else if (pollCount >= maxPolls) {
-          showAlert(t.networkError || '网络错误，请重试')
-          setLoading(false)
-          setSkipPolling(true)
-          if (pollingInterval) {
-            clearInterval(pollingInterval)
-          }
+          setStep('input')
+          showAlert(t.processFailed || '处理失败，请重试')
         }
       }
     }
 
-    // 设置轮询间隔：1 秒。注意 handleNavigateToRecord 已在进入条目时手动拉过一次 status，
-    // 这里不再立即调用 pollStatus()，避免 1 秒内重复请求。
-    pollingInterval = setInterval(pollStatus, 1000)
-    // 若不是从历史记录进入（如刚提交文本），则手动拉一次首次状态
-    if (!skipPolling) pollStatus()
-
-    // 清理函数
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval)
+    const es = new EventSource(`/api/status/${currentFileId}/stream?token=${encodeURIComponent(token)}`)
+    es.onmessage = (e) => {
+      try {
+        const status = JSON.parse(e.data)
+        handleStatusUpdate(status)
+      } catch (err) {
+        console.error('SSE parse error:', err)
       }
+    }
+    es.addEventListener('end', (e) => {
+      console.log('SSE end event:', e.data)
+      es.close()
+    })
+    // ponytail: 连接级错误。401(token 无效)会无限重连——检测 readyState 关闭。
+    // 网络断开 EventSource 自动重连，不干预。后端重启后 status 丢失，stream 返回无数据，
+    // 用户重新进入条目时 handleNavigateToRecord 的 refill 会重建 status。
+    es.onerror = (e) => {
+      if (es.readyState === EventSource.CLOSED) {
+        console.log('SSE 连接关闭(可能 401 或终态)')
+        return
+      }
+      // 连接出错但未关闭——EventSource 会自动重连，这里不做额外处理
+      console.log('SSE 连接错误，等待自动重连...')
+    }
+
+    return () => {
+      closed = true
+      if (retryTimer) clearTimeout(retryTimer)
+      es.close()
     }
   }, [currentFileId, skipPolling, step])
 

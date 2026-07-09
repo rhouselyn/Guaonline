@@ -5,13 +5,16 @@ import time
 import asyncio
 import datetime
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+import json
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query
+from starlette.responses import StreamingResponse
 
 from llm_api import detect_language, get_lang_name
 from utils.llm_gateway import gateway
 from utils.state import storage, processing_status
 from utils.exercise_generators import process_text_background, generate_title, retry_failed_sentences, refill_missing_words_background, _detect_missing_and_bold
 from auth.deps import get_current_user, require_auth, TokenData
+from auth.jwt_utils import decode_token
 from auth.quota import check_and_refill_quota, consume_quota
 from utils.state import text_processor
 from vocab import global_vocab, user_vocab
@@ -403,6 +406,46 @@ async def get_status(file_id: str):
     if file_id not in processing_status:
         raise HTTPException(status_code=404, detail="File not found")
     return processing_status[file_id]
+
+
+def _require_auth_for_sse(token: str = Query(None)):
+    """SSE 专用认证：EventSource 不能设置自定义 header，所以接受 ?token=xxx。复用 admin.py 同款范式。"""
+    if not token:
+        raise HTTPException(status_code=401, detail="缺少 token")
+    token_data = decode_token(token)
+    if token_data is None:
+        raise HTTPException(status_code=401, detail="token 无效或已过期")
+    return token_data
+
+
+@router.get("/status/{file_id}/stream")
+async def stream_status(file_id: str, current_user: TokenData = Depends(_require_auth_for_sse)):
+    """SSE 实时推送处理状态。处理流程 0 改动——这里读同一个 processing_status dict，sig 去重后推送。
+
+    ponytail: 用服务端内部 0.3s 轮询内存 dict（无 HTTP/认证开销）替代前端 1s HTTP 轮询。
+    终态(completed/error)推送后发 event:end 关闭连接，避免长连接挂着。
+    """
+    async def event_stream():
+        last_sig = None
+        while True:
+            st = processing_status.get(file_id)
+            if st is not None:
+                # 排除不可序列化的 sentence_translations（可能很大），前端轮询本就不依赖它
+                st_clean = {k: v for k, v in st.items() if k != "sentence_translations"}
+                sig = json.dumps(st_clean, ensure_ascii=False, sort_keys=True, default=str)
+                if sig != last_sig:
+                    last_sig = sig
+                    yield f"data: {json.dumps(st_clean, ensure_ascii=False, default=str)}\n\n"
+                    if st.get("status") in ("completed", "error"):
+                        yield 'event: end\ndata: done\n\n'
+                        return
+            try:
+                await asyncio.sleep(0.3)
+            except asyncio.CancelledError:
+                return
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+                            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.post("/detect-language")
