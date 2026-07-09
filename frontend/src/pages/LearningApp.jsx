@@ -115,6 +115,11 @@ function App() {
   const [unitStarCounts, setUnitStarCounts] = useState({})
   const unitErrorCountRef = useRef(0)
   const isFetchingNextRef = useRef(false)
+  // ponytail: 预加载下一道题——做题时后台拉取下一题并缓存，点击"下一题"时直接命中缓存
+  // prefetchedNextRef: { gen, promise, bundle } | null
+  const prefetchedNextRef = useRef(null)
+  const prefetchGenRef = useRef(0)
+  const isPrefetchingRef = useRef(false)
   const [skipListening, setSkipListening] = useState(false)
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [onlyNewWords, setOnlyNewWords] = useState(false)
@@ -231,7 +236,13 @@ function App() {
       learningContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [step, currentExerciseData, learningData, quizData, listeningQuizData])
-  
+
+  // ponytail: 预加载缓存失效——切条目/切跳过听力/切只学新词/进入或退出复习模式时，旧缓存不再有效
+  useEffect(() => {
+    prefetchGenRef.current++
+    prefetchedNextRef.current = null
+  }, [currentFileId, skipListening, onlyNewWords, reviewMode])
+
   const updateUnitStars = (key, starCount) => {
     setUnitStarCounts(prev => {
       const updated = { ...prev, [key]: starCount }
@@ -683,13 +694,15 @@ function App() {
 
   const handlePhase1UnitClick = async (unitId) => {
     if (!currentFileId) return
-    
+
     setUnitErrorCount(0)
     unitErrorCountRef.current = 0
     setWrongItems([])
     setReviewMode(false)
     setReviewIndex(0)
     setReviewRound(0)
+    // 直接进入某单元起点：旧预加载缓存对应的索引已失效，必须清空
+    clearPrefetchCache()
 
     setLoading(true)
     try {
@@ -736,6 +749,10 @@ function App() {
         setIsCorrect(null)
         setLearningMode('word')
         setStep('learning')
+      }
+      // 展示单元首题后，后台预加载下一题（单元完成页除外）
+      if (response.type !== 'unit_complete' && response.type !== 'all_complete') {
+        schedulePrefetch()
       }
     } catch (error) {
       console.error('获取单元单词错误:', error)
@@ -883,6 +900,8 @@ function App() {
 
   const handleUnitClick = async (unitIndex) => {
     setLoading(true)
+    // 直接进入某单元起点：旧预加载缓存对应的索引已失效，必须清空
+    clearPrefetchCache()
     try {
       // 计算该单元的起始学习索引
       const startIndex = unitIndex * 10
@@ -896,6 +915,8 @@ function App() {
       setIsCorrect(null)
       setLearningMode('word')
       setStep('learning')
+      // 展示单元首题后，后台预加载下一题
+      schedulePrefetch()
     } catch (error) {
       console.error('获取单元单词错误:', error)
       showAlert(t.cannotGetWords || '无法获取单元单词，请重试')
@@ -1071,100 +1092,233 @@ function App() {
     }
   }
 
+  // ponytail: 预加载下一道题——核心实现
+  // fetchNextBundle: 推进服务端索引并拉取下一题内容，返回统一的 bundle（不触发任何 setState）
+  const fetchNextBundle = async () => {
+    const nextWordResponse = await api.nextWord(currentFileId)
+
+    if (nextWordResponse.type === 'unit_complete') {
+      const [phase1UnitsData, phase2UnitsData] = await Promise.all([
+        api.getPhaseUnits(currentFileId, 1),
+        api.getPhaseUnits(currentFileId, 2)
+      ])
+      return {
+        type: 'unit_complete',
+        completedUnitId: nextWordResponse.completed_unit_id ?? phase1UnitsData.current_unit,
+        unitEndIndex: nextWordResponse.unit_end_index,
+        phase1UnitsData, phase2UnitsData
+      }
+    }
+
+    if (nextWordResponse.sentence_quiz) {
+      return {
+        type: 'sentence_quiz',
+        quizData: nextWordResponse.sentence_quiz,
+        unitEndIndex: nextWordResponse.unit_end_index || unitEndIndex
+      }
+    }
+
+    if (nextWordResponse.listening_quiz) {
+      if (skipListening) {
+        // 跳过听力题：继续推进到下一道（与原递归 getNextWord 行为一致）
+        return fetchNextBundle()
+      }
+      return {
+        type: 'listening_quiz',
+        listeningQuizData: nextWordResponse.listening_quiz,
+        unitEndIndex: nextWordResponse.unit_end_index || unitEndIndex
+      }
+    }
+
+    // 普通单词：拉取完整内容
+    const response = await api.getRandomWord(currentFileId)
+    if (response.type === 'sentence_quiz') {
+      return { type: 'sentence_quiz', quizData: response, unitEndIndex: response.unit_end_index }
+    }
+    if (response.type === 'listening_quiz') {
+      if (skipListening) {
+        return fetchNextBundle()
+      }
+      return { type: 'listening_quiz', listeningQuizData: response, unitEndIndex: response.unit_end_index }
+    }
+    if (response.type === 'unit_complete' || response.type === 'all_complete') {
+      const [phase1UnitsData, phase2UnitsData] = await Promise.all([
+        api.getPhaseUnits(currentFileId, 1),
+        api.getPhaseUnits(currentFileId, 2)
+      ])
+      return {
+        type: 'unit_complete',
+        completedUnitId: nextWordResponse?.completed_unit_id ?? phase1UnitsData.current_unit,
+        unitEndIndex: response.unit_end_index,
+        phase1UnitsData, phase2UnitsData
+      }
+    }
+    return { type: 'word', learningData: response, unitEndIndex: response.unit_end_index }
+  }
+
+  // applyBundle: 把 bundle 应用到 React state（展示题目）
+  const applyBundle = (bundle) => {
+    if (!bundle) return false
+    if (bundle.type === 'unit_complete') {
+      setPhase1Units(bundle.phase1UnitsData.units)
+      const genUnits = new Set()
+      bundle.phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
+      setGeneratingUnits(genUnits)
+      setPhase2Units(bundle.phase2UnitsData.units)
+      setCurrentPhase1Unit(bundle.phase1UnitsData.current_unit)
+      setCurrentPhase2Unit(bundle.phase2UnitsData.current_unit)
+      setCompletedUnitId(bundle.completedUnitId)
+      setCompletedPhase(1)
+      const starCount = Math.max(0, 3 - Math.floor(unitErrorCountRef.current / 3))
+      updateUnitStars(`1-${bundle.completedUnitId}`, starCount)
+      setStep('unit-complete')
+    } else if (bundle.type === 'sentence_quiz') {
+      setQuizData(bundle.quizData)
+      setUnitEndIndex(bundle.unitEndIndex)
+      setLearningMode('sentence')
+      setStep('sentence-quiz')
+    } else if (bundle.type === 'listening_quiz') {
+      setListeningQuizData(bundle.listeningQuizData)
+      setUnitEndIndex(bundle.unitEndIndex)
+      setLearningMode('listening')
+      setStep('listening-quiz')
+    } else {
+      setLearningData(bundle.learningData)
+      setUnitEndIndex(bundle.unitEndIndex)
+      setShowWordCard(false)
+      setSelectedOption(null)
+      setIsCorrect(null)
+      setLearningMode('word')
+      setStep('learning')
+    }
+    return true
+  }
+
+  // applyRandomWordResponse: 用 getRandomWord 读取"当前索引"内容并展示（不推进索引，用于预加载失败时的安全兜底）
+  const applyRandomWordResponse = async (response) => {
+    if (response.type === 'sentence_quiz') {
+      setQuizData(response)
+      setUnitEndIndex(response.unit_end_index)
+      setLearningMode('sentence')
+      setStep('sentence-quiz')
+    } else if (response.type === 'listening_quiz') {
+      if (skipListening) return false // 交由调用方继续推进
+      setListeningQuizData(response)
+      setUnitEndIndex(response.unit_end_index)
+      setLearningMode('listening')
+      setStep('listening-quiz')
+    } else if (response.type === 'unit_complete' || response.type === 'all_complete') {
+      const [phase1UnitsData, phase2UnitsData] = await Promise.all([
+        api.getPhaseUnits(currentFileId, 1),
+        api.getPhaseUnits(currentFileId, 2)
+      ])
+      setPhase1Units(phase1UnitsData.units)
+      const genUnits = new Set()
+      phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
+      setGeneratingUnits(genUnits)
+      setPhase2Units(phase2UnitsData.units)
+      setCurrentPhase1Unit(phase1UnitsData.current_unit)
+      setCurrentPhase2Unit(phase2UnitsData.current_unit)
+      setCompletedUnitId(phase1UnitsData.current_unit)
+      setCompletedPhase(1)
+      const starCount = Math.max(0, 3 - Math.floor(unitErrorCountRef.current / 3))
+      updateUnitStars(`1-${phase1UnitsData.current_unit}`, starCount)
+      setStep('unit-complete')
+    } else {
+      setLearningData(response)
+      setUnitEndIndex(response.unit_end_index)
+      setShowWordCard(false)
+      setSelectedOption(null)
+      setIsCorrect(null)
+      setLearningMode('word')
+      setStep('learning')
+    }
+    return true
+  }
+
+  // clearPrefetchCache: 失效缓存的预加载（切条目/切设置/直接进入某题时调用）
+  const clearPrefetchCache = () => {
+    prefetchGenRef.current++
+    prefetchedNextRef.current = null
+  }
+
+  // schedulePrefetch: 在后台预加载下一题，存入缓存（不显示 loading、不阻塞 UI）
+  const schedulePrefetch = () => {
+    if (!currentFileId) return
+    if (isPrefetchingRef.current) return
+    if (reviewMode) return
+    const gen = ++prefetchGenRef.current
+    const entry = { gen, promise: null, bundle: null }
+    prefetchedNextRef.current = entry
+    isPrefetchingRef.current = true
+    const promise = (async () => {
+      try {
+        const b = await fetchNextBundle()
+        if (prefetchedNextRef.current && prefetchedNextRef.current.gen === gen) {
+          prefetchedNextRef.current.bundle = b
+        }
+        return b
+      } catch (e) {
+        // 预加载失败：静默处理，getNextWord 会走兜底逻辑
+        return null
+      } finally {
+        isPrefetchingRef.current = false
+      }
+    })()
+    if (prefetchedNextRef.current && prefetchedNextRef.current.gen === gen) {
+      prefetchedNextRef.current.promise = promise
+    }
+  }
+
   const getNextWord = async (retryCount = 0) => {
     if (!currentFileId) return
     if (isFetchingNextRef.current) return
     isFetchingNextRef.current = true
-    
+
     setLoading(true)
     try {
-      const nextWordResponse = await api.nextWord(currentFileId)
-      const newIndex = nextWordResponse.new_index
-      
-      if (nextWordResponse.type === 'unit_complete') {
-        const [phase1UnitsData, phase2UnitsData] = await Promise.all([
-          api.getPhaseUnits(currentFileId, 1),
-          api.getPhaseUnits(currentFileId, 2)
-        ])
-        setPhase1Units(phase1UnitsData.units)
-        const genUnits = new Set()
-        phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
-        setGeneratingUnits(genUnits)
-        setPhase2Units(phase2UnitsData.units)
-        setCurrentPhase1Unit(phase1UnitsData.current_unit)
-        setCurrentPhase2Unit(phase2UnitsData.current_unit)
-        const completedUnit = nextWordResponse.completed_unit_id ?? phase1UnitsData.current_unit
-        setCompletedUnitId(completedUnit)
-        setCompletedPhase(1)
-        const starCount = Math.max(0, 3 - Math.floor(unitErrorCountRef.current / 3))
-        updateUnitStars(`1-${completedUnit}`, starCount)
-        setStep('unit-complete')
-        return
-      }
-      
-      if (nextWordResponse.sentence_quiz) {
-        const endIdx = nextWordResponse.unit_end_index || unitEndIndex
-        setQuizData(nextWordResponse.sentence_quiz)
-        setUnitEndIndex(endIdx)
-        setLearningMode('sentence')
-        setStep('sentence-quiz')
-        return
-      }
-      
-      if (nextWordResponse.listening_quiz) {
-        if (skipListening) {
-          isFetchingNextRef.current = false
-          return getNextWord(retryCount)
+      let bundle = null
+      // 1) 命中已完成的预加载缓存
+      const cached = prefetchedNextRef.current
+      if (cached && cached.gen === prefetchGenRef.current) {
+        if (cached.bundle) {
+          bundle = cached.bundle
+          prefetchedNextRef.current = null
+        } else if (cached.promise) {
+          // 预加载仍在进行中——等待它完成（避免重复推进索引）
+          const awaited = await cached.promise
+          prefetchedNextRef.current = null
+          if (awaited) {
+            bundle = awaited
+          } else {
+            // 预加载失败：用 getRandomWord 读取"已推进到的当前索引"内容，安全兜底（不会重复推进、不会跳词）
+            try {
+              const resp = await api.getRandomWord(currentFileId)
+              const ok = await applyRandomWordResponse(resp)
+              if (!ok && skipListening) {
+                // 当前是需跳过的听力题：继续推进一次
+                bundle = await fetchNextBundle()
+              }
+            } catch (e) {
+              throw e
+            }
+            // 兜底展示后也尝试预加载下一题
+            schedulePrefetch()
+            return
+          }
         }
-        const endIdx = nextWordResponse.unit_end_index || unitEndIndex
-        setListeningQuizData(nextWordResponse.listening_quiz)
-        setUnitEndIndex(endIdx)
-        setLearningMode('listening')
-        setStep('listening-quiz')
-        return
       }
-      
-      const response = await api.getRandomWord(currentFileId)
-      if (response.type === 'sentence_quiz') {
-        setQuizData(response)
-        setUnitEndIndex(response.unit_end_index)
-        setLearningMode('sentence')
-        setStep('sentence-quiz')
-      } else if (response.type === 'listening_quiz') {
-        if (skipListening) {
-          isFetchingNextRef.current = false
-          return getNextWord(retryCount)
-        }
-        setListeningQuizData(response)
-        setUnitEndIndex(response.unit_end_index)
-        setLearningMode('listening')
-        setStep('listening-quiz')
-      } else if (response.type === 'unit_complete' || response.type === 'all_complete') {
-        const [phase1UnitsData, phase2UnitsData] = await Promise.all([
-          api.getPhaseUnits(currentFileId, 1),
-          api.getPhaseUnits(currentFileId, 2)
-        ])
-        setPhase1Units(phase1UnitsData.units)
-        const genUnits = new Set()
-        phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
-        setGeneratingUnits(genUnits)
-        setPhase2Units(phase2UnitsData.units)
-        setCurrentPhase1Unit(phase1UnitsData.current_unit)
-        setCurrentPhase2Unit(phase2UnitsData.current_unit)
-        const completedUnit = nextWordResponse?.completed_unit_id ?? phase1UnitsData.current_unit
-        setCompletedUnitId(completedUnit)
-        setCompletedPhase(1)
-        const starCount = Math.max(0, 3 - Math.floor(unitErrorCountRef.current / 3))
-        updateUnitStars(`1-${completedUnit}`, starCount)
-        setStep('unit-complete')
-      } else {
-        setLearningData(response)
-        setUnitEndIndex(response.unit_end_index)
-        setShowWordCard(false)
-        setSelectedOption(null)
-        setIsCorrect(null)
-        setLearningMode('word')
-        setStep('learning')
+
+      // 2) 无缓存：同步拉取
+      if (!bundle) {
+        bundle = await fetchNextBundle()
+      }
+
+      applyBundle(bundle)
+
+      // 3) 展示当前题后，后台预加载下一题（unit_complete 不预加载：用户还在单元完成页，未决定下一步）
+      if (bundle.type !== 'unit_complete') {
+        schedulePrefetch()
       }
     } catch (error) {
       console.error('获取下一个单词错误:', error)
@@ -1202,6 +1356,8 @@ function App() {
   }
 
   const handleStudyWord = (wordData) => {
+    // 直接学习某个单词（不走索引推进）：旧预加载缓存与当前展示内容不匹配，清空
+    clearPrefetchCache()
     setLearningData(wordData)
     setShowWordCard(false)
     setSelectedOption(null)

@@ -6,14 +6,53 @@ import { speakText } from '../utils/speech'
 import { groupVocab } from '../utils/vocab'
 import WordDetail from './WordDetail'
 
-function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, pageSize = 50 }) {
+function VocabListStep({ vocab: propVocab, onClose, loading, t, currentFileId, sourceLang, pageSize = 50 }) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchDebounced, setSearchDebounced] = useState('')
   const [expandedWord, setExpandedWord] = useState(null)
   const [enrichedWords, setEnrichedWords] = useState({})
   const [loadingWord, setLoadingWord] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [pagedVocab, setPagedVocab] = useState([])
+  const [vocabTotal, setVocabTotal] = useState(0)
+  const [vocabFetching, setVocabFetching] = useState(false)
   const listRef = useRef(null)
   const wordRefs = useRef({})
+  const fetchSeq = useRef(0)
+
+  // 搜索去抖
+  useEffect(() => {
+    const id = setTimeout(() => { setSearchDebounced(searchQuery); setCurrentPage(1) }, 300)
+    return () => clearTimeout(id)
+  }, [searchQuery])
+
+  // 按页拉取词汇表
+  useEffect(() => {
+    if (!currentFileId) {
+      // 无 currentFileId 时回退到 propVocab
+      setPagedVocab(Array.isArray(propVocab) ? propVocab : [])
+      setVocabTotal(Array.isArray(propVocab) ? propVocab.length : 0)
+      return
+    }
+    let cancelled = false
+    const seq = ++fetchSeq.current
+    setVocabFetching(true)
+    api.getVocab(currentFileId, {
+      offset: (currentPage - 1) * pageSize,
+      limit: pageSize,
+      q: searchDebounced,
+      sort: 'asc',
+      include_total: true
+    }).then(data => {
+      if (cancelled || seq !== fetchSeq.current) return
+      setPagedVocab(Array.isArray(data.vocab) ? data.vocab : [])
+      setVocabTotal(typeof data.total === 'number' ? data.total : (Array.isArray(data.vocab) ? data.vocab.length : 0))
+    }).catch(() => {
+      if (cancelled || seq !== fetchSeq.current) return
+      setPagedVocab([]); setVocabTotal(0)
+    }).finally(() => { if (!cancelled && seq === fetchSeq.current) setVocabFetching(false) })
+    return () => { cancelled = true }
+  }, [currentFileId, currentPage, pageSize, searchDebounced, propVocab])
 
   // 切换页数时滚动条置顶
   useEffect(() => {
@@ -54,27 +93,10 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
         setLoadingWord(null)
       }
     }
-  }, [expandedWord, scrollToWord, currentFileId, enrichedWords])
+  }, [expandedWord, scrollToWord, currentFileId, enrichedWords, sourceLang])
 
-  const filteredVocab = useMemo(() => {
-    if (!searchQuery.trim()) return vocab
-    const q = searchQuery.toLowerCase()
-    return vocab.filter(w =>
-      w.word.toLowerCase().includes(q) ||
-      (w.meaning && w.meaning.toLowerCase().includes(q)) ||
-      (w.context_meaning && w.context_meaning.toLowerCase().includes(q)) ||
-      (w.enriched_meaning && w.enriched_meaning.toLowerCase().includes(q))
-    )
-  }, [vocab, searchQuery])
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(vocabTotal / pageSize)), [vocabTotal, pageSize])
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredVocab.length / pageSize)), [filteredVocab, pageSize])
-
-  const pagedVocab = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    return filteredVocab.slice(start, start + pageSize)
-  }, [filteredVocab, currentPage, pageSize])
-
-  // 完全照搬 DictionaryStep 的分组逻辑
   const groupedVocab = useMemo(() => {
     return groupVocab(pagedVocab)
   }, [pagedVocab])
@@ -83,59 +105,12 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
     return groupedVocab.map(([letter]) => letter)
   }, [groupedVocab])
 
-  const allLetterIndex = useMemo(() => {
-    return groupVocab(filteredVocab).map(([letter]) => letter)
-  }, [filteredVocab])
-
   const speakWord = useCallback((text, e) => {
     if (e) e.stopPropagation()
     speakText(text, sourceLang)
   }, [sourceLang])
 
-  const pendingLetterRef = useRef(null)
-
-  const scrollToLetter = useCallback((letter) => {
-    const el = document.getElementById(`vocab-group-${letter}`)
-    if (el && listRef.current) {
-      const container = listRef.current
-      const containerRect = container.getBoundingClientRect()
-      const elRect = el.getBoundingClientRect()
-      const scrollOffset = elRect.top - containerRect.top + container.scrollTop - 32
-      container.scrollTo({ top: Math.max(0, scrollOffset), behavior: 'smooth' })
-    } else {
-      const letterLower = letter.toLowerCase()
-      const wordIdx = filteredVocab.findIndex(w => {
-        const key = (w.word || '')[0]?.normalize('NFD')[0]?.toUpperCase() || '#'
-        return key === letter || key.toLowerCase() === letterLower
-      })
-      if (wordIdx >= 0) {
-        const targetPage = Math.floor(wordIdx / pageSize) + 1
-        if (targetPage !== currentPage) {
-          pendingLetterRef.current = letter
-          setCurrentPage(targetPage)
-        }
-      }
-    }
-  }, [filteredVocab, currentPage, pageSize])
-
-  useEffect(() => {
-    if (pendingLetterRef.current) {
-      const letter = pendingLetterRef.current
-      pendingLetterRef.current = null
-      setTimeout(() => {
-        const el = document.getElementById(`vocab-group-${letter}`)
-        if (el && listRef.current) {
-          const container = listRef.current
-          const containerRect = container.getBoundingClientRect()
-          const elRect = el.getBoundingClientRect()
-          const scrollOffset = elRect.top - containerRect.top + container.scrollTop - 32
-          container.scrollTo({ top: Math.max(0, scrollOffset), behavior: 'smooth' })
-        }
-      }, 200)
-    }
-  }, [currentPage])
-
-  const getEnriched = (word) => enrichedWords[word] || {}
+  const getEnriched = (word) => enrichedWords[word.word] || {}
 
   const renderPagination = () => {
     if (totalPages <= 1) return null
@@ -196,11 +171,8 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
               <BookOpen className="w-4 h-4 text-amber-500" />
               <h2 className="text-sm font-bold font-display text-ink-700">{t.vocabList || '单词表'}</h2>
               <span className="badge-ochre ml-1">
-                {vocab.length}
+                {vocabTotal}
               </span>
-              {searchQuery && filteredVocab.length !== vocab.length && (
-                <span className="text-xs text-ink-400">· {t.matched || '匹配'} {filteredVocab.length}</span>
-              )}
             </div>
             <button
               onClick={onClose}
@@ -217,7 +189,7 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
             <input
               type="text"
               value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
+              onChange={e => setSearchQuery(e.target.value)}
               placeholder={t.searchWordOrMeaning || '搜索单词或释义...'}
               className="input-warm w-full pl-9 pr-3 py-1.5 bg-parchment-50 border-2 border-aged-200/80 rounded-sm text-[13px] text-ink-700 placeholder:text-aged-300 focus:outline-none focus:ring-2 focus:ring-amber-200/60 focus:border-amber-300/60 transition-all"
             />
@@ -225,12 +197,12 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
         </div>
 
         <div className="flex-1 flex min-h-0">
-          {loading ? (
+          {vocabFetching ? (
             <div className="flex-1 py-16 text-center">
               <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-amber-400" />
               <p className="text-ink-400 text-sm">{t.loading}</p>
             </div>
-          ) : filteredVocab.length === 0 ? (
+          ) : pagedVocab.length === 0 ? (
             <div className="flex-1 py-16 text-center">
               <BookOpen className="w-10 h-10 mx-auto mb-3 text-aged-200" />
               <p className="text-ink-400 text-sm">
@@ -239,24 +211,16 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
             </div>
           ) : (
             <>
-              {allLetterIndex.length > 1 && !searchQuery && (
+              {letterIndex.length > 1 && !searchQuery && (
                 <div className="flex flex-col items-center gap-px py-1 border-r border-aged-200/60 bg-parchment-50/40 w-5 shrink-0 overflow-y-auto">
-                  {allLetterIndex.map(letter => {
-                    const onCurrentPage = letterIndex.includes(letter)
-                    return (
-                      <button
-                        key={letter}
-                        onClick={() => scrollToLetter(letter)}
-                        className={`w-4 h-4 flex items-center justify-center text-[8px] font-bold rounded transition-colors shrink-0 ${
-                          onCurrentPage
-                            ? 'text-ink-600 hover:text-amber-500 hover:bg-amber-50'
-                            : 'text-aged-300/60 hover:text-amber-500 hover:bg-amber-50/50'
-                        }`}
-                      >
-                        {letter}
-                      </button>
-                    )
-                  })}
+                  {letterIndex.map(letter => (
+                    <button
+                      key={letter}
+                      className="w-4 h-4 flex items-center justify-center text-[8px] font-bold rounded transition-colors shrink-0 text-ink-600 hover:text-amber-500 hover:bg-amber-50"
+                    >
+                      {letter}
+                    </button>
+                  ))}
                 </div>
               )}
               <div className="flex-1 min-w-0 flex flex-col">
@@ -275,7 +239,7 @@ function VocabListStep({ vocab, onClose, loading, t, currentFileId, sourceLang, 
                         <div className="space-y-px">
                           {words.map((word, wordIdx) => {
                             const isExpanded = expandedWord === word.word
-                            const enriched = getEnriched(word.word)
+                            const enriched = getEnriched(word)
                             const displayMeaning = word.enriched_meaning || word.meaning || word.context_meaning
                             return (
                               <motion.div
