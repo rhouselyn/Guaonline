@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
+import { useMediaQuery } from '../utils/useMediaQuery'
+import { auth } from '../utils/auth'
 
 const LANG_COLORS = {
   'en': '#3b82f6', 'fr': '#6366f1', 'pt': '#22c55e', 'de': '#eab308', 'ro': '#2563eb',
@@ -47,7 +49,8 @@ function LangIcon({ langCode, size = 'md' }) {
   })()
   const isAuto = langCode === 'auto'
   const code = isAuto ? 'AUTO' : langCode === 'zh-TW' ? 'TW' : langCode.substring(0, 2).toUpperCase()
-  const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : size === 'lg' ? 'w-8 h-8 text-xs' : 'w-7 h-7 text-[10px]'
+  // ponytail: auto 4 字符用更小字号才能完整显示
+  const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : size === 'lg' ? `w-9 h-9 ${isAuto ? 'text-[9px]' : 'text-sm'}` : 'w-7 h-7 text-[10px]'
   return (
     <span
       className={`inline-flex items-center justify-center rounded-sm font-bold text-white leading-none ${sizeClasses}`}
@@ -399,7 +402,7 @@ function LanguageSelector({ value, onChange, uiLang, inputMode, recentLanguages,
           className="flex items-center gap-1.5 text-base font-bold text-ink-700 hover:text-ink-900 transition-colors"
         >
           <span className="leading-none">
-            {isAuto ? <LangIcon langCode="auto" size="md" /> : <LangIcon langCode={value} size="md" />}
+            {isAuto ? <LangIcon langCode="auto" size="lg" /> : <LangIcon langCode={value} size="lg" />}
           </span>
           <span className="text-ink-800">{currentLabel}</span>
           {nativeLabel && nativeLabel !== currentLabel && (
@@ -631,6 +634,15 @@ function ModeSelector({ mode, setMode, t }) {
 
 function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
   const navigate = useNavigate()
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  // ponytail: 复用 auth.getQuota() 显示额度（与 AccountMenu 同源），移动端在发送箭头左侧展示
+  const [quota, setQuota] = useState(() => auth.getQuota())
+  useEffect(() => {
+    const refresh = () => { const q = auth.getQuota(); if (q) setQuota(q) }
+    refresh()
+    const interval = setInterval(refresh, 30000)
+    return () => clearInterval(interval)
+  }, [])
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')
   // 记住非直接输入模式（翻译/生成）的语言选择
@@ -675,6 +687,87 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
     if (inputMode === 'translate') return t.modeTranslatePlaceholder
     if (inputMode === 'generate') return t.modeGeneratePlaceholder
     return t.modeDirectPlaceholder
+  }
+
+  const available = quota?.available ?? 0
+  const max = quota?.tier_max ?? quota?.max ?? 200
+  const isUnlimited = max === -1
+  const isLow = !isUnlimited && typeof available === 'number' && available <= 10
+
+  // ponytail: 移动端布局 — 顶栏(学习语言 左 / logo+标题 右) + Edge式三模式在框外 + 搜索框(额度在发送箭头左侧)
+  if (!isDesktop) {
+    return (
+      <div className="flex flex-col w-full">
+        <div className="flex items-center justify-between pt-3 px-4 gap-2">
+          <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex items-center gap-2 cursor-pointer shrink-0"
+            onClick={() => navigate('/')}
+            title="返回首页"
+          >
+            <div className="w-9 h-9 bg-amber-400 rounded-md flex items-center justify-center shadow-retro border-2 border-amber-500">
+              <FrogLogo size={22} />
+            </div>
+            <h1 className="text-xl font-display font-bold text-ink-800 leading-tight" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
+              {t.title || '呱邻国'}
+            </h1>
+          </motion.div>
+        </div>
+
+        {/* Edge式：三模式在搜索框范围之外 */}
+        <div className="px-3 pt-3">
+          <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
+        </div>
+
+        <div className="w-full px-3 pt-2">
+          <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
+            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
+            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={getPlaceholder()}
+              rows={3}
+              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none px-4 py-2 text-sm text-ink-700 placeholder-ink-400 leading-relaxed"
+            />
+            <div className="flex items-center justify-between px-3 pb-3">
+              <span className={`flex items-center gap-1 text-xs font-medium ${isLow ? 'text-rust-500' : 'text-amber-600'}`} title={t?.remainingQuota || '剩余额度'}>
+                <Zap className="w-3 h-3" />
+                {isUnlimited ? '∞' : `${available}/${max}`}
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onProcess}
+                disabled={loading || !text.trim()}
+                className={`p-2 rounded-sm transition-all duration-200 ${
+                  loading || !text.trim()
+                    ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
+                    : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
+                }`}
+              >
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <ArrowRight className="w-4 h-4" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

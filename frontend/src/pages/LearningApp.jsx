@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, ArrowLeft, Settings, Loader2 } from 'lucide-react'
+import { BookOpen, ArrowLeft, Settings, Loader2, Home, User, ListChecks, LogOut, Zap } from 'lucide-react'
 import { api } from '../utils/api'
 import { translations } from '../utils/translations'
 import { warmupSpeech } from '../utils/speech'
@@ -123,6 +123,8 @@ function App() {
   const [fontScaleMobile, setFontScaleMobile] = useState(1)
   const [fontScaleDesktop, setFontScaleDesktop] = useState(1)
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  // 移动端底部导航 tab：home/details/quiz/profile
+  const [mobileTab, setMobileTab] = useState('home')
 
   // === 浏览器历史导航：每个 step 变化压入历史栈，支持回退/前进 ===
   const isPopstateRef = useRef(false)
@@ -162,11 +164,12 @@ function App() {
     }).catch(() => {})
   }, [])
 
-  // === 字体缩放：应用到 documentElement，学习页基础字号 14px（比默认 16px 小）===
+  // === 字体缩放：应用到 documentElement ===
+  // 桌面端基础字号 14px；移动端基础字号 12.6px（桌面的 90%），fontScaleMobile 默认 1（100%）
   // 依赖 showSettings：设置弹窗关闭时重新应用已保存值，撤销弹窗内的实时预览
   useEffect(() => {
     const scale = isDesktop ? fontScaleDesktop : fontScaleMobile
-    document.documentElement.style.fontSize = `${14 * scale}px`
+    document.documentElement.style.fontSize = `${(isDesktop ? 14 : 12.6) * scale}px`
     return () => {
       // 离开学习页时恢复浏览器默认 16px
       document.documentElement.style.fontSize = ''
@@ -1289,11 +1292,42 @@ function App() {
   const handleOpenWordList = (lang) => {
     setFavoriteLang(null)
     setWordListLang(prev => prev === lang ? null : lang)
+    // ponytail: 移动端从 Profile 点开单词表/收藏时切回主页显示
+    if (!isDesktop) { setStep('input'); setMobileTab('home') }
   }
 
   const handleOpenFavorites = (lang) => {
     setWordListLang(null)
     setFavoriteLang(prev => prev === lang ? null : lang)
+    if (!isDesktop) { setStep('input'); setMobileTab('home') }
+  }
+
+  // ponytail: 移动端点 Details/Quiz tab 时加载最近条目（无 currentFileId 时从历史取第一条）
+  const handleLoadMostRecent = async () => {
+    try {
+      const data = await api.getHistory()
+      const recent = (data.records || [])[0]
+      if (recent) {
+        await handleNavigateToRecord(recent.file_id, recent.source_lang, recent.target_lang, recent.title)
+      }
+    } catch (e) {
+      console.error('Failed to load recent record:', e)
+    }
+  }
+
+  const handleMobileTab = (tab) => {
+    setMobileTab(tab)
+    if (tab === 'home') {
+      setStep('input')
+    } else if (tab === 'profile') {
+      setStep('profile')
+    } else if (tab === 'details') {
+      // ponytail: 总是重新加载最近条目 — 修复 sentenceTranslations 被清空后卡 loading，且符合「点进去是最近条目」需求
+      handleLoadMostRecent()
+    } else if (tab === 'quiz') {
+      if (currentFileId) setStep('all-units')
+      else handleLoadMostRecent().then(() => setStep('all-units'))
+    }
   }
 
   const handleNextSentenceQuiz = async () => {
@@ -1319,6 +1353,17 @@ function App() {
     }
   }
 
+  // ponytail: step 变化时同步移动端底部 nav 高亮（历史条目点击/开始学习等路径也会触发）
+  useEffect(() => {
+    if (step === 'input') setMobileTab('home')
+    else if (step === 'dictionary') setMobileTab('details')
+    else if (step === 'all-units') setMobileTab('quiz')
+    else if (step === 'profile') setMobileTab('profile')
+  }, [step])
+
+  // 移动端底部 nav 仅在非练习 step 显示；做题时只有返回，无 nav
+  const showMobileNav = !isDesktop && ['input', 'dictionary', 'all-units', 'profile'].includes(step)
+
   return (
     <div className="h-screen h-[100svh] overflow-hidden bg-parchment-50 bg-paper-grain relative">
       {/* 装饰性波点背景 */}
@@ -1326,7 +1371,7 @@ function App() {
         style={{ backgroundImage: 'radial-gradient(circle, #8b7e5e 1px, transparent 1px)', backgroundSize: '24px 24px' }}
       />
       <main className="h-full relative z-10">
-        {step === 'input' ? (
+        {step === 'input' && isDesktop ? (
           <div className="flex h-full">
             <HistorySidebar onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
             <div className="flex-1 min-w-0 relative h-full px-4 sm:px-6 lg:px-8 py-4">
@@ -1391,8 +1436,89 @@ function App() {
               )}
             </div>
           </div>
+        ) : step === 'input' ? (
+          // ponytail: 移动端主页 — 输入框在顶部 + 历史记录在下方堆叠
+          <div className="h-full overflow-y-auto pb-16">
+            {wordListLang ? (
+              <WordListPanel sourceLang={wordListLang} t={t} onBack={() => setWordListLang(null)} pageSize={pageSize} />
+            ) : favoriteLang ? (
+              <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => setFavoriteLang(null)} pageSize={pageSize} favoritesMode={true} />
+            ) : (
+              <>
+                {translatingUI && (
+                  <div className="absolute inset-0 bg-parchment-50/80 backdrop-blur-sm z-20 flex items-center justify-center">
+                    <div className="flex items-center gap-3 bg-parchment-50 border-2 border-aged-200 rounded-sm px-6 py-4 shadow-retro">
+                      <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                      <span className="text-sm text-ink-600">{t.translatingUI || '正在切换界面语言...'}</span>
+                    </div>
+                  </div>
+                )}
+                <InputStep
+                  text={text}
+                  setText={setText}
+                  sourceLang={sourceLang}
+                  setSourceLang={setSourceLang}
+                  uiLang={uiLang}
+                  loading={loading}
+                  onProcess={handleProcess}
+                  t={t}
+                  inputMode={inputMode}
+                  setInputMode={setInputMode}
+                  recentLanguages={recentLanguages}
+                />
+                <div className="px-3 mt-4">
+                  <HistorySidebar inline onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
+                </div>
+              </>
+            )}
+          </div>
+        ) : step === 'profile' ? (
+          // ponytail: 移动端个人页 — 头像/账号/设置/退出 + 学习记录（最近/语言/进度/单词表/收藏）
+          <div className="h-full overflow-y-auto pb-16 px-4 py-4">
+            {(() => {
+              const user = auth.getUser()
+              const q = auth.getQuota()
+              const available = q?.available ?? 0
+              const max = q?.tier_max ?? q?.max ?? 200
+              const isUnlimited = max === -1
+              const isLow = !isUnlimited && typeof available === 'number' && available <= 10
+              const tierLabel = { free: t.freeTier || '免费版', basic: t.basicTier || '基础版', pro: t.proTier || '专业版' }[user?.tier] || user?.tier || ''
+              return (
+                <div className="max-w-md mx-auto">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center text-lg font-bold shrink-0">
+                      {user ? (user.name || user.email)[0].toUpperCase() : '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink-800 truncate">{user?.email || ''}</p>
+                      <p className="text-xs text-amber-600 mt-0.5">{tierLabel}</p>
+                    </div>
+                  </div>
+                  {!isUnlimited && (
+                    <div className="bg-parchment-50 border-2 border-aged-200 rounded-md p-3 mb-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-ink-500 flex items-center gap-1"><Zap className="w-3 h-3" />{t.remainingQuota || '剩余额度'}</span>
+                        <span className={`text-xs font-bold ${isLow ? 'text-rust-500' : 'text-amber-600'}`}>{available} / {max}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-parchment-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${isLow ? 'bg-rust-400' : 'bg-amber-400'}`} style={{ width: `${max > 0 ? Math.max(0, (available / max) * 100) : 0}%` }} />
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-ink-700 hover:bg-parchment-100 transition-colors mb-2">
+                    <Settings className="w-4 h-4 text-ink-400" />
+                    {t.settings || '设置'}
+                  </button>
+                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
+                    <LogOut className="w-4 h-4" />
+                    {t.logout || '退出登录'}
+                  </button>
+                </div>
+              )
+            })()}
+          </div>
         ) : (
-          <div ref={learningContainerRef} className="h-full overflow-y-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div ref={learningContainerRef} className={`h-full overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 ${showMobileNav ? 'pb-16' : ''}`}>
             <AnimatePresence mode="wait">
           {step === 'dictionary' && (
             <DictionaryStep
@@ -1691,6 +1817,30 @@ function App() {
           </div>
         )}
       </main>
+      {/* ponytail: 移动端底部导航 — 主页/条目详情/题目/个人，仅 logo 标识，当前页高亮 */}
+      {showMobileNav && (
+        <nav className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
+          {[
+            { key: 'home', icon: Home },
+            { key: 'details', icon: BookOpen },
+            { key: 'quiz', icon: ListChecks },
+            { key: 'profile', icon: User },
+          ].map(({ key, icon: Icon }) => {
+            const active = mobileTab === key
+            return (
+              <button
+                key={key}
+                onClick={() => handleMobileTab(key)}
+                className="flex-1 flex items-center justify-center py-2 transition-colors"
+              >
+                <span className={`flex items-center justify-center rounded-full transition-all duration-200 ${active ? 'w-11 h-8 bg-amber-400 text-white shadow-retro-sm' : 'w-8 h-8 text-aged-300'}`}>
+                  <Icon className={`transition-all duration-200 ${active ? 'w-5 h-5' : 'w-[18px] h-[18px]'}`} />
+                </span>
+              </button>
+            )
+          })}
+        </nav>
+      )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
       {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
       <ConfirmDialog

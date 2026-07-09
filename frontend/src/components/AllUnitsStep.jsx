@@ -216,7 +216,7 @@ function AllUnitsStep({
           />
         </div>
 
-        <div className="grid gap-2.5 justify-center grid-cols-[repeat(auto-fill,5rem)]">
+        <div className="grid gap-2.5 justify-center grid-cols-[repeat(auto-fit,5rem)]">
           {pageUnits.map((unit, pageIdx) => {
             const globalIdx = startIdx + pageIdx;
             return renderUnitCard(
@@ -312,7 +312,7 @@ function AllUnitsStep({
 
         <button
           onClick={onHome}
-          className="btn-ghost p-2"
+          className="btn-ghost p-2 hidden md:flex"
           title={t.backToHome || '返回主页'}
         >
           <Home className="w-5 h-5" />
@@ -320,7 +320,7 @@ function AllUnitsStep({
       </div>
 
       <div className="max-w-3xl mx-auto">
-        <div className="mb-6 text-center">
+        <div className="mb-6 text-center hidden md:block">
           <h2 className="text-xl font-bold font-display text-ink-800">
             {tabs[activeTab].label}
           </h2>
@@ -334,7 +334,7 @@ function AllUnitsStep({
           </div>
         ) : (
           <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden">
-            <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5 hidden md:block">
+            <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5">
               <div className="flex gap-1 relative">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-parchment-50 rounded-t-xl shadow-retro-sm"
@@ -370,7 +370,7 @@ function AllUnitsStep({
               </div>
             </div>
 
-            <div className="px-5 pb-20 md:pb-5 pt-4">
+            <div className="px-5 pb-5 pt-4">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -386,28 +386,6 @@ function AllUnitsStep({
           </div>
         )}
       </div>
-
-      {/* 手机端底部 Tab 栏（微信式：图标+文字垂直排列） */}
-      {!isDesktop && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
-          {tabs.map((tab, i) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === i;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => switchTab(i)}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-                  isActive ? 'text-amber-600' : 'text-ink-400'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </motion.div>
   );
 }
