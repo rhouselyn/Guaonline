@@ -35,12 +35,8 @@ class _LLMApiShim:
         )
 
 
-async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None, missing_words_hint=None):
-    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。
-
-    missing_words_hint: 上一次翻译遗漏的词列表。非空时原文 text 中这些词已被 ** 加粗，
-    LLM 会被要求必须为每个加粗词生成条目。用于"加粗重译"循环。
-    """
+async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
+    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
     source_lang_name = get_lang_name(source_lang)
     target_lang_name = get_lang_name(target_lang)
 
@@ -142,20 +138,6 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 - redundant_tokens: 冗余词
 
 【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
-
-    # ponytail: 加粗重译模式——原文中被 ** 包裹的词是上一轮遗漏的，必须为它们生成条目。
-    if missing_words_hint:
-        hint_examples = ", ".join(f"**{w}**" for w in missing_words_hint[:5])
-        system_prompt += f"""
-
-═══════════════════════════════════════════════════════════
-【极其重要·加粗词必须包含】
-原文中有一些词被 ** 加粗标记（例如：{hint_examples}），这些是上一次翻译中遗漏的词。
-- 加粗标记 ** 只是"必须包含"的提示，不是原文内容的一部分。
-- translation 数组的 text 字段必须返回去掉 ** 后的原始词形（如 **your** → "your"），并为其生成完整的 phonetic/morphology/meaning。
-- 绝对不允许再遗漏任何加粗的词！每个加粗词都必须在 translation 数组中有对应的条目。
-- 若连续多个词被一起加粗（如 **your tie**），说明它们适合作为一个多词表达整体处理——可以在 translation 中作为一个 text="your tie" 的多词 token 返回，也可以分别返回 your 和 tie 两个 token，由你根据 {source_lang_name} 习惯决定。
-═══════════════════════════════════════════════════════════"""
 
     user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
 
@@ -362,11 +344,11 @@ async def _gateway_process_remaining_words(user_id, tier, words, source_lang, ta
 遗漏的单词：
 {words_str}
 
-上下文句子：
+上下文句子（其中遗漏词已用 ** 标记，** 仅为提示非原文内容）：
 {context}
 
 请为每个单词提供：
-1. text: 单词本身
+1. text: 单词本身（去掉 ** 后的原始词形；若是多词词组则保留空格）
 2. phonetic: 发音标注。使用该语言最常用、最被广泛认可的注音系统——可以是 IPA、拼音、罗马字或其他母语者和学习者期望的标准注音方式。声调语言需标注声调信息
 3. morphology: 词性缩写（如 n, v, adj, adv, prep, conj, pron, det 等）
 4. meaning: 基于上下文的 {target_lang_name} 释义，简洁的几个独立词，不需要用完整句子解释
@@ -770,45 +752,44 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_extract_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
 
-            # ponytail: 程序逐词匹配漏词 → 把没匹配到的部分整体加粗 → 复用同一个 LLM prompt 重译。
-            # LLM 常跳过常见词（your/tie 等）。检测在 validate 之前，基于 LLM 原始输出比对，
-            # 不被 validate 填的空壳干扰。连续遗漏词合并为一个整体 span 加粗（如 your tie 都漏
-            # → **your tie**），重译 prompt 复用 _gateway_process_text_with_dictionary。
-            # 循环直到没有漏词或达到重试上限，最后 validate 对齐顺序/补空壳。
+            # ponytail: 程序逐词匹配漏词 → 把没匹配到的部分整体加粗 → 只为遗漏词调用轻量 LLM。
+            # LLM 常跳过常见词（your/tie 等）。程序逐词比对找出未覆盖词，连续遗漏合并为一个 span
+            # （如 your tie 都漏 → "your tie"）。补漏用 _gateway_process_remaining_words 轻量接口——
+            # 只生成遗漏词的 text/phonetic/morphology/meaning，不重译整句、不生成翻译/语法/冗余词。
+            # 把加粗句作为上下文给 LLM（加粗提示这些词必须生成），补回的条目合并进现有 translation。
+            # 循环直到无漏词或达上限，最后 validate 对齐顺序。
             MAX_RETRY = 2
             retry_count = 0
             missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
             while missing_spans and retry_count < MAX_RETRY:
                 retry_count += 1
-                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次重译，漏词: {missing_spans}")
+                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次补漏，漏词: {missing_spans}")
                 t_retry_start = time.time()
-                retry_result = await _gateway_process_text_with_dictionary(
-                    user_id, tier, bolded, source_lang, target_lang, context_sentences,
-                    missing_words_hint=missing_spans
+                # 把加粗句作为上下文——LLM 看到加粗就知道这些是必须生成的词
+                remaining_entries = await _gateway_process_remaining_words(
+                    user_id, tier, missing_spans, source_lang, target_lang, bolded
                 )
-                # 复用 process_translation 的标点过滤逻辑（重译结果未经 process_translation）
-                if isinstance(retry_result, dict) and 'translation' in retry_result:
-                    filtered = []
-                    for token in retry_result['translation']:
-                        if isinstance(token, dict) and 'text' in token:
-                            token_text = token['text'].strip()
-                            if not token_text or is_punctuation_only(token_text):
-                                continue
-                            cleaned = strip_edge_punctuation(token_text)
-                            if cleaned and cleaned != token_text:
-                                token['text'] = cleaned
-                            if cleaned:
-                                filtered.append(token)
-                    retry_result['translation'] = filtered
-                sentence_translation_result = retry_result
+                if remaining_entries:
+                    # 合并补回的条目到现有 translation（不替换整句翻译）
+                    if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
+                        existing_lower = set()
+                        for token in sentence_translation_result["translation"]:
+                            if isinstance(token, dict) and token.get("text"):
+                                existing_lower.add(token["text"].lower())
+                        for entry in remaining_entries:
+                            if isinstance(entry, dict) and entry.get("text"):
+                                key = entry["text"].lower()
+                                if key not in existing_lower:
+                                    sentence_translation_result["translation"].append(entry)
+                                    existing_lower.add(key)
                 t_retry_end = time.time()
-                print(f"[TIMING] 句子 {idx+1} 第 {retry_count} 次加粗重译: {t_retry_end - t_retry_start:.3f}s")
+                print(f"[TIMING] 句子 {idx+1} 第 {retry_count} 次补漏: {t_retry_end - t_retry_start:.3f}s")
                 missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
 
             if missing_spans:
-                print(f"[DEBUG] 句子 {idx+1} 加粗重译后仍有漏词(将留空壳): {missing_spans}")
+                print(f"[DEBUG] 句子 {idx+1} 补漏后仍有漏词(将留空壳): {missing_spans}")
             elif retry_count > 0:
-                print(f"[DEBUG] 句子 {idx+1} 加粗重译成功，无漏词")
+                print(f"[DEBUG] 句子 {idx+1} 补漏成功，无漏词")
 
             t_validate_start = time.time()
             sentence_translation_result = text_processor.validate_and_complete_translation(
