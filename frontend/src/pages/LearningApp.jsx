@@ -1266,19 +1266,9 @@ function App() {
       }
 
       // 进入条目时不再手动 getStatus——下面的轮询 useEffect 在 currentFileId 变化时会立即拉一次。
+      // 不自动触发失败句子重试——避免进入条目即显示"处理中"状态，用户应先看到已有数据。
+      // 有 __failed 句子时，轮询检测到 processing 状态会自然恢复；用户也可手动重试。
       setSkipPolling(false)
-
-      // ponytail: 句子重进自动检测 __failed 并续生成。改用 /info 返回的 has_failed 标记，
-      // 无需全量加载 sentences 即可判断。命中即调 retry-sentences，后端恢复 processing 并启动后台重试。
-      try {
-        if (infoData.has_failed) {
-          api.retryFailedSentences(fileId).then(() => {
-            setSkipPolling(false)
-          }).catch(() => {})
-        }
-      } catch (e) {
-        // 检测失败不阻塞进入
-      }
 
       api.startWordGen(fileId).catch(() => {})
       setStep('dictionary')
@@ -1441,12 +1431,16 @@ function App() {
             </div>
           </div>
         ) : step === 'input' ? (
-          // ponytail: 移动端主页 — 输入框在顶部 + 历史记录在下方堆叠
-          <div className="h-full overflow-y-auto pb-nav-safe">
+          // 移动端主页 — 输入框固定顶部不滚动，历史记录区域独立滚动
+          <div className="h-full flex flex-col pb-nav-safe">
             {wordListLang ? (
-              <WordListPanel sourceLang={wordListLang} t={t} onBack={() => setWordListLang(null)} pageSize={pageSize} />
+              <div className="h-full overflow-y-auto">
+                <WordListPanel sourceLang={wordListLang} t={t} onBack={() => setWordListLang(null)} pageSize={pageSize} />
+              </div>
             ) : favoriteLang ? (
-              <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => setFavoriteLang(null)} pageSize={pageSize} favoritesMode={true} />
+              <div className="h-full overflow-y-auto">
+                <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => setFavoriteLang(null)} pageSize={pageSize} favoritesMode={true} />
+              </div>
             ) : (
               <>
                 {translatingUI && (
@@ -1457,20 +1451,22 @@ function App() {
                     </div>
                   </div>
                 )}
-                <InputStep
-                  text={text}
-                  setText={setText}
-                  sourceLang={sourceLang}
-                  setSourceLang={setSourceLang}
-                  uiLang={uiLang}
-                  loading={loading}
-                  onProcess={handleProcess}
-                  t={t}
-                  inputMode={inputMode}
-                  setInputMode={setInputMode}
-                  recentLanguages={recentLanguages}
-                />
-                <div className="px-5 mt-5">
+                <div className="shrink-0 safe-top">
+                  <InputStep
+                    text={text}
+                    setText={setText}
+                    sourceLang={sourceLang}
+                    setSourceLang={setSourceLang}
+                    uiLang={uiLang}
+                    loading={loading}
+                    onProcess={handleProcess}
+                    t={t}
+                    inputMode={inputMode}
+                    setInputMode={setInputMode}
+                    recentLanguages={recentLanguages}
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 mt-1 min-h-0">
                   <HistorySidebar inline onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
                 </div>
               </>
