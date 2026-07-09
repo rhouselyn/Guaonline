@@ -35,8 +35,12 @@ class _LLMApiShim:
         )
 
 
-async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
-    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
+async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None, missing_words_hint=None):
+    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。
+
+    missing_words_hint: 上一次翻译遗漏的词列表。非空时原文 text 中这些词已被 ** 加粗，
+    LLM 会被要求必须为每个加粗词生成条目。用于"加粗重译"循环。
+    """
     source_lang_name = get_lang_name(source_lang)
     target_lang_name = get_lang_name(target_lang)
 
@@ -138,6 +142,19 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 - redundant_tokens: 冗余词
 
 【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
+
+    # ponytail: 加粗重译模式——原文中被 ** 包裹的词是上一轮遗漏的，必须为它们生成条目。
+    if missing_words_hint:
+        hint_examples = ", ".join(f"**{w}**" for w in missing_words_hint[:5])
+        system_prompt += f"""
+
+═══════════════════════════════════════════════════════════
+【极其重要·加粗词必须包含】
+原文中有一些词被 ** 加粗标记（例如：{hint_examples}），这些是上一次翻译中遗漏的词。
+- 加粗标记 ** 只是"必须包含"的提示，不是原文内容的一部分。
+- translation 数组的 text 字段必须返回去掉 ** 后的原始词形（如 **your** → "your"），并为其生成完整的 phonetic/morphology/meaning。
+- 绝对不允许再遗漏任何加粗的词！每个加粗词都必须在 translation 数组中有对应的条目。
+═══════════════════════════════════════════════════════════"""
 
     user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
 
@@ -392,6 +409,54 @@ async def _gateway_process_remaining_words(user_id, tier, words, source_lang, ta
     except Exception as e:
         print(f"Process remaining words failed: {e}")
     return []
+
+
+def _detect_missing_words(sentence, sentence_words, translation_result, source_lang):
+    """检测原文中未被 translation_result 覆盖的词（基于 LLM 原始输出，在 validate 之前调用）。
+
+    返回遗漏词列表（保留原文大小写的 strip_edge_punctuation 结果）。
+    """
+    translation_words = set()
+    if isinstance(translation_result, dict) and "translation" in translation_result:
+        for token in translation_result["translation"]:
+            if isinstance(token, dict) and "text" in token:
+                translation_words.add(token["text"].lower())
+
+    if source_lang in NO_SPACE_LANGUAGES:
+        # 无空格语言：按归一化后整体比对，无法逐词报告，保持不报（与原行为一致）
+        def _norm(text):
+            return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
+        sentence_norm = _norm(sentence)
+        tokens_norm = _norm(''.join(translation_words))
+        return [] if tokens_norm == sentence_norm else []
+
+    multiword_components = set()
+    for tw in translation_words:
+        if ' ' in tw:
+            for part in tw.split():
+                multiword_components.add(part.lower())
+
+    missing = []
+    for w in sentence_words:
+        w_clean = strip_edge_punctuation(w).lower()
+        if w_clean and w_clean not in translation_words and w_clean not in multiword_components and not is_punctuation_only(w):
+            missing.append(strip_edge_punctuation(w))
+    return missing
+
+
+def _bold_missing_words(sentence, missing_words):
+    """在原句中用 ** 包裹遗漏词，作为"必须包含"的视觉提示交给 LLM 重译。
+
+    按词长降序处理，避免短词误匹配到长词内部；用 lookbehind/lookahead 排除字母与已存在的 *,
+    避免重复加粗或匹配词内子串。
+    """
+    result = sentence
+    for w in sorted(set(missing_words), key=len, reverse=True):
+        if not w:
+            continue
+        pattern = re.compile(r'(?<![\w*])' + re.escape(w) + r'(?![\w*])', re.IGNORECASE)
+        result = pattern.sub(lambda m: f'**{m.group(0)}**', result)
+    return result
 
 
 def _finalize_pipeline(file_id, sentence_translations, total_sentences,
@@ -690,86 +755,58 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_llm_end = time.time()
             print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
 
+            t_extract_start = time.time()
+            sentence_words = text_processor.extract_words(sentence, source_lang)
+            t_extract_end = time.time()
+            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
+
+            # ponytail: 漏词检测 + 加粗重译循环。
+            # LLM 常跳过常见词（your/tie 等）。检测在 validate 之前，基于 LLM 原始输出比对，
+            # 这样不会被 validate 填的空壳 placeholder 干扰。发现漏词后，在原句把这些词用 **
+            # 加粗，把加粗句整句重交给 LLM 翻译，循环直到没有漏词或达到重试上限。
+            # 最后再 validate 补齐顺序/空壳（重试上限后仍漏的词会留空壳）。
+            MAX_RETRY = 2
+            retry_count = 0
+            missing_words = _detect_missing_words(sentence, sentence_words, sentence_translation_result, source_lang)
+            while missing_words and retry_count < MAX_RETRY:
+                retry_count += 1
+                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次重译，漏词: {missing_words}")
+                bolded = _bold_missing_words(sentence, missing_words)
+                t_retry_start = time.time()
+                retry_result = await _gateway_process_text_with_dictionary(
+                    user_id, tier, bolded, source_lang, target_lang, context_sentences,
+                    missing_words_hint=missing_words
+                )
+                # 复用 process_translation 的标点过滤逻辑（重译结果未经 process_translation）
+                if isinstance(retry_result, dict) and 'translation' in retry_result:
+                    filtered = []
+                    for token in retry_result['translation']:
+                        if isinstance(token, dict) and 'text' in token:
+                            token_text = token['text'].strip()
+                            if not token_text or is_punctuation_only(token_text):
+                                continue
+                            cleaned = strip_edge_punctuation(token_text)
+                            if cleaned and cleaned != token_text:
+                                token['text'] = cleaned
+                            if cleaned:
+                                filtered.append(token)
+                    retry_result['translation'] = filtered
+                sentence_translation_result = retry_result
+                t_retry_end = time.time()
+                print(f"[TIMING] 句子 {idx+1} 第 {retry_count} 次加粗重译: {t_retry_end - t_retry_start:.3f}s")
+                missing_words = _detect_missing_words(sentence, sentence_words, sentence_translation_result, source_lang)
+
+            if missing_words:
+                print(f"[DEBUG] 句子 {idx+1} 加粗重译后仍有漏词(将留空壳): {missing_words}")
+            elif retry_count > 0:
+                print(f"[DEBUG] 句子 {idx+1} 加粗重译成功，无漏词")
+
             t_validate_start = time.time()
             sentence_translation_result = text_processor.validate_and_complete_translation(
                 sentence, sentence_translation_result, source_lang
             )
             t_validate_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 验证补全: {t_validate_end - t_validate_start:.3f}s")
-
-            t_extract_start = time.time()
-            sentence_words = text_processor.extract_words(sentence, source_lang)
-            t_extract_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
-
-            translation_words = set()
-            if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                for token in sentence_translation_result["translation"]:
-                    if isinstance(token, dict) and "text" in token:
-                        # ponytail: 空壳 placeholder（validate_and_complete_translation 填的、
-                        # 无释义/音标/词性的占位条目）不算"已翻译"，需让 missing_words 检测捕获，
-                        # 进而触发 _gateway_process_remaining_words 补救调用真正生成内容。
-                        if token.get("phonetic") or token.get("morphology") or token.get("meaning"):
-                            translation_words.add(token["text"].lower())
-
-            if source_lang in NO_SPACE_LANGUAGES:
-                def _norm(text):
-                    return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
-                sentence_norm = _norm(sentence)
-                tokens_norm = _norm(''.join(translation_words))
-                missing_words = [] if tokens_norm == sentence_norm else []
-            else:
-                multiword_components = set()
-                for tw in translation_words:
-                    if ' ' in tw:
-                        for part in tw.split():
-                            multiword_components.add(part.lower())
-
-                missing_words = []
-                for w in sentence_words:
-                    w_clean = strip_edge_punctuation(w).lower()
-                    if w_clean and w_clean not in translation_words and w_clean not in multiword_components and not is_punctuation_only(w):
-                        missing_words.append(strip_edge_punctuation(w))
-
-            if missing_words:
-                print(f"[DEBUG] 发现遗漏单词: {missing_words}, 正在补充处理...")
-                t_missing_start = time.time()
-                remaining_entries = await _gateway_process_remaining_words(
-                    user_id, tier, missing_words, source_lang, target_lang, sentence
-                )
-                t_missing_end = time.time()
-                print(f"[TIMING] 句子 {idx+1} 遗漏单词补充LLM调用: {t_missing_end - t_missing_start:.3f}s")
-                if remaining_entries:
-                    if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                        # ponytail: 用补救结果原地替换空壳 placeholder（按 text 匹配），
-                        # 而非"已存在则跳过"的追加——否则 first-wins 去重会保留空壳、丢弃完整条目。
-                        remaining_by_word = {}
-                        for entry in remaining_entries:
-                            if isinstance(entry, dict) and "text" in entry and entry["text"]:
-                                remaining_by_word[entry["text"].lower()] = entry
-
-                        for token in sentence_translation_result["translation"]:
-                            if not isinstance(token, dict) or "text" not in token:
-                                continue
-                            key = token["text"].lower()
-                            if key in remaining_by_word:
-                                complete = remaining_by_word.pop(key)
-                                # 原地填充：完整字段优先，保留 placeholder 已有 text
-                                token["phonetic"] = complete.get("phonetic", "") or token.get("phonetic", "")
-                                token["morphology"] = complete.get("morphology", "") or token.get("morphology", "")
-                                token["meaning"] = complete.get("meaning", "") or token.get("meaning", "")
-
-                        # 追加剩余未匹配到 placeholder 的条目（如 LLM 返回了归一化后不同的词形）
-                        existing_lower = set()
-                        for token in sentence_translation_result["translation"]:
-                            if isinstance(token, dict) and "text" in token:
-                                existing_lower.add(token["text"].lower())
-                        for key, entry in remaining_by_word.items():
-                            if key not in existing_lower:
-                                sentence_translation_result["translation"].append(entry)
-                                existing_lower.add(key)
-
-                    print(f"[DEBUG] 补充了 {len(remaining_entries)} 个遗漏单词")
 
             sentence_data = {
                 "sentence": sentence,
