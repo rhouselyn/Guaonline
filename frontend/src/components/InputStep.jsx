@@ -693,11 +693,12 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
   const isUnlimited = max === -1
   const isLow = !isUnlimited && typeof available === 'number' && available <= 10
 
-  // ponytail: 移动端布局 — 顶栏(logo+标题 / 学习语言) + 搜索式输入框(额度在发送箭头左侧)
+  // ponytail: 移动端布局 — 顶栏(学习语言 左 / logo+标题 右) + Edge式三模式在框外 + 搜索框(额度在发送箭头左侧)
   if (!isDesktop) {
     return (
       <div className="flex flex-col w-full">
         <div className="flex items-center justify-between pt-3 px-4 gap-2">
+          <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -713,18 +714,19 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
               {t.title || '呱邻国'}
             </h1>
           </motion.div>
-          <LanguageSelector compact value={sourceLang} onChange={handleSourceLangChange} uiLang={uiLang} inputMode={inputMode} recentLanguages={recentLanguages} t={t} />
         </div>
 
-        <div className="w-full px-3 pt-3">
+        {/* Edge式：三模式在搜索框范围之外 */}
+        <div className="px-3 pt-3">
+          <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
+        </div>
+
+        <div className="w-full px-3 pt-2">
           <div className="relative bg-parchment-50 border-2 border-aged-200 rounded-md shadow-retro overflow-hidden">
             <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 z-10" />
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 z-10" />
             <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-10" />
             <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-10" />
-            <div className="border-b border-aged-200/60 px-3 pt-2 pb-0">
-              <ModeSelector mode={inputMode} setMode={handleModeChange} t={t} />
-            </div>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}

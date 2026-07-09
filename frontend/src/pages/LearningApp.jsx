@@ -1322,8 +1322,8 @@ function App() {
     } else if (tab === 'profile') {
       setStep('profile')
     } else if (tab === 'details') {
-      if (currentFileId) setStep('dictionary')
-      else handleLoadMostRecent()
+      // ponytail: 总是重新加载最近条目 — 修复 sentenceTranslations 被清空后卡 loading，且符合「点进去是最近条目」需求
+      handleLoadMostRecent()
     } else if (tab === 'quiz') {
       if (currentFileId) setStep('all-units')
       else handleLoadMostRecent().then(() => setStep('all-units'))
@@ -1467,7 +1467,7 @@ function App() {
                   recentLanguages={recentLanguages}
                 />
                 <div className="px-3 mt-4">
-                  <HistorySidebar inline simple onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
+                  <HistorySidebar inline onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
                 </div>
               </>
             )}
@@ -1509,13 +1509,10 @@ function App() {
                     <Settings className="w-4 h-4 text-ink-400" />
                     {t.settings || '设置'}
                   </button>
-                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors mb-4">
+                  <button onClick={() => { auth.logout(); navigate('/') }} className="w-full flex items-center gap-2 px-3 py-2.5 bg-parchment-50 border-2 border-aged-200 rounded-md text-sm text-rust-500 hover:bg-rust-50 transition-colors">
                     <LogOut className="w-4 h-4" />
                     {t.logout || '退出登录'}
                   </button>
-                  <div className="border-t border-aged-200/60 pt-3">
-                    <HistorySidebar inline onNavigateToRecord={handleNavigateToRecord} t={t} onOpenWordList={handleOpenWordList} activeWordListLang={wordListLang} onOpenFavorites={handleOpenFavorites} activeFavoriteLang={favoriteLang} refreshTrigger={historyRefresh} />
-                  </div>
                 </div>
               )
             })()}
@@ -1820,7 +1817,7 @@ function App() {
           </div>
         )}
       </main>
-      {/* ponytail: 移动端底部导航 — 主页/条目详情/题目/个人，仅 logo 标识 */}
+      {/* ponytail: 移动端底部导航 — 主页/条目详情/题目/个人，仅 logo 标识，当前页高亮 */}
       {showMobileNav && (
         <nav className="fixed bottom-0 left-0 right-0 z-30 flex bg-parchment-50 border-t border-aged-200 md:hidden">
           {[
@@ -1828,15 +1825,20 @@ function App() {
             { key: 'details', icon: BookOpen },
             { key: 'quiz', icon: ListChecks },
             { key: 'profile', icon: User },
-          ].map(({ key, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => handleMobileTab(key)}
-              className={`flex-1 flex items-center justify-center py-2.5 transition-colors ${mobileTab === key ? 'text-amber-600' : 'text-ink-400'}`}
-            >
-              <Icon className="w-5 h-5" />
-            </button>
-          ))}
+          ].map(({ key, icon: Icon }) => {
+            const active = mobileTab === key
+            return (
+              <button
+                key={key}
+                onClick={() => handleMobileTab(key)}
+                className="flex-1 flex items-center justify-center py-2 transition-colors"
+              >
+                <span className={`flex items-center justify-center rounded-full transition-all duration-200 ${active ? 'w-11 h-8 bg-amber-400 text-white shadow-retro-sm' : 'w-8 h-8 text-aged-300'}`}>
+                  <Icon className={`transition-all duration-200 ${active ? 'w-5 h-5' : 'w-[18px] h-[18px]'}`} />
+                </span>
+              </button>
+            )
+          })}
         </nav>
       )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
