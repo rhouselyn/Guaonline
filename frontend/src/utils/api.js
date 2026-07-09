@@ -26,6 +26,12 @@ export const api = {
     return response.data;
   },
 
+  // 进入条目时检查并补漏缺词（返回 needs_refill；true 则后端启动 refilling 后台任务）
+  refillMissingWords: async (fileId) => {
+    const response = await axios.post(`${baseUrl}/api/process-text/${fileId}/refill-missing-words`);
+    return response.data;
+  },
+
   detectLanguage: async (text) => {
     const response = await axios.post(`${baseUrl}/api/detect-language`, {
       text: text.trim(),

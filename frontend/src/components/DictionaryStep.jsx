@@ -947,7 +947,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             </span>
             <span className="text-[11px] text-blue-500 font-medium truncate">
               {preprocessStatus === 'detecting' ? (t.detectingLanguage || '识别语言中...') :
-               preprocessStatus === 'translating' ? (t.translating || '翻译中...') : (t.generating || '生成文本中...')}
+               preprocessStatus === 'translating' ? (t.translating || '翻译中...') :
+               preprocessStatus === 'refilling' ? (t.refillingWords || '补全漏词中...') :
+               (t.generating || '生成文本中...')}
             </span>
           </div>
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (

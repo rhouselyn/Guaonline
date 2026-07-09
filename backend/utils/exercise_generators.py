@@ -451,11 +451,47 @@ def _detect_missing_and_bold(sentence, sentence_words, translation_result, sourc
     return missing_spans, bolded
 
 
-def _finalize_pipeline(file_id, sentence_translations, total_sentences,
-                       source_lang, target_lang, user_id, tier, t_total_start):
-    """句子全部就绪后：提取词典、保存 pipeline/vocab、生成学习计划、启动单词生成、置完成状态。
+async def _fill_missing_words(sentence, sentence_words, translation_result, source_lang, target_lang, user_id, tier, idx_label=""):
+    """对单个句子的 translation_result 跑补漏循环。
 
-    返回 all_vocab。供正常处理路径与“重试失败句子”路径共用，避免逻辑重复。
+    程序逐词匹配漏词 → 连续漏词合并为整体 span 加粗 → 轻量 LLM 只为遗漏词生成条目 →
+    合并进 translation。循环直到无漏词或达上限(2次)。
+    返回 (translation_result, missing_spans, retry_count)。
+    供首次处理与进入条目批量补漏复用。
+    """
+    MAX_RETRY = 2
+    retry_count = 0
+    missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, translation_result, source_lang)
+    while missing_spans and retry_count < MAX_RETRY:
+        retry_count += 1
+        if idx_label:
+            print(f"[DEBUG] {idx_label} 第 {retry_count} 次补漏，漏词: {missing_spans}")
+        t_retry_start = time.time()
+        remaining_entries = await _gateway_process_remaining_words(
+            user_id, tier, missing_spans, source_lang, target_lang, bolded
+        )
+        if remaining_entries:
+            if isinstance(translation_result, dict) and "translation" in translation_result:
+                existing_lower = set()
+                for token in translation_result["translation"]:
+                    if isinstance(token, dict) and token.get("text"):
+                        existing_lower.add(token["text"].lower())
+                for entry in remaining_entries:
+                    if isinstance(entry, dict) and entry.get("text"):
+                        key = entry["text"].lower()
+                        if key not in existing_lower:
+                            translation_result["translation"].append(entry)
+                            existing_lower.add(key)
+        t_retry_end = time.time()
+        if idx_label:
+            print(f"[TIMING] {idx_label} 第 {retry_count} 次补漏: {t_retry_end - t_retry_start:.3f}s")
+        missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, translation_result, source_lang)
+    return translation_result, missing_spans, retry_count
+
+
+def _extract_vocab_from_sentences(sentence_translations, source_lang):
+    """从句子翻译结果提取去重后的词典条目。
+    供 _finalize_pipeline 与进入条目补漏重建 vocab 复用。
     """
     all_vocab = []
     for i, sentence_data in enumerate(sentence_translations):
@@ -494,7 +530,6 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
             seen.add(word)
             unique_vocab.append(entry)
         else:
-            # 已存在：用当前条目的非空字段补齐已保留条目的空字段
             prev = next((e for e in unique_vocab if e.get("word", "").lower() == word), None)
             if prev:
                 for field in ("ipa", "meaning", "morphology"):
@@ -515,8 +550,95 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
                 continue
         deduplicated.append(entry)
     all_vocab = deduplicated
-
     all_vocab.sort(key=vocab_sort_key)
+    return all_vocab
+
+
+async def refill_missing_words_background(file_id, user_id, tier):
+    """进入条目时批量补漏：遍历所有已处理句子，对有漏词的跑补漏，增量保存+实时更新进度。
+
+    不重置学习计划/学习进度——只更新 pipeline_data 与 vocab 存储。
+    """
+    try:
+        pipeline = storage.load_pipeline_data(file_id) or []
+        if not pipeline:
+            _preserve = {k: processing_status.get(file_id, {}).get(k) for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+            processing_status[file_id] = {"status": "completed", "progress": 100, **_preserve}
+            return
+
+        settings = storage.load_language_settings(file_id) or {}
+        source_lang = settings.get("source_lang", "en")
+        target_lang = settings.get("target_lang", "zh")
+
+        # 第一遍：快速检测哪些句子有漏词（不调 LLM）
+        needs_refill = []
+        for i, sd in enumerate(pipeline):
+            if not isinstance(sd, dict):
+                continue
+            sentence = sd.get("sentence", "")
+            tr = sd.get("translation_result", {})
+            if not sentence or not isinstance(tr, dict):
+                continue
+            words = text_processor.extract_words(sentence, source_lang)
+            missing_spans, _ = _detect_missing_and_bold(sentence, words, tr, source_lang)
+            if missing_spans:
+                needs_refill.append(i)
+
+        if not needs_refill:
+            _preserve = {k: processing_status.get(file_id, {}).get(k) for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+            processing_status[file_id] = {"status": "completed", "progress": 100, **_preserve}
+            return
+
+        total = len(needs_refill)
+        _preserve = {k: processing_status.get(file_id, {}).get(k) for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+        processing_status[file_id] = {
+            "status": "processing", "progress": 0,
+            "current_sentence": 0, "total_sentences": total,
+            "preprocess": "refilling",
+            **_preserve
+        }
+        print(f"[DEBUG] 进入条目补漏: {total} 句有漏词，开始补漏")
+
+        # 逐句补漏
+        for done, idx in enumerate(needs_refill):
+            sd = pipeline[idx]
+            sentence = sd.get("sentence", "")
+            tr = sd.get("translation_result", {})
+            words = text_processor.extract_words(sentence, source_lang)
+            tr, missing_spans, retry_count = await _fill_missing_words(
+                sentence, words, tr, source_lang, target_lang, user_id, tier, f"补漏句子 {idx+1}")
+            tr = text_processor.validate_and_complete_translation(sentence, tr, source_lang)
+            sd["translation_result"] = tr
+            # 增量保存 pipeline + 重建 vocab（前端实时 refetch 句子与词汇表）
+            storage.save_pipeline_data(file_id, pipeline)
+            all_vocab = _extract_vocab_from_sentences(pipeline, source_lang)
+            storage.save_vocab(file_id, all_vocab)
+            processing_status[file_id]["current_sentence"] = done + 1
+            processing_status[file_id]["progress"] = int((done + 1) / total * 100)
+            processing_status[file_id]["vocab"] = all_vocab
+
+        all_vocab = _extract_vocab_from_sentences(pipeline, source_lang)
+        processing_status[file_id] = {
+            "status": "completed", "progress": 100,
+            "vocab": all_vocab,
+            "sentence_translations": pipeline,
+            **_preserve
+        }
+        print(f"[DEBUG] 补漏完成: {total} 句已补，共 {len(all_vocab)} 词")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _preserve = {k: processing_status.get(file_id, {}).get(k) for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+        processing_status[file_id] = {"status": "error", "error": f"补漏失败: {e}", **_preserve}
+
+
+def _finalize_pipeline(file_id, sentence_translations, total_sentences,
+                       source_lang, target_lang, user_id, tier, t_total_start):
+    """句子全部就绪后：提取词典、保存 pipeline/vocab、生成学习计划、启动单词生成、置完成状态。
+
+    返回 all_vocab。供正常处理路径与“重试失败句子”路径共用，避免逻辑重复。
+    """
+    all_vocab = _extract_vocab_from_sentences(sentence_translations, source_lang)
     print(f"[DEBUG] 从所有句子中提取词典条目，共 {len(all_vocab)} 个单词: {[word['word'] for word in all_vocab]}")
 
     learned_words_set = set()
@@ -752,40 +874,9 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_extract_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
 
-            # ponytail: 程序逐词匹配漏词 → 把没匹配到的部分整体加粗 → 只为遗漏词调用轻量 LLM。
-            # LLM 常跳过常见词（your/tie 等）。程序逐词比对找出未覆盖词，连续遗漏合并为一个 span
-            # （如 your tie 都漏 → "your tie"）。补漏用 _gateway_process_remaining_words 轻量接口——
-            # 只生成遗漏词的 text/phonetic/morphology/meaning，不重译整句、不生成翻译/语法/冗余词。
-            # 把加粗句作为上下文给 LLM（加粗提示这些词必须生成），补回的条目合并进现有 translation。
-            # 循环直到无漏词或达上限，最后 validate 对齐顺序。
-            MAX_RETRY = 2
-            retry_count = 0
-            missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
-            while missing_spans and retry_count < MAX_RETRY:
-                retry_count += 1
-                print(f"[DEBUG] 句子 {idx+1} 第 {retry_count} 次补漏，漏词: {missing_spans}")
-                t_retry_start = time.time()
-                # 把加粗句作为上下文——LLM 看到加粗就知道这些是必须生成的词
-                remaining_entries = await _gateway_process_remaining_words(
-                    user_id, tier, missing_spans, source_lang, target_lang, bolded
-                )
-                if remaining_entries:
-                    # 合并补回的条目到现有 translation（不替换整句翻译）
-                    if isinstance(sentence_translation_result, dict) and "translation" in sentence_translation_result:
-                        existing_lower = set()
-                        for token in sentence_translation_result["translation"]:
-                            if isinstance(token, dict) and token.get("text"):
-                                existing_lower.add(token["text"].lower())
-                        for entry in remaining_entries:
-                            if isinstance(entry, dict) and entry.get("text"):
-                                key = entry["text"].lower()
-                                if key not in existing_lower:
-                                    sentence_translation_result["translation"].append(entry)
-                                    existing_lower.add(key)
-                t_retry_end = time.time()
-                print(f"[TIMING] 句子 {idx+1} 第 {retry_count} 次补漏: {t_retry_end - t_retry_start:.3f}s")
-                missing_spans, bolded = _detect_missing_and_bold(sentence, sentence_words, sentence_translation_result, source_lang)
-
+            # ponytail: 补漏——抽到 _fill_missing_words，进入条目批量补漏也复用同一逻辑。
+            sentence_translation_result, missing_spans, retry_count = await _fill_missing_words(
+                sentence, sentence_words, sentence_translation_result, source_lang, target_lang, user_id, tier, f"句子 {idx+1}")
             if missing_spans:
                 print(f"[DEBUG] 句子 {idx+1} 补漏后仍有漏词(将留空壳): {missing_spans}")
             elif retry_count > 0:

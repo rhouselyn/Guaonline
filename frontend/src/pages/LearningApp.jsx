@@ -391,6 +391,8 @@ function App() {
           setPreprocessStatus('generating')
         } else if (status.preprocess === 'detecting') {
           setPreprocessStatus('detecting')
+        } else if (status.preprocess === 'refilling') {
+          setPreprocessStatus('refilling')
         } else {
           setPreprocessStatus(null)
         }
@@ -1430,9 +1432,20 @@ function App() {
         console.error('Failed to load phase units:', e)
       }
 
-      // 进入条目时不再手动 getStatus——下面的轮询 useEffect 在 currentFileId 变化时会立即拉一次。
-      // 不自动触发失败句子重试——避免进入条目即显示"处理中"状态，用户应先看到已有数据。
-      // 有 __failed 句子时，轮询检测到 processing 状态会自然恢复；用户也可手动重试。
+      // ponytail: 进入条目时检查并补漏缺词。在启动轮询前调用——有漏词则后端置 refilling 状态，
+      // 轮询拿到 refilling 不停止，实时更新句子与词汇表；无漏词则后端置 completed，轮询正常停止。
+      // 正在处理中的条目后端会跳过（skipping），不干扰主流程。
+      try {
+        const refillResp = await api.refillMissingWords(fileId)
+        if (refillResp.needs_refill) {
+          // 有漏词——保持 loading 让用户看到补漏进度，轮询会在 completed 时清掉 loading
+          setLoading(true)
+        }
+      } catch (e) {
+        // 补漏检查失败不阻塞，按已有数据展示
+        console.error('refill check failed:', e)
+      }
+
       setSkipPolling(false)
 
       api.startWordGen(fileId).catch(() => {})
