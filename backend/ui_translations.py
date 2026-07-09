@@ -19,6 +19,7 @@ UI_TRANSLATION_SCHEMA = {
     "meaningLabel": {"desc": "Label for word meaning", "zh": "意思", "en": "Meaning"},
     "posLabel": {"desc": "Label for part of speech", "zh": "词性", "en": "Part of Speech"},
     "definition": {"desc": "Label for definition section", "zh": "释义", "en": "Definition"},
+    "thisSentenceContext": {"desc": "Badge marking that the shown word meaning/POS is from the clicked sentence's context (overrides global meaning)", "zh": "本句上下文", "en": "This sentence"},
     "variants": {"desc": "Label for word forms/variants", "zh": "词形变化", "en": "Word Forms"},
     "examples": {"desc": "Label for example sentences", "zh": "例句", "en": "Examples"},
     "memoryHint": {"desc": "Label for memory aid", "zh": "记忆辅助", "en": "Memory Hint"},

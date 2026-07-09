@@ -45,6 +45,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [wordDetailCache, setWordDetailCache] = useState({})
   const [loadingWords, setLoadingWords] = useState({})
   const [wordDetails, setWordDetails] = useState({})
+  // ponytail: 从句子点击单词时，记录该句 token 的上下文释义/词性/音标，覆盖全局释义展示。
+  // { wordKey, meaning, morphology, phonetic } | null。直接点单词表时清空（用全局）。
+  const [activeSentenceContext, setActiveSentenceContext] = useState(null)
   const [sentenceSearch, setSentenceSearch] = useState(saved.sentenceSearch || '')
   const [vocabSearch, setVocabSearch] = useState(saved.vocabSearch || '')
   const [sentenceDisplayMode, setSentenceDisplayMode] = useState(saved.sentenceDisplayMode || 0)
@@ -548,7 +551,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }
   }, [expandedWord, showGlobalVocab, scrollToWord, vocabPage])
 
-  const handleTokenClick = useCallback(async (sourceWord) => {
+  const handleTokenClick = useCallback(async (sourceWord, sentenceToken) => {
     const sourceLower = sourceWord.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
@@ -570,6 +573,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setExpandedWord(null)
       return
     }
+
+    // ponytail: 从句子点击——记录该句 token 的上下文释义/词性/音标，覆盖全局释义。
+    const ctx = (sentenceToken && (sentenceToken.meaning || sentenceToken.morphology || sentenceToken.phonetic))
+      ? { wordKey, meaning: sentenceToken.meaning || '', morphology: sentenceToken.morphology || '', phonetic: sentenceToken.phonetic || '' }
+      : null
 
     // ponytail: 后端分页后无全量 vocab，改为「按词搜索」定位——把该词设为搜索词，
     // 后端 /vocab?q=word 会返回含该词的当前页（通常第 1 页即命中），再展开。
@@ -596,6 +604,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     setTimeout(() => {
       setExpandedWord(wordKey)
+      setActiveSentenceContext(ctx)
       speakText(wordKey, sourceLang)
       fetchWordDetail(wordKey)
     }, 150)
@@ -610,6 +619,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setExpandedWord(null)
       return
     }
+    setActiveSentenceContext(null) // 直接点单词表——用全局释义
     speakText(word.word, actualSourceLang)
     scrollToWord(wordKey, 0)
     setTimeout(() => {
@@ -644,6 +654,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setExpandedWord(null)
       return
     }
+    setActiveSentenceContext(null) // 全局词表——无句子上下文
     speakText(word.word, actualSourceLang)
     scrollToGlobalWord(word.word, 0)
     setTimeout(async () => {
@@ -752,6 +763,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     })
   }, [pagedFilteredVocab])
 
+  // ponytail: 在当前句子的 token 数组里找出与可点击文本对应的那个 token（含其上下文释义/词性/音标）。
+  const findTokenForPart = useCallback((tokens, part) => {
+    if (!tokens || !part) return null
+    const partLower = part.toLowerCase()
+    const partStripped = stripEdgePunct(partLower)
+    return tokens.find(tk => {
+      if (!tk || typeof tk.text !== 'string') return false
+      const tLower = tk.text.toLowerCase()
+      if (tLower === partLower) return true
+      const tStripped = stripEdgePunct(tLower)
+      if (tStripped && tStripped === partStripped) return true
+      return false
+    }) || null
+  }, [])
+
   const renderOriginalSentence = (item) => {
     const sentence = item.sentence || ''
     const tr = item.translation_result
@@ -787,7 +813,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             return (
               <span
                 key={i}
-                onClick={(e) => { e.stopPropagation(); handleTokenClick(part) }}
+                onClick={(e) => { e.stopPropagation(); handleTokenClick(part, findTokenForPart(tokens, part)) }}
                 className="cursor-pointer rounded px-0.5 -mx-0.5 hover:bg-amber-100 hover:text-amber-800 transition-colors duration-150 border-b border-amber-300/50"
               >
                 {part}
@@ -1379,6 +1405,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                         const isExpanded = expandedWord === wordKey
                         const isLoading = loadingWords[wordKey]
                         const detail = wordDetails[wordKey]
+                        // ponytail: 若是从句子点击进来的，用该句 token 的释义/词性/音标覆盖全局释义。
+                        const ctx = (activeSentenceContext && activeSentenceContext.wordKey === wordKey) ? activeSentenceContext : null
 
                         return (
                           <motion.div
@@ -1446,10 +1474,25 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                           <h3 className="label-warm mb-0.5 flex items-center gap-1">
                                             <Brain className="w-3 h-3 text-amber-500" />
                                             {t.definition || '释义'}
+                                            {ctx && (
+                                              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium tracking-wide">
+                                                {t.thisSentenceContext || '本句上下文'}
+                                              </span>
+                                            )}
                                           </h3>
                                           <p className="text-[13px] text-ink-700 leading-relaxed">
-                                            {detail.enriched_meaning || detail.meaning || detail.context_meaning}
+                                            {ctx ? (ctx.meaning || detail.enriched_meaning || detail.meaning || detail.context_meaning) : (detail.enriched_meaning || detail.meaning || detail.context_meaning)}
                                           </p>
+                                          {ctx && (ctx.morphology || ctx.phonetic) && (
+                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                              {ctx.morphology && (
+                                                <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide">{ctx.morphology}</span>
+                                              )}
+                                              {ctx.phonetic && (
+                                                <span className="text-[11px] text-ink-400 ipa-font">{ctx.phonetic.startsWith('/') ? ctx.phonetic : `/${ctx.phonetic}/`}</span>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                         <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={sourceLang} hideDefinition />
                                       </div>
