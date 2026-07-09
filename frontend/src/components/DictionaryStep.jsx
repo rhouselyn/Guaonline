@@ -552,7 +552,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceWord.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    const matchedWord = vocab.find(w => {
+    const matchedWord = pagedFilteredVocab.find(w => {
       const wordLower = w.word.toLowerCase()
       if (wordLower === sourceLower) return true
       if (wordLower === sourceNoHyphen) return true
@@ -602,7 +602,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
     if (!isDesktop) switchPanel(1)
-  }, [vocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
+  }, [pagedFilteredVocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -740,7 +740,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceText.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    return vocab.some(w => {
+    return pagedFilteredVocab.some(w => {
       const wordLower = w.word.toLowerCase()
       if (wordLower === sourceLower) return true
       if (wordLower === sourceNoHyphen) return true
@@ -750,7 +750,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (sourceStripped && sourceStripped !== sourceLower && w.tokens && w.tokens.some(t => t.toLowerCase() === sourceStripped)) return true
       return false
     })
-  }, [vocab])
+  }, [pagedFilteredVocab])
 
   const renderOriginalSentence = (item) => {
     const sentence = item.sentence || ''
@@ -765,7 +765,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         })
       : []
 
-    const vocabTexts = vocab.map(w => w.word).filter(Boolean)
+    const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
 
     const allWords = [...new Set([...tokenTexts, ...vocabTexts])]
     if (allWords.length === 0) {
@@ -1112,7 +1112,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                       <pre className="text-[13px] text-amber-900 leading-relaxed whitespace-pre-wrap font-sans">{entryPrompt}</pre>
                     </div>
                   )}
-                  <pre className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText || safeSentenceTranslations.map(item => item.sentence || '').join('\n')}</pre>
+                  <pre className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText || pagedFilteredSentences.map(item => item.sentence || '').join('\n')}</pre>
                 </div>
               ) : pagedFilteredSentences.length > 0 ? (
                 <div className="divide-y divide-aged-200/60">
@@ -1155,7 +1155,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                             >
                               <div className="border-t border-aged-200/60 p-4 bg-parchment-50/50">
                                 <SentenceDetail
-                                  sentenceTranslation={safeSentenceTranslations[originalIndex]}
+                                  sentenceTranslation={item}
                                   t={t}
                                 />
                               </div>
