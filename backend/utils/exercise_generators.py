@@ -38,8 +38,8 @@ class _LLMApiShim:
 async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None, fixed_words=None):
     """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。
 
-    ponytail: fixed_words 非空时（Stage2 充实）在 system_prompt 末尾追加强制词表约束，
-    要求 translation 数组严格等于该词表。与 _enforce_word_list 结构性回填互为双保险。
+    ponytail: fixed_words 非空时（Stage2 充实）在 system_prompt 末尾追加预填 JSON 骨架，
+    text 全部预填、其余字段留 "___" 待 LLM 填空。LLM 只需替换占位符，无法增删 text。
     """
     source_lang_name = get_lang_name(source_lang)
     target_lang_name = get_lang_name(target_lang)
@@ -283,40 +283,6 @@ async def _gateway_stage1_segment(user_id, tier, sentence, source_lang, context_
         if c:
             cleaned.append(c)
     return cleaned
-
-
-def _enforce_word_list(llm_result, fixed_words, sentence):
-    """ponytail: 以 Stage1 固定词表为准，把 LLM 返回的 phonetic/morphology/meaning 按 lower(text) 回填。
-    结构性保证 translation 数组 == fixed_words（顺序/数量一致），缺失属性留空串。
-    与 prompt 强制词表互为双保险——prompt 偏了也不漏词。透传 tokenized_translation 等其它字段。
-    """
-    if not isinstance(llm_result, dict):
-        llm_result = {}
-
-    llm_trans = llm_result.get("translation", []) if isinstance(llm_result.get("translation"), list) else []
-    info_by_key = {}
-    for tok in llm_trans:
-        if not isinstance(tok, dict) or not tok.get("text"):
-            continue
-        key = strip_edge_punctuation(str(tok["text"])).lower()
-        if key:
-            info_by_key[key] = tok
-
-    enforced = []
-    for w in fixed_words:
-        info = info_by_key.get(w.lower())
-        enforced.append({
-            "text": w,
-            "phonetic": (info.get("phonetic", "") if info else "") or "",
-            "morphology": (info.get("morphology", "") if info else "") or "",
-            "meaning": (info.get("meaning", "") if info else "") or "",
-        })
-
-    result = dict(llm_result)
-    # ponytail: original 一律以传入的真实句子为准（ground truth），不信 LLM 回填，避免 echo 偏差
-    result["original"] = sentence
-    result["translation"] = enforced
-    return result
 
 
 async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning, context, target_lang, source_lang, temperature):
@@ -1062,8 +1028,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 raw = await _gateway_process_text_with_dictionary(
                     user_id, tier, sentence, source_lang, target_lang, _ctx_for(idx), fixed_words=words
                 )
-                enforced = _enforce_word_list(raw, words, sentence)
-                enforced = text_processor.validate_and_complete_translation(sentence, enforced, source_lang)
+                enforced = text_processor.validate_and_complete_translation(sentence, raw, source_lang)
                 return idx, {"sentence": sentence, "source_lang": source_lang, "translation_result": enforced}
             except Exception as e:
                 print(f"[ERROR] 句子 {idx+1} Stage2 充实失败: {e}")
