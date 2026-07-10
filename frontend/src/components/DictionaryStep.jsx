@@ -293,8 +293,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
 
-  // ponytail: 单词表面板用分页 pagedVocab；句子高亮/点击改用句子自身 tokens（见 renderOriginalSentence / handleTokenClick），
-  // 不再依赖分页 vocab 做高亮——分页只有 50 个词，跨页词会漏链接。
   const pagedFilteredVocab = pagedVocab
   const pagedFilteredSentences = pagedSent
 
@@ -568,9 +566,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return false
     })
 
-    // ponytail: 词不在当前分页——但句子 token 有这个词，仍可点击（后续 setVocabSearch 会通过 API 定位）
-    const wordKey = matchedWord?.word || sentenceToken?.text
-    if (!wordKey) return
+    if (!matchedWord) return
+
+    const wordKey = matchedWord.word
     if (expandedWord === wordKey) {
       setExpandedWord(null)
       return
@@ -810,8 +808,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       <div className="font-medium text-[15px] text-ink-800 mb-1.5 leading-relaxed sentence-text">
         {parts.map((part, i) => {
           if (!part) return null
-          // ponytail: 优先用句子自身 tokens 判断可点击性（永远完整），无 tokens 时回退到 vocab 匹配
-          const clickable = tokens ? !!findTokenForPart(tokens, part) : findVocabWordBySourceText(part)
+          const clickable = findVocabWordBySourceText(part)
           if (clickable) {
             return (
               <span
@@ -851,20 +848,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <span>{t.prevPage || '上一页'}</span>
           </button>
           <span className="text-[11px] text-ink-400 tabular-nums">{currentPage} / {totalPages}</span>
-          <input
-            type="number"
-            min={1}
-            max={totalPages}
-            placeholder={`${t.jumpToPage || '跳至'}`}
-            className="w-12 text-[11px] text-center border border-aged-200 rounded-sm px-1 py-0.5 focus:outline-none focus:border-amber-300"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const p = parseInt(e.target.value, 10)
-                if (p >= 1 && p <= totalPages) { onPageChange(p); e.target.value = '' }
-                e.target.blur()
-              }
-            }}
-          />
           <button
             onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
@@ -919,25 +902,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
-        {totalPages > 7 && (
-          <div className="flex items-center gap-1 ml-2">
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              placeholder={`${t.jumpToPage || '跳至'}`}
-              className="w-12 text-[11px] text-center border border-aged-200 rounded-sm px-1 py-0.5 focus:outline-none focus:border-amber-300"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const p = parseInt(e.target.value, 10)
-                  if (p >= 1 && p <= totalPages) { onPageChange(p); e.target.value = '' }
-                  e.target.blur()
-                }
-              }}
-            />
-            <span className="text-[10px] text-aged-300">/ {totalPages}</span>
-          </div>
-        )}
       </div>
     )
   }
@@ -990,21 +954,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
-              <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-                {progress}%
-              </span>
-              <div className={barCls}>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.4, ease: 'easeOut' }}
-                  className="progress-warm-bar"
-                />
-              </div>
-              <span className="text-[10px] text-ink-400 whitespace-nowrap">
-                {t.processingSentences || '处理句子中...'}
-              </span>
+            <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
+              {safeProcessingInfo.current}/{safeProcessingInfo.total}
+            </span>
+            <div className={barCls}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="progress-warm-bar"
+              />
             </div>
+            <span className="text-[10px] text-ink-400 whitespace-nowrap">
+              {t.processingSentences || '处理句子中...'}
+            </span>
+          </div>
         ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
           <div className={innerCls}>
             <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
@@ -1464,18 +1428,18 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                 <span className={`text-[14px] font-bold text-ink-800 tracking-tight shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
                                   {word.word}
                                 </span>
-                                {(() => { const ipa = ctx?.phonetic || word.ipa; return ipa && (
+                                {word.ipa && (
                                   <span className={`text-[11px] text-ink-400 ipa-font shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
-                                    {ipa.startsWith('/') ? ipa : `/${ipa}/`}
+                                    {word.ipa.startsWith('/') ? word.ipa : `/${word.ipa}/`}
                                   </span>
-                                ) })()}
-                                {(ctx?.morphology || word.morphology) && (
+                                )}
+                                {word.morphology && (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide shrink-0">
-                                    {ctx?.morphology || word.morphology}
+                                    {word.morphology}
                                   </span>
                                 )}
                                 <span className={`text-[12px] text-ink-500 truncate ${vocabDisplayMode === 1 && !isExpanded ? 'invisible' : ''}`}>
-                                  {ctx?.meaning || meaningOverrides[word.word] || word.meaning || word.context_meaning}
+                                  {meaningOverrides[word.word] || word.meaning || word.context_meaning}
                                 </span>
                               </div>
                               {isExpanded && (
@@ -1512,10 +1476,25 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                           <h3 className="label-warm mb-0.5 flex items-center gap-1">
                                             <Brain className="w-3 h-3 text-amber-500" />
                                             {t.definition || '释义'}
+                                            {ctx && (
+                                              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium tracking-wide">
+                                                {t.thisSentenceContext || '本句上下文'}
+                                              </span>
+                                            )}
                                           </h3>
                                           <p className="text-[13px] text-ink-700 leading-relaxed">
-                                            {detail.enriched_meaning || detail.meaning || detail.context_meaning}
+                                            {ctx ? (ctx.meaning || detail.enriched_meaning || detail.meaning || detail.context_meaning) : (detail.enriched_meaning || detail.meaning || detail.context_meaning)}
                                           </p>
+                                          {ctx && (ctx.morphology || ctx.phonetic) && (
+                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                              {ctx.morphology && (
+                                                <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide">{ctx.morphology}</span>
+                                              )}
+                                              {ctx.phonetic && (
+                                                <span className="text-[11px] text-ink-400 ipa-font">{ctx.phonetic.startsWith('/') ? ctx.phonetic : `/${ctx.phonetic}/`}</span>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                         <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={sourceLang} hideDefinition />
                                       </div>

@@ -402,10 +402,6 @@ function App() {
       }
       if (status.vocab) {
         setVocabLength(status.vocab.length)
-        setVocab(status.vocab)
-      }
-      if (status.sentence_translations) {
-        setSentenceTranslations(status.sentence_translations)
       }
       if (status.progress !== undefined) {
         setProgress(status.progress)
