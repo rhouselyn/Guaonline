@@ -61,7 +61,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [titleInput, setTitleInput] = useState('')
   const [vocabPage, setVocabPage] = useState(saved.vocabPage || 1)
   const [sentencePage, setSentencePage] = useState(saved.sentencePage || 1)
-  const [jumpPage, setJumpPage] = useState('')
   const [globalVocabPage, setGlobalVocabPage] = useState(saved.globalVocabPage || 1)
   const [wordGenProgress, setWordGenProgress] = useState(null)
   const [meaningOverrides, setMeaningOverrides] = useState({})
@@ -836,16 +835,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
-    
-    const handleJump = (e) => {
-      e.preventDefault()
-      const page = parseInt(jumpPage, 10)
-      if (!isNaN(page) && page >= 1 && page <= totalPages) {
-        onPageChange(page)
-      }
-      setJumpPage('')
-    }
-    
+    // 手机端：简化分页器（上一页/页码/下一页），占满一行
     if (!isDesktop) {
       return (
         <div className="flex items-center justify-between gap-2 py-1.5 px-3 border-t border-aged-200/60 bg-parchment-50/40">
@@ -857,18 +847,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>{t.prevPage || '上一页'}</span>
           </button>
-          <form onSubmit={handleJump} className="flex items-center gap-1">
-            <input
-              type="number"
-              min="1"
-              max={totalPages}
-              value={jumpPage}
-              onChange={(e) => setJumpPage(e.target.value)}
-              placeholder={String(currentPage)}
-              className="w-12 text-[11px] text-center px-1.5 py-0.5 border border-aged-200 rounded-sm bg-parchment-50 text-ink-600 focus:outline-none focus:border-amber-400"
-            />
-            <span className="text-[11px] text-ink-400">/ {totalPages}</span>
-          </form>
+          <span className="text-[11px] text-ink-400 tabular-nums">{currentPage} / {totalPages}</span>
           <button
             onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
@@ -880,6 +859,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </div>
       )
     }
+    // 桌面端：原有数字分页器
     return (
       <div className="flex items-center justify-center gap-1 py-1.5 border-t border-aged-200/60 bg-parchment-50/40">
         <button
@@ -922,23 +902,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
-        <form onSubmit={handleJump} className="flex items-center gap-1 ml-2">
-          <span className="text-[10px] text-ink-400">{t.jumpToPage || '跳转到'}</span>
-          <input
-            type="number"
-            min="1"
-            max={totalPages}
-            value={jumpPage}
-            onChange={(e) => setJumpPage(e.target.value)}
-            className="w-10 text-[10px] text-center px-1.5 py-0.5 border border-aged-200 rounded-sm bg-parchment-50 text-ink-600 focus:outline-none focus:border-amber-400"
-          />
-          <button
-            type="submit"
-            className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded-sm hover:bg-amber-100 hover:text-amber-700 transition-colors"
-          >
-            {t.go || '确定'}
-          </button>
-        </form>
       </div>
     )
   }
