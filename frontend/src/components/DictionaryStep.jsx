@@ -293,8 +293,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
 
-  const pagedFilteredVocab = pagedVocab
-  const pagedFilteredSentences = pagedSent
+  const pagedFilteredVocab = progress < 100 && Array.isArray(vocab) && vocab.length > 0 ? vocab : pagedVocab
+  const pagedFilteredSentences = progress < 100 && Array.isArray(sentenceTranslations) && sentenceTranslations.length > 0 ? sentenceTranslations : pagedSent
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -954,21 +954,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
-            <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-              {safeProcessingInfo.current}/{safeProcessingInfo.total}
-            </span>
-            <div className={barCls}>
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-                className="progress-warm-bar"
-              />
+              <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
+                {progress}%
+              </span>
+              <div className={barCls}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                  className="progress-warm-bar"
+                />
+              </div>
+              <span className="text-[10px] text-ink-400 whitespace-nowrap">
+                {t.processingSentences || '处理句子中...'}
+              </span>
             </div>
-            <span className="text-[10px] text-ink-400 whitespace-nowrap">
-              {t.processingSentences || '处理句子中...'}
-            </span>
-          </div>
         ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
           <div className={innerCls}>
             <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
