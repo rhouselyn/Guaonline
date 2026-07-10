@@ -954,9 +954,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           </div>
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
-            <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-              {safeProcessingInfo.current}/{safeProcessingInfo.total}
-            </span>
             <div className={barCls}>
               <motion.div
                 initial={{ width: 0 }}
@@ -965,15 +962,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 className="progress-warm-bar"
               />
             </div>
-            <span className="text-[10px] text-ink-400 whitespace-nowrap">
-              {t.processingSentences || '处理句子中...'}
+            <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
+              {progress}%
             </span>
           </div>
         ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
           <div className={innerCls}>
-            <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
-              {wordGenProgress.completed}/{wordGenProgress.total}
-            </span>
             <div className={barCls}>
               <motion.div
                 initial={{ width: 0 }}
@@ -982,8 +976,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 className="progress-warm-bar"
               />
             </div>
-            <span className="text-[10px] text-amber-500 whitespace-nowrap">
-              {t.generatingWordDetails || '生成单词详情中...'}
+            <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
+              {wordGenProgress.total > 0 ? Math.round(wordGenProgress.completed / wordGenProgress.total * 100) : 0}%
             </span>
           </div>
         ) : null}

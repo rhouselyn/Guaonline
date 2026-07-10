@@ -1050,6 +1050,9 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 else:
                     incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
             storage.save_pipeline_data(file_id, incremental_pipeline)
+            # ponytail: 阶段1 半成品也写入 vocab 表——前端词汇分表 + 句子跳转链接读 DB，
+            # 阶段1 分词后纯单词立即可见，阶段2 填释义后覆盖更新
+            storage.save_vocab(file_id, unique_partial)
             print(f"[DEBUG] 更新状态: 进度 {progress}%, 已完成 {len(completed_indices)} 句, 词汇 {len(unique_partial)} 个")
 
         async def process_single_sentence(idx, sentence):
@@ -1078,10 +1081,6 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_tok_start = time.time()
             print(f"[DEBUG] 句子 {idx+1}/{total_sentences} 阶段1分词: {repr(sentence)}")
             tokens = await _gateway_tokenize_sentence(user_id, tier, sentence, source_lang, context_sentences)
-            if not tokens:
-                # ponytail: LLM 分词失败兜底——本地 extract_words，保证流程不中断
-                tokens = [strip_edge_punctuation(w) for w in text_processor.extract_words(sentence, source_lang) if not is_punctuation_only(w)]
-                tokens = [t for t in tokens if t]
             t_tok_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 阶段1分词: {t_tok_end - t_tok_start:.3f}s, {len(tokens)} 词")
 
