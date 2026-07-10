@@ -23,10 +23,6 @@ class _LegacyLLMApiShim:
         from utils.exercise_generators import _gateway_generate_multiple_choice
         return await _gateway_generate_multiple_choice(None, "free", word, correct_meaning, context, target_lang, source_lang, temperature)
 
-    async def process_remaining_words(self, words, source_lang, target_lang, context):
-        from utils.exercise_generators import _gateway_process_remaining_words
-        return await _gateway_process_remaining_words(None, "free", words, source_lang, target_lang, context)
-
     async def call_llm(self, messages, tools=None, temperature=0.0, max_tokens=None, user_id=None):
         from utils.llm_gateway import gateway
         return await gateway.call(user_id or "system", "free", messages, temperature=temperature, max_tokens=max_tokens, request_type="llm_call", tools=tools)

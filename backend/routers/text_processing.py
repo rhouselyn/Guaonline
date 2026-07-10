@@ -12,7 +12,7 @@ from starlette.responses import StreamingResponse
 from llm_api import detect_language, get_lang_name
 from utils.llm_gateway import gateway
 from utils.state import storage, processing_status
-from utils.exercise_generators import process_text_background, generate_title, retry_failed_sentences, refill_missing_words_background, _detect_missing_and_bold
+from utils.exercise_generators import process_text_background, generate_title, retry_failed_sentences
 from auth.deps import get_current_user, require_auth, TokenData
 from auth.jwt_utils import decode_token
 from auth.quota import check_and_refill_quota, consume_quota
@@ -353,52 +353,6 @@ async def retry_sentences(file_id: str, background_tasks: BackgroundTasks, curre
                                   "total_sentences": total, "preprocess": "retrying", **_preserve}
     background_tasks.add_task(retry_failed_sentences, file_id, current_user.user_id, current_user.tier.value)
     return {"file_id": file_id, "status": "processing", "preprocess": "retrying"}
-
-
-@router.post("/process-text/{file_id}/refill-missing-words")
-async def refill_missing_words(file_id: str, background_tasks: BackgroundTasks,
-                               current_user: TokenData = Depends(require_auth)):
-    """进入条目时检查并补漏缺词。快速检测（不调 LLM）→ 有漏词则后台补漏 → 返回 needs_refill。
-
-    无漏词返回 needs_refill=false；有漏词则把状态置为 refilling 并启动后台任务，
-    前端通过轮询 status 拿 preprocess=refilling 进度，实时更新句子与词汇表。
-    """
-    # 正在处理/重试中的条目不干预——主流程本身已含补漏
-    st = processing_status.get(file_id)
-    if st and st.get("status") == "processing":
-        return {"file_id": file_id, "needs_refill": False, "skipping": True}
-
-    pipeline = storage.load_pipeline_data(file_id) or []
-    settings = storage.load_language_settings(file_id) or {}
-    source_lang = settings.get("source_lang", "en")
-
-    # 快速检测：只跑 _detect_missing_and_bold（纯 CPU，不调 LLM）
-    needs_refill = 0
-    for sd in pipeline:
-        if not isinstance(sd, dict):
-            continue
-        sentence = sd.get("sentence", "")
-        tr = sd.get("translation_result", {})
-        if not sentence or not isinstance(tr, dict):
-            continue
-        words = text_processor.extract_words(sentence, source_lang)
-        missing_spans, _ = _detect_missing_and_bold(sentence, words, tr, source_lang)
-        if missing_spans:
-            needs_refill += 1
-
-    _preserve = {k: st.get(k) for k in ("original_text", "title") if st and k in st}
-    if needs_refill == 0:
-        # 无漏词：确保 status 为 completed（处理后端重启后 status 丢失的 404 场景）
-        processing_status[file_id] = {"status": "completed", "progress": 100, **_preserve}
-        return {"file_id": file_id, "needs_refill": False}
-
-    processing_status[file_id] = {
-        "status": "processing", "progress": 0,
-        "current_sentence": 0, "total_sentences": needs_refill,
-        "preprocess": "refilling", **_preserve
-    }
-    background_tasks.add_task(refill_missing_words_background, file_id, current_user.user_id, current_user.tier.value)
-    return {"file_id": file_id, "needs_refill": True, "missing_count": needs_refill}
 
 
 @router.get("/status/{file_id}")
