@@ -62,9 +62,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [vocabPage, setVocabPage] = useState(saved.vocabPage || 1)
   const [sentencePage, setSentencePage] = useState(saved.sentencePage || 1)
   const [globalVocabPage, setGlobalVocabPage] = useState(saved.globalVocabPage || 1)
-  const [vocabJumpInput, setVocabJumpInput] = useState('')
-  const [sentenceJumpInput, setSentenceJumpInput] = useState('')
-  const [globalVocabJumpInput, setGlobalVocabJumpInput] = useState('')
   const [wordGenProgress, setWordGenProgress] = useState(null)
   const [meaningOverrides, setMeaningOverrides] = useState({})
   const [favoriteWords, setFavoriteWords] = useState([])
@@ -836,19 +833,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return <div className={`text-ink-600 text-[14px] ${sentenceDisplayMode === 1 ? 'invisible' : ''}`}>{text}</div>
   }
 
-  const renderPagination = (currentPage, totalPages, onPageChange, jumpInput, setJumpInput) => {
+  const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
-    // 手机端：简化分页器（上一页/页码输入/下一页），占满一行
+    // 手机端：简化分页器（上一页/页码/下一页），占满一行
     if (!isDesktop) {
-      const handleJump = (e) => {
-        if (e.key === 'Enter') {
-          const num = parseInt(jumpInput, 10)
-          if (num >= 1 && num <= totalPages) {
-            onPageChange(num)
-            setJumpInput('')
-          }
-        }
-      }
       return (
         <div className="flex items-center justify-between gap-2 py-1.5 px-3 border-t border-aged-200/60 bg-parchment-50/40">
           <button
@@ -859,20 +847,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>{t.prevPage || '上一页'}</span>
           </button>
-          <div className="flex items-center gap-1">
-            <input
-              type="number"
-              min="1"
-              max={totalPages}
-              value={jumpInput}
-              onChange={(e) => setJumpInput(e.target.value)}
-              onKeyDown={handleJump}
-              onBlur={() => setJumpInput('')}
-              placeholder={String(currentPage)}
-              className="w-14 text-center text-[11px] text-ink-600 bg-white border border-aged-200 rounded-sm px-1 py-0.5 outline-none focus:border-amber-400 placeholder:text-ink-300"
-            />
-            <span className="text-[11px] text-ink-400">/ {totalPages}</span>
-          </div>
+          <span className="text-[11px] text-ink-400 tabular-nums">{currentPage} / {totalPages}</span>
           <button
             onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
@@ -1230,7 +1205,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 </div>
               )}
             </div>
-            {renderPagination(sentencePage, sentenceTotalPages, setSentencePage, sentenceJumpInput, setSentenceJumpInput)}
+            {renderPagination(sentencePage, sentenceTotalPages, setSentencePage)}
           </div>
         </div>
 
@@ -1530,8 +1505,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               </div>
             </div>
             {showGlobalVocab
-              ? renderPagination(globalVocabPage, globalVocabTotalPages, setGlobalVocabPage, globalVocabJumpInput, setGlobalVocabJumpInput)
-              : renderPagination(vocabPage, vocabTotalPages, setVocabPage, vocabJumpInput, setVocabJumpInput)
+              ? renderPagination(globalVocabPage, globalVocabTotalPages, setGlobalVocabPage)
+              : renderPagination(vocabPage, vocabTotalPages, setVocabPage)
             }
           </div>
         </div>
