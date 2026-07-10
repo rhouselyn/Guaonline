@@ -450,21 +450,21 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
 
           {/* Body: Sidebar + Content */}
           <div className="flex flex-1 min-h-0 flex-row">
-            {/* Left Sidebar */}
-            <div className="flex flex-col w-[110px] sm:w-[130px] shrink-0 border-r border-aged-200/60 bg-parchment-100/40 py-2">
+            {/* Left Sidebar — 固定比例（1/4），适应全尺寸 */}
+            <div className="flex flex-col w-1/4 shrink-0 border-r border-aged-200/60 bg-parchment-100/40 py-2">
               {SECTIONS.map(key => {
                 const isActive = activeSection === key
                 return (
                   <button
                     key={key}
                     onClick={() => setActiveSection(key)}
-                    className={`w-full flex items-center px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                    className={`w-full flex items-center px-3 sm:px-4 py-2.5 text-xs font-medium transition-colors text-left ${
                       isActive
                         ? 'bg-amber-50/80 text-amber-600 border-r-2 border-amber-400 shrink-0'
                         : 'text-ink-500 hover:text-ink-700 hover:bg-parchment-50/60 shrink-0'
                     }`}
                   >
-                    <span>{sectionLabels[key]}</span>
+                    <span className="truncate">{sectionLabels[key]}</span>
                   </button>
                 )
               })}

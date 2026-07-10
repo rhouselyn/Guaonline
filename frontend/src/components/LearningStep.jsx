@@ -68,7 +68,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-3xl mx-auto pb-nav-safe md:pb-0"
+      className="max-w-3xl mx-auto"
       onTouchStart={(e) => {
         if (isDesktop) return
         const t = e.touches[0]
@@ -122,6 +122,26 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
           )}
         </div>
       </div>
+
+      {/* 手机端顶部模式切换 — 紧凑分段控件 */}
+      {!isDesktop && (
+        <div className="flex justify-center mb-4 md:hidden">
+          <div className="inline-flex items-center bg-parchment-100 rounded-full p-0.5">
+            <button
+              onClick={() => switchMode(0)}
+              className={`px-5 py-1 rounded-full text-xs font-bold transition-all ${activeMode === 0 ? 'bg-amber-400 text-white shadow-sm' : 'text-ink-400'}`}
+            >
+              {t.question || '题目'}
+            </button>
+            <button
+              onClick={() => switchMode(1)}
+              className={`px-5 py-1 rounded-full text-xs font-bold transition-all ${activeMode === 1 ? 'bg-amber-400 text-white shadow-sm' : 'text-ink-400'}`}
+            >
+              {t.wordCard || '单词卡'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {activeMode === 0 ? (
@@ -376,26 +396,6 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* 手机端底部 Tab 栏 — 纯图标，与主导航同风格防抖：固定高度 + 恒定图标尺寸 + 始终渲染的顶部指示条，消除切换浮动 */}
-      {!isDesktop && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 flex h-14 bg-parchment-50/95 backdrop-blur-md border-t border-aged-200 nav-safe-bottom md:hidden">
-          <button
-            onClick={() => switchMode(0)}
-            className="flex-1 flex items-center justify-center relative"
-          >
-            <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${activeMode === 0 ? 'bg-amber-500' : 'bg-transparent'}`} />
-            <Languages className={`w-6 h-6 transition-colors duration-200 ${activeMode === 0 ? 'text-amber-600' : 'text-aged-300'}`} />
-          </button>
-          <button
-            onClick={() => switchMode(1)}
-            className="flex-1 flex items-center justify-center relative"
-          >
-            <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full transition-colors duration-200 ${activeMode === 1 ? 'bg-amber-500' : 'bg-transparent'}`} />
-            <BookOpen className={`w-6 h-6 transition-colors duration-200 ${activeMode === 1 ? 'text-amber-600' : 'text-aged-300'}`} />
-          </button>
-        </div>
-      )}
     </motion.div>
   )
 }

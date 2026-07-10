@@ -269,46 +269,46 @@ function AllUnitsStep({
         </button>
 
         {fileTitle && (
-          <span className="text-base font-bold text-ink-500 truncate min-w-0 flex-1 md:flex-none md:max-w-[280px]">
+          <span className="text-base font-bold text-ink-500 truncate min-w-0 max-w-[55%] md:max-w-[280px]">
             {fileTitle}
           </span>
         )}
 
-        <div className="flex-1 min-w-0 hidden md:block" />
+        <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none group">
+            <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              {t.onlyNewWords || '只学新词'}
+            </span>
+            <div className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                checked={onlyNewWords || false}
+                onChange={(e) => onOnlyNewWordsChange?.(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
+              <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
+            </div>
+          </label>
 
-        <label className="flex items-center gap-1.5 cursor-pointer select-none group mr-1">
-          <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
-            <Sparkles className="w-3 h-3" />
-            {t.onlyNewWords || '只学新词'}
-          </span>
-          <div className="relative inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={onlyNewWords || false}
-              onChange={(e) => onOnlyNewWordsChange?.(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
-            <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
-          </div>
-        </label>
-
-        <label className="flex items-center gap-1.5 cursor-pointer select-none group mr-1">
-          <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
-            <Headphones className="w-3 h-3" />
-            {t.skipListening || '跳过听力'}
-          </span>
-          <div className="relative inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={skipListening || false}
-              onChange={(e) => onSkipListeningChange?.(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
-            <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
-          </div>
-        </label>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none group">
+            <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
+              <Headphones className="w-3 h-3" />
+              {t.skipListening || '跳过听力'}
+            </span>
+            <div className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                checked={skipListening || false}
+                onChange={(e) => onSkipListeningChange?.(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="toggle-warm-off peer-checked:bg-amber-400 peer-focus:outline-none" />
+              <div className="absolute left-[2px] top-[3px] toggle-warm-dot peer-checked:translate-x-4" />
+            </div>
+          </label>
+        </div>
 
         <button
           onClick={onHome}
