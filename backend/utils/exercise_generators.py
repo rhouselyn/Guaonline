@@ -29,14 +29,19 @@ class _LLMApiShim:
         self._user_id = user_id
         self._tier = tier
 
-    async def process_text_with_dictionary(self, text, source_lang, target_lang, context_sentences=None):
+    async def process_text_with_dictionary(self, text, source_lang, target_lang, context_sentences=None, prefill_tokens=None):
         return await _gateway_process_text_with_dictionary(
-            self._user_id, self._tier, text, source_lang, target_lang, context_sentences
+            self._user_id, self._tier, text, source_lang, target_lang, context_sentences, prefill_tokens
         )
 
 
-async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
-    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
+async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None, prefill_tokens=None):
+    """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。
+
+    ponytail: 两阶段处理的阶段2。若传入 prefill_tokens（阶段1 LLM 分词结果），
+    则把分词模板塞进 user message，LLM 只填 phonetic/morphology/meaning，
+    返回后用 _align_translation_to_tokens 强制对齐 text，确保与分词完全一致。
+    """
     source_lang_name = get_lang_name(source_lang)
     target_lang_name = get_lang_name(target_lang)
 
@@ -141,6 +146,11 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 
     user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
 
+    # ponytail: 阶段2 预填分词模板——text 已由阶段1 确定，LLM 只填释义字段，不得改 text
+    if prefill_tokens:
+        template = [{"text": t, "phonetic": "", "morphology": "", "meaning": ""} for t in prefill_tokens]
+        user_content += "\n\n【极其重要·预填分词模板】translation 数组必须严格使用以下模板的 text 字段（顺序、数量、内容完全一致），你只需为每个条目填充 phonetic/morphology/meaning，绝对不得增删条目或修改任何 text：\n" + json.dumps(template, ensure_ascii=False, indent=2)
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
@@ -160,17 +170,146 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
         if tool_calls:
             arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
             result = json.loads(arguments_str)
+            if prefill_tokens and isinstance(result, dict) and result.get("translation"):
+                result = _align_translation_to_tokens(result, prefill_tokens)
             return result
         # 如果没有 tool_calls，尝试从 content 解析 JSON
         content = message.get("content", "")
         if content:
             try:
-                return json.loads(content)
+                result = json.loads(content)
+                if prefill_tokens and isinstance(result, dict) and result.get("translation"):
+                    result = _align_translation_to_tokens(result, prefill_tokens)
+                return result
             except json.JSONDecodeError:
                 pass
     except Exception as e:
         print(f"[WARN] process_text_with_dictionary tool call parse failed: {e}")
     return {}
+
+
+def _align_translation_to_tokens(result, prefill_tokens):
+    """ponytail: 强制把 result['translation'] 的 text 对齐到阶段1 分词结果。
+    LLM 只填释义；若条目数或 text 不一致，按 prefill_tokens 重建，尽量保留 LLM 填的字段。
+    确保最终 translation 的 text 与分词完全一致。"""
+    if not isinstance(result, dict) or not prefill_tokens:
+        return result
+    translation = result.get("translation")
+    if not isinstance(translation, list):
+        return result
+    llm_map = {}
+    for tok in translation:
+        if isinstance(tok, dict) and tok.get("text"):
+            llm_map[tok["text"].lower()] = tok
+    aligned = []
+    for t in prefill_tokens:
+        tok = llm_map.get(t.lower())
+        if isinstance(tok, dict):
+            aligned.append({
+                "text": t,
+                "phonetic": tok.get("phonetic", ""),
+                "morphology": tok.get("morphology", ""),
+                "meaning": tok.get("meaning", ""),
+            })
+        else:
+            aligned.append({"text": t, "phonetic": "", "morphology": "", "meaning": ""})
+    result["translation"] = aligned
+    return result
+
+
+async def _gateway_tokenize_sentence(user_id, tier, text, source_lang, context_sentences=None):
+    """ponytail: 两阶段处理的阶段1——LLM 纯分词，输出无标点的 token 列表。
+    复用 _gateway_process_text_with_dictionary 的分词原则（精简），不生成释义。
+    返回 List[str]；失败返回 []，由调用方用本地 extract_words 兜底。"""
+    source_lang_name = get_lang_name(source_lang)
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "tokenize_sentence",
+            "description": "将句子分词，输出按原句顺序、无标点的词列表",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tokens": {
+                        "type": "array",
+                        "items": {"type": "string", "description": "A single word or fixed multi-word expression. MUST NOT contain any punctuation. Hyphens(-) and apostrophes(') preserved if internal. Follow natural word boundaries of the source language."},
+                        "description": "分词结果，按原句顺序，标点完全丢弃",
+                    },
+                },
+                "required": ["tokens"],
+            },
+        },
+    }]
+
+    context_section = ""
+    if context_sentences:
+        before = context_sentences.get("before", [])
+        after = context_sentences.get("after", [])
+        parts = []
+        if before:
+            parts.append("前文：\n" + "\n".join(before))
+        if after:
+            parts.append("后文：\n" + "\n".join(after))
+        if parts:
+            context_section = "\n【上下文】\n" + "\n".join(parts) + "\n"
+
+    system_prompt = f"""将以下 {source_lang_name} 句子分词，输出无标点的词列表。
+
+你是一个语言专家，精通 {source_lang_name} 的正字法和语法规则。
+
+【分词原则】
+1. 遵循 {source_lang_name} 自身的自然词边界——能否作为独立条目出现在该语言词典中？
+2. 变位/屈折形式是单个词，不要拆分为词干+词缀
+3. 只有当多个词整体含义不可组合、在词典中作为独立词条存在、替换任一词都改变含义时，才合并为一个 token（固定搭配/多词表达）
+4. 标点绝对禁止出现在 token 中（句号、逗号、问号、感叹号、冒号、分号等全部丢弃）
+5. 连字符(-)和撇号(')若是该语言单词的内部组成部分则保留
+6. 所有 token 去标点后按顺序拼接必须等于原句去标点后的内容
+7. 绝对禁止将一个完整的词拆分成字符、音节或语素
+8. token 数量与原文词一一对应，禁止增减
+
+【输出约束】只输出工具调用的 JSON，不要任何其他文本。"""
+
+    user_content = f"{context_section}\n【待分词文本】\n{text}" if context_section else f"【待分词文本】\n{text}"
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=0.0,
+        request_type="tokenize_sentence", tools=tools,
+    )
+
+    try:
+        choice = response.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+        if tool_calls:
+            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
+            result = json.loads(arguments_str)
+            tokens = result.get("tokens", [])
+            if isinstance(tokens, list):
+                cleaned = []
+                for t in tokens:
+                    if isinstance(t, str) and t.strip():
+                        cw = strip_edge_punctuation(t.strip())
+                        if cw and not is_punctuation_only(cw):
+                            cleaned.append(cw)
+                return cleaned
+        content = message.get("content", "")
+        if content:
+            try:
+                result = json.loads(content)
+                tokens = result.get("tokens", [])
+                if isinstance(tokens, list):
+                    return [strip_edge_punctuation(t.strip()) for t in tokens if isinstance(t, str) and t.strip() and not is_punctuation_only(t)]
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        print(f"[WARN] tokenize_sentence parse failed: {e}")
+    return []
 
 
 async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning, context, target_lang, source_lang, temperature):
@@ -852,6 +991,67 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         results_dict = {}
         completed_indices = set()
 
+        def _push_progress(extra_partial=None):
+            """ponytail: 抽取的状态推送——构建 vocab + sentence_translations 并写 processing_status + save_pipeline_data。
+            extra_partial: {idx: sentence_data} 阶段1 半成品，优先级低于 results_dict，
+            让前端在阶段1 分词完成时就能看到 token（释义待阶段2 填）。"""
+            all_completed_translations = []
+            for si in range(total_sentences):
+                if si in results_dict:
+                    all_completed_translations.append(results_dict[si])
+                elif extra_partial and si in extra_partial:
+                    all_completed_translations.append(extra_partial[si])
+                else:
+                    all_completed_translations.append({"sentence": sentences[si], "translation_result": {}})
+
+            partial_vocab = []
+            for si, sd in enumerate(all_completed_translations):
+                tr = sd.get("translation_result", {})
+                if isinstance(tr, dict) and "translation" in tr:
+                    for ti, token in enumerate(tr["translation"]):
+                        if isinstance(token, dict) and "text" in token:
+                            partial_vocab.append({
+                                "word": token["text"],
+                                "ipa": token.get("phonetic", ""),
+                                "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
+                                "tokens": [token["text"]],
+                                "morphology": token.get("morphology", ""),
+                                "sentence_index": si,
+                                "token_index": ti
+                            })
+
+            seen = set()
+            unique_partial = []
+            for entry in partial_vocab:
+                word = entry.get("word", "").lower()
+                if word not in seen and word:
+                    seen.add(word)
+                    unique_partial.append(entry)
+            unique_partial.sort(key=vocab_sort_key)
+
+            progress = int(len(completed_indices) / total_sentences * 100) if total_sentences else 0
+            _preserve = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
+            processing_status[file_id] = {
+                "status": "processing",
+                "progress": progress,
+                "current_sentence": len(completed_indices),
+                "total_sentences": total_sentences,
+                "vocab": unique_partial,
+                "sentence_translations": all_completed_translations,
+                **_preserve
+            }
+
+            incremental_pipeline = []
+            for si in range(total_sentences):
+                if si in results_dict:
+                    incremental_pipeline.append(results_dict[si])
+                elif extra_partial and si in extra_partial:
+                    incremental_pipeline.append(extra_partial[si])
+                else:
+                    incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
+            storage.save_pipeline_data(file_id, incremental_pipeline)
+            print(f"[DEBUG] 更新状态: 进度 {progress}%, 已完成 {len(completed_indices)} 句, 词汇 {len(unique_partial)} 个")
+
         async def process_single_sentence(idx, sentence):
             """处理单句。失败时返回失败哨兵，不抛异常——单句失败不应拖垮整个任务。"""
             if not sentence.strip():
@@ -874,32 +1074,41 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
 
             t_sentence_start = time.time()
 
+            # === 阶段1：LLM 纯分词 ===
+            t_tok_start = time.time()
+            print(f"[DEBUG] 句子 {idx+1}/{total_sentences} 阶段1分词: {repr(sentence)}")
+            tokens = await _gateway_tokenize_sentence(user_id, tier, sentence, source_lang, context_sentences)
+            if not tokens:
+                # ponytail: LLM 分词失败兜底——本地 extract_words，保证流程不中断
+                tokens = [strip_edge_punctuation(w) for w in text_processor.extract_words(sentence, source_lang) if not is_punctuation_only(w)]
+                tokens = [t for t in tokens if t]
+            t_tok_end = time.time()
+            print(f"[TIMING] 句子 {idx+1} 阶段1分词: {t_tok_end - t_tok_start:.3f}s, {len(tokens)} 词")
+
+            # 构建半成品 translation_result（text 有，释义空），预更新前端：
+            # 句子跳转链接（依赖 translation 的 tokenTexts）+ 单词分表（只有词，无释义）立即可用
+            partial_result = {
+                "original": sentence,
+                "translation": [{"text": t, "phonetic": "", "morphology": "", "meaning": ""} for t in tokens],
+                "tokenized_translation": "",
+                "translation_phrases": [],
+                "grammar_explanation": "",
+                "redundant_tokens": [],
+            }
+            partial_data = {"sentence": sentence, "source_lang": source_lang, "translation_result": partial_result}
+            _push_progress(extra_partial={idx: partial_data})
+
+            # === 阶段2：LLM 填释义（用阶段1 tokens 作为预填模板，后端 _align 强制对齐 text）===
             t_llm_start = time.time()
-            print(f"[DEBUG] 正在翻译句子 {idx+1}/{total_sentences}: {repr(sentence)}")
+            print(f"[DEBUG] 句子 {idx+1} 阶段2填释义")
             llm_shim = _LLMApiShim(user_id, tier)
             sentence_translation_result = await text_processor.process_translation(
-                sentence,
-                source_lang,
-                target_lang,
-                llm_shim,
-                context_sentences
+                sentence, source_lang, target_lang, llm_shim, context_sentences, prefill_tokens=tokens
             )
             t_llm_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
+            print(f"[TIMING] 句子 {idx+1} 阶段2填释义: {t_llm_end - t_llm_start:.3f}s")
 
-            t_extract_start = time.time()
-            sentence_words = text_processor.extract_words(sentence, source_lang)
-            t_extract_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
-
-            # ponytail: 补漏——抽到 _fill_missing_words，进入条目批量补漏也复用同一逻辑。
-            sentence_translation_result, missing_spans, retry_count = await _fill_missing_words(
-                sentence, sentence_words, sentence_translation_result, source_lang, target_lang, user_id, tier, f"句子 {idx+1}")
-            if missing_spans:
-                print(f"[DEBUG] 句子 {idx+1} 补漏后仍有漏词(将留空壳): {missing_spans}")
-            elif retry_count > 0:
-                print(f"[DEBUG] 句子 {idx+1} 补漏成功，无漏词")
-
+            # 兜底：补全空字段。阶段1 已分词、阶段2 已对齐，不再需要 _fill_missing_words 补漏
             t_validate_start = time.time()
             sentence_translation_result = text_processor.validate_and_complete_translation(
                 sentence, sentence_translation_result, source_lang
@@ -923,65 +1132,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             if sentence_data is not None:
                 results_dict[idx] = sentence_data
             completed_indices.add(idx)
-
-            max_sequential = -1
-            for ci in sorted(completed_indices):
-                if ci == max_sequential + 1:
-                    max_sequential = ci
-                else:
-                    break
-
-            all_completed_translations = []
-            for si in sorted(results_dict.keys()):
-                all_completed_translations.append(results_dict[si])
-
-            partial_vocab = []
-            for si, sd in enumerate(all_completed_translations):
-                tr = sd.get("translation_result", {})
-                if isinstance(tr, dict) and "translation" in tr:
-                    for ti, token in enumerate(tr["translation"]):
-                        if isinstance(token, dict) and "text" in token:
-                            entry = {
-                                "word": token["text"],
-                                "ipa": token.get("phonetic", ""),
-                                "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
-                                "tokens": [token["text"]],
-                                "morphology": token.get("morphology", ""),
-                                "sentence_index": si,
-                                "token_index": ti
-                            }
-                            partial_vocab.append(entry)
-
-            seen = set()
-            unique_partial = []
-            for entry in partial_vocab:
-                word = entry.get("word", "").lower()
-                if word not in seen and word:
-                    seen.add(word)
-                    unique_partial.append(entry)
-            unique_partial.sort(key=vocab_sort_key)
-
-            progress = int(len(completed_indices) / total_sentences * 100)
-            _preserve3 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
-            processing_status[file_id] = {
-                "status": "processing",
-                "progress": progress,
-                "current_sentence": len(completed_indices),
-                "total_sentences": total_sentences,
-                "vocab": unique_partial,
-                "sentence_translations": all_completed_translations,
-                **_preserve3
-            }
-            print(f"[DEBUG] 更新状态: 进度 {progress}%, 已处理 {len(completed_indices)} 个句子, 词汇 {len(unique_partial)} 个")
-
-            # 增量更新 DB：把已翻译的句子写回 pipeline_data，前端 refetch 即可看到翻译结果
-            incremental_pipeline = []
-            for si in range(total_sentences):
-                if si in results_dict:
-                    incremental_pipeline.append(results_dict[si])
-                else:
-                    incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
-            storage.save_pipeline_data(file_id, incremental_pipeline)
+            _push_progress()
 
         sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
 
