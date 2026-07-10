@@ -95,12 +95,15 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
             <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex-1 flex items-center justify-center min-w-0">
+        <div className="flex-1 flex items-center justify-start min-w-0">
           {totalItemsInUnit > 0 && (
             <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">{(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink-0">
+          {sourceLang && (
+            <span className="text-[10px] font-bold text-ink-400 uppercase border border-aged-200 px-1.5 py-0.5 rounded-sm">{sourceLang.substring(0, 2)}</span>
+          )}
           {onOpenVocabList && (
             <motion.button
               onClick={onOpenVocabList}

@@ -271,7 +271,7 @@ function AllUnitsStep({
         </div>
 
         {fileTitle && (
-          <span className="text-base font-bold text-ink-500 truncate min-w-0 flex-1 text-center px-2">
+          <span className="text-base font-bold text-ink-500 truncate min-w-0 flex-1 text-left px-2">
             {fileTitle}
           </span>
         )}

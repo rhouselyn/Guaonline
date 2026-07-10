@@ -4,8 +4,9 @@ import re
 import random
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
+from auth.deps import require_auth, TokenData
 from text_processor import BACKUP_VOCAB_BY_LANG, is_punctuation_only, is_source_lang_text, strip_edge_punctuation, NO_SPACE_LANGUAGES
 from utils.state import llm_api, storage, word_gen_state
 from utils.helpers import (
@@ -183,7 +184,7 @@ async def get_word_gen_progress(file_id: str):
 
 
 @router.get("/{file_id}/random-word")
-async def get_random_word(file_id: str):
+async def get_random_word(file_id: str, current_user: TokenData = Depends(require_auth)):
     try:
         storage.touch_history_record(file_id)
         vocab = storage.load_vocab(file_id)
@@ -202,7 +203,7 @@ async def get_random_word(file_id: str):
             plan = storage.load_learning_plan(file_id)
 
         # "只学新词" 开关：根据已学单词集合跳过当前位置上的已学单词
-        app_settings = storage.load_user_preferences()
+        app_settings = storage.load_user_preferences(user_id=current_user.user_id)
         only_new_words = bool(app_settings.get("only_new_words", False))
         learned_words = storage.load_learned_words(file_id) if only_new_words else set()
         if only_new_words and current_index is not None:
@@ -464,7 +465,7 @@ async def get_random_word(file_id: str):
 
 
 @router.post("/{file_id}/next-word")
-async def next_word(file_id: str):
+async def next_word(file_id: str, current_user: TokenData = Depends(require_auth)):
     try:
         vocab = storage.load_vocab(file_id)
         if not vocab:
@@ -479,7 +480,7 @@ async def next_word(file_id: str):
             return {"success": True, "new_index": new_index}
 
         # "只学新词" 开关：根据已学集合跳过下一个已学单词
-        app_settings = storage.load_user_preferences()
+        app_settings = storage.load_user_preferences(user_id=current_user.user_id)
         only_new_words = bool(app_settings.get("only_new_words", False))
         learned_words = storage.load_learned_words(file_id) if only_new_words else set()
 

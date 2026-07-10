@@ -1383,6 +1383,14 @@ function App() {
     setProcessingInfo(null)
     setOriginalText('')
     setEntryPrompt('')
+    // ponytail: 同步清空题目/练习数据，否则进入新条目后题目界面仍显示上一条目的内容
+    setLearningData(null)
+    setQuizData(null)
+    setListeningQuizData(null)
+    setCurrentExerciseData(null)
+    setShowWordCard(false)
+    setSelectedOption(null)
+    setIsCorrect(null)
     // ponytail: 点击最近条目即更新 updated_at，使返回主页时历史顺序立即正确（缓存刷新）
     api.touchHistory(fileId).then(() => setHistoryRefresh(v => v + 1)).catch(() => {})
     try {

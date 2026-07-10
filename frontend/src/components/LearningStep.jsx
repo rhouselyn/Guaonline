@@ -72,7 +72,7 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
             <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex-1 flex items-center justify-center min-w-0">
+        <div className="flex-1 flex items-center justify-start min-w-0">
           {totalItemsInUnit > 0 && (
             <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">
               {(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}
