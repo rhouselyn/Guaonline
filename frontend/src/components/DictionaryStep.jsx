@@ -1428,18 +1428,18 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                 <span className={`text-[14px] font-bold text-ink-800 tracking-tight shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
                                   {word.word}
                                 </span>
-                                {word.ipa && (
+                                {(() => { const ipa = ctx?.phonetic || word.ipa; return ipa && (
                                   <span className={`text-[11px] text-ink-400 ipa-font shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
-                                    {word.ipa.startsWith('/') ? word.ipa : `/${word.ipa}/`}
+                                    {ipa.startsWith('/') ? ipa : `/${ipa}/`}
                                   </span>
-                                )}
-                                {word.morphology && (
+                                ) })()}
+                                {(ctx?.morphology || word.morphology) && (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide shrink-0">
-                                    {word.morphology}
+                                    {ctx?.morphology || word.morphology}
                                   </span>
                                 )}
                                 <span className={`text-[12px] text-ink-500 truncate ${vocabDisplayMode === 1 && !isExpanded ? 'invisible' : ''}`}>
-                                  {meaningOverrides[word.word] || word.meaning || word.context_meaning}
+                                  {ctx?.meaning || meaningOverrides[word.word] || word.meaning || word.context_meaning}
                                 </span>
                               </div>
                               {isExpanded && (
@@ -1476,25 +1476,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                           <h3 className="label-warm mb-0.5 flex items-center gap-1">
                                             <Brain className="w-3 h-3 text-amber-500" />
                                             {t.definition || '释义'}
-                                            {ctx && (
-                                              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium tracking-wide">
-                                                {t.thisSentenceContext || '本句上下文'}
-                                              </span>
-                                            )}
                                           </h3>
                                           <p className="text-[13px] text-ink-700 leading-relaxed">
-                                            {ctx ? (ctx.meaning || detail.enriched_meaning || detail.meaning || detail.context_meaning) : (detail.enriched_meaning || detail.meaning || detail.context_meaning)}
+                                            {detail.enriched_meaning || detail.meaning || detail.context_meaning}
                                           </p>
-                                          {ctx && (ctx.morphology || ctx.phonetic) && (
-                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                              {ctx.morphology && (
-                                                <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide">{ctx.morphology}</span>
-                                              )}
-                                              {ctx.phonetic && (
-                                                <span className="text-[11px] text-ink-400 ipa-font">{ctx.phonetic.startsWith('/') ? ctx.phonetic : `/${ctx.phonetic}/`}</span>
-                                              )}
-                                            </div>
-                                          )}
                                         </div>
                                         <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={sourceLang} hideDefinition />
                                       </div>
