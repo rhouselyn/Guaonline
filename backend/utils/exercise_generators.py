@@ -1030,12 +1030,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         async def _stage1_single(idx, sentence):
             if not sentence.strip():
                 return idx, None
-            try:
-                words = await _gateway_stage1_segment(user_id, tier, sentence, source_lang, _ctx_for(idx))
-            except Exception as e:
-                # ponytail: LLM 分词失败 → 退回程序分词 extract_words，不丢词、不阻塞
-                print(f"[WARN] 句子 {idx+1} Stage1 分词失败，退回 extract_words: {e}")
-                words = [strip_edge_punctuation(w) for w in text_processor.extract_words(sentence, source_lang) if strip_edge_punctuation(w)]
+            words = await _gateway_stage1_segment(user_id, tier, sentence, source_lang, _ctx_for(idx))
             tr = {"original": sentence, "translation": [{"text": w} for w in words]}
             return idx, {"sentence": sentence, "source_lang": source_lang, "translation_result": tr}
 
