@@ -676,10 +676,26 @@ async def retry_failed_sentences(file_id: str, user_id: str = None, tier: str = 
             before_sentences = [sentences[i] for i in before_indices if sentences[i].strip()]
             after_sentences = [sentences[i] for i in after_indices if sentences[i].strip()]
             context_sentences = {"before": before_sentences, "after": after_sentences} if (before_sentences or after_sentences) else None
-            llm_shim = _LLMApiShim(user_id, tier)
-            sentence_translation_result = await text_processor.process_translation(
-                sentence, source_lang, target_lang, llm_shim, context_sentences
+
+            # Stage 1
+            stage1_words = await _gateway_segment_sentence(
+                user_id, tier, sentence, source_lang, context_sentences
             )
+            if not text_processor.validate_segmentation(sentence, stage1_words, source_lang):
+                stage1_words = await _gateway_segment_sentence(
+                    user_id, tier, sentence, source_lang, context_sentences
+                )
+
+            # Stage 2
+            llm_result = await _gateway_fill_sentence(
+                user_id, tier, sentence, source_lang, target_lang, stage1_words, context_sentences
+            )
+            if not (isinstance(llm_result, dict) and llm_result.get("tokenized_translation")):
+                llm_result = await _gateway_fill_sentence(
+                    user_id, tier, sentence, source_lang, target_lang, stage1_words, context_sentences
+                )
+
+            sentence_translation_result = text_processor.backfill_stage2_result(stage1_words, llm_result)
             sentence_translation_result = text_processor.validate_and_complete_translation(
                 sentence, sentence_translation_result, source_lang
             )
