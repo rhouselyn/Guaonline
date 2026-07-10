@@ -140,6 +140,9 @@ function App() {
   // === 浏览器历史导航：每个 step 变化压入历史栈，支持回退/前进 ===
   const isPopstateRef = useRef(false)
   const lastHistoryStepRef = useRef('input')
+  // ponytail: 单词总表/收藏面板打开时压入历史条目，使浏览器/手机返回键关闭面板回到主页
+  const wordPanelOpenRef = useRef(false)
+  const prevPanelOpenRef = useRef(false)
 
   const showAlert = useCallback((message, title) => {
     setAlertDialog({ open: true, title: title || '', message })
@@ -192,6 +195,12 @@ function App() {
   // === 浏览器历史导航：popstate 监听（回退/前进）===
   useEffect(() => {
     const handlePopState = (event) => {
+      // 单词总表/收藏面板打开时，回退仅关闭面板，不切换 step（回到主页）
+      if (wordPanelOpenRef.current) {
+        setWordListLang(null)
+        setFavoriteLang(null)
+        return
+      }
       const targetStep = event.state?.step
       if (targetStep && targetStep !== lastHistoryStepRef.current) {
         isPopstateRef.current = true
@@ -207,6 +216,16 @@ function App() {
     window.history.replaceState({ step: 'input' }, '')
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
+
+  // === 单词总表/收藏面板：打开时压入历史条目，供原生返回键关闭 ===
+  useEffect(() => {
+    const open = !!(wordListLang || favoriteLang)
+    wordPanelOpenRef.current = open
+    if (open && !prevPanelOpenRef.current) {
+      window.history.pushState({ step: 'input', panel: true }, '')
+    }
+    prevPanelOpenRef.current = open
+  }, [wordListLang, favoriteLang])
 
   // === 浏览器历史导航：step 变化时压入历史栈 ===
   useEffect(() => {
@@ -1353,6 +1372,8 @@ function App() {
     setProcessingInfo(null)
     setOriginalText('')
     setEntryPrompt('')
+    // ponytail: 点击最近条目即更新 updated_at，使返回主页时历史顺序立即正确（缓存刷新）
+    api.touchHistory(fileId).then(() => setHistoryRefresh(v => v + 1)).catch(() => {})
     try {
       setCurrentFileId(fileId)
       setFileId(fileId)
@@ -1515,14 +1536,14 @@ function App() {
                 <WordListPanel
                   sourceLang={wordListLang}
                   t={t}
-                  onBack={() => setWordListLang(null)}
+                  onBack={() => window.history.back()}
                   pageSize={pageSize}
                 />
               ) : favoriteLang ? (
                 <WordListPanel
                   sourceLang={favoriteLang}
                   t={t}
-                  onBack={() => setFavoriteLang(null)}
+                  onBack={() => window.history.back()}
                   pageSize={pageSize}
                   favoritesMode={true}
                 />
@@ -1569,11 +1590,11 @@ function App() {
           <div className="h-full flex flex-col pb-nav-safe">
             {wordListLang ? (
               <div className="h-full overflow-y-auto">
-                <WordListPanel sourceLang={wordListLang} t={t} onBack={() => setWordListLang(null)} pageSize={pageSize} />
+                <WordListPanel sourceLang={wordListLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} />
               </div>
             ) : favoriteLang ? (
               <div className="h-full overflow-y-auto">
-                <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => setFavoriteLang(null)} pageSize={pageSize} favoritesMode={true} />
+                <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} favoritesMode={true} />
               </div>
             ) : (
               <>

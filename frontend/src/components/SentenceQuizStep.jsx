@@ -87,7 +87,7 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <motion.button
             onClick={onBack}
-            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
+            className="hidden md:flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.95 }}
           >

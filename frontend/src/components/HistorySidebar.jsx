@@ -165,7 +165,7 @@ function HistoryItem({ record, isRenaming, renameValue, onRenameStart, onRenameC
           const rect = e.currentTarget.getBoundingClientRect()
           onMenuOpen(record.file_id, rect.right - 160, rect.bottom + 4)
         }}
-        className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-aged-200/70 text-ink-400 hover:text-ink-600 transition-all flex-shrink-0"
+        className="md:opacity-0 md:group-hover:opacity-100 p-1 rounded-md hover:bg-aged-200/70 text-ink-400 hover:text-ink-600 transition-all flex-shrink-0"
       >
         <MoreHorizontal className="w-3.5 h-3.5" />
       </button>
@@ -173,16 +173,29 @@ function HistoryItem({ record, isRenaming, renameValue, onRenameStart, onRenameC
   )
 }
 
-function RecentItem({ record, onNavigate }) {
+function RecentItem({ record, onNavigate, onMenuOpen, t }) {
   return (
-    <button
+    <div
       onClick={() => onNavigate(record.file_id, record.source_lang, record.target_lang, record.title)}
-      className="w-full flex items-center gap-2 px-3 py-2 rounded-sm hover:bg-parchment-200/60 transition-colors text-left"
+      className="group w-full flex items-center gap-2 px-3 py-2 rounded-sm hover:bg-parchment-200/60 transition-colors text-left cursor-pointer"
     >
       <ProgressBadge progress={record.progress} />
       <span className="text-[13px] text-ink-700 truncate flex-1">{record.title}</span>
       <span className="text-[10px] font-bold text-ink-400 flex-shrink-0 uppercase">{(record.source_lang || '?').substring(0, 2)}</span>
-    </button>
+      {onMenuOpen && (
+        <button
+          onClick={e => {
+            e.stopPropagation()
+            const rect = e.currentTarget.getBoundingClientRect()
+            onMenuOpen(record.file_id, rect.right - 160, rect.bottom + 4)
+          }}
+          className="p-1 rounded-md hover:bg-aged-200/70 text-ink-400 hover:text-ink-600 transition-all flex-shrink-0"
+          title={t?.rename || '重命名'}
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -314,7 +327,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
       return (
         <div className="space-y-0.5">
           {sortedRecords.map(record => (
-            <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} />
+            <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} onMenuOpen={handleMenuOpen} t={t} />
           ))}
         </div>
       )
@@ -327,7 +340,7 @@ function HistorySidebar({ onNavigateToRecord, t, onOpenWordList, activeWordListL
           </div>
           <div className="space-y-0.5 px-1">
             {recentRecords.map(record => (
-              <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} />
+              <RecentItem key={record.file_id} record={record} onNavigate={handleNavigate} onMenuOpen={handleMenuOpen} t={t} />
             ))}
           </div>
           {hasMoreRecent && (

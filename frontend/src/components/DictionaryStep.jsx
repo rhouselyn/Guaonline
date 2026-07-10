@@ -1002,14 +1002,14 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       <div className="flex items-center gap-2 md:gap-3 flex-wrap px-1">
         <button
           onClick={onBack}
-          className="btn-ghost p-2 -ml-1.5"
+          className="btn-ghost p-2 -ml-1.5 hidden md:flex"
           title={t.backToHome || '返回主页'}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
         {actualSourceLang && actualSourceLang !== 'auto' && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <LangIcon langCode={actualSourceLang} size="md" />
             <span className="text-sm font-bold text-ink-700">
               {LANGUAGES.find(l => l.value === actualSourceLang)?.native || actualSourceLang?.toUpperCase()}
@@ -1020,7 +1020,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         {fileTitle && !editingTitle && (
           <button
             onClick={handleTitleClick}
-            className="flex items-center gap-1.5 max-w-[150px] md:max-w-[250px] group"
+            className="flex items-center gap-1.5 min-w-0 flex-1 md:flex-none md:max-w-[300px] group"
           >
             <span className="truncate text-base font-bold text-ink-600 group-hover:text-ink-800 transition-colors">{fileTitle}</span>
             <Pencil className="w-2.5 h-2.5 text-aged-300 group-hover:text-ink-400 shrink-0 transition-colors" />
@@ -1034,11 +1034,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             onChange={e => setTitleInput(e.target.value)}
             onBlur={handleTitleSave}
             onKeyDown={handleTitleKeyDown}
-            className="text-[13px] font-bold text-ink-600 bg-transparent border-b border-aged-300 px-1 py-0.5 max-w-[150px] md:max-w-[250px] focus:outline-none focus:border-amber-400 transition-colors"
+            className="text-[13px] font-bold text-ink-600 bg-transparent border-b border-aged-300 px-1 py-0.5 min-w-0 flex-1 md:flex-none md:max-w-[300px] focus:outline-none focus:border-amber-400 transition-colors"
           />
         )}
 
-        <div className="flex-1 min-w-0" />
+        <div className="flex-1 min-w-0 hidden md:block" />
 
         {isDesktop && renderProgress(false)}
 
@@ -1047,7 +1047,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           whileTap={{ scale: 0.97 }}
           onClick={onStartLearning}
           disabled={loading || !!preprocessStatus || vocabTotal === 0 || (processingInfo && processingInfo.total > 0 && progress < 100)}
-          className="btn-primary flex items-center gap-2 shrink-0 py-2 px-4 md:py-3 md:px-6"
+          className="btn-primary hidden md:flex items-center gap-2 shrink-0 py-2 px-4 md:py-3 md:px-6"
         >
           {(loading || preprocessStatus) ? (
             <>

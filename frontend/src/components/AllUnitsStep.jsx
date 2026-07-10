@@ -238,7 +238,7 @@ function AllUnitsStep({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="w-full"
+      className="w-full h-full flex flex-col"
       onTouchStart={(e) => {
         if (isDesktop) return
         const t = e.touches[0]
@@ -263,18 +263,18 @@ function AllUnitsStep({
       <div className="flex items-center gap-1 sm:gap-2 flex-wrap mb-6">
         <button
           onClick={onBack}
-          className="btn-ghost p-2"
+          className="btn-ghost p-2 hidden md:flex"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
         {fileTitle && (
-          <span className="text-base font-bold text-ink-500 truncate max-w-[140px] sm:max-w-[240px]">
+          <span className="text-base font-bold text-ink-500 truncate min-w-0 flex-1 md:flex-none md:max-w-[280px]">
             {fileTitle}
           </span>
         )}
 
-        <div className="flex-1 min-w-0" />
+        <div className="flex-1 min-w-0 hidden md:block" />
 
         <label className="flex items-center gap-1.5 cursor-pointer select-none group mr-1">
           <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
@@ -319,7 +319,7 @@ function AllUnitsStep({
         </button>
       </div>
 
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col min-h-0">
         <div className="mb-6 text-center hidden md:block">
           <h2 className="text-xl font-bold font-display text-ink-800">
             {tabs[activeTab].label}
@@ -333,7 +333,7 @@ function AllUnitsStep({
             <p className="text-xs text-ink-400">{t.loading}</p>
           </div>
         ) : (
-          <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden">
+          <div className="bg-parchment-50 rounded-md shadow-retro overflow-hidden flex-1 flex flex-col min-h-0">
             <div className="bg-parchment-100/70 backdrop-blur-md border-b border-aged-200/60 px-3 pt-2.5">
               <div className="flex gap-1 relative">
                 <motion.div
@@ -343,7 +343,6 @@ function AllUnitsStep({
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
                 {tabs.map((tab, i) => {
-                  const Icon = tab.icon;
                   const isActive = activeTab === i;
                   return (
                     <button
@@ -354,7 +353,6 @@ function AllUnitsStep({
                       <div className={`flex items-center gap-1.5 transition-colors duration-300 ${
                         isActive ? 'text-ink-700' : 'text-ink-400 hover:text-ink-500'
                       }`}>
-                        <Icon className="w-3.5 h-3.5" />
                         <span>{tab.label}</span>
                         {tab.total > 0 && (
                           <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-none transition-colors duration-300 ${
@@ -370,7 +368,7 @@ function AllUnitsStep({
               </div>
             </div>
 
-            <div className="px-5 pb-5 pt-4">
+            <div className="px-5 pb-5 pt-4 flex-1 overflow-y-auto min-h-0">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}

@@ -14,7 +14,7 @@ function PhaseSelectorStep({ phases, currentFileId, onPhaseSelect, onBack, loadi
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         onClick={onBack}
-        className="btn-ghost flex items-center gap-2 px-4 py-2 mb-8"
+        className="btn-ghost hidden md:flex items-center gap-2 px-4 py-2 mb-8"
       >
         <ArrowLeft className="w-4 h-4" />
         {t.back}

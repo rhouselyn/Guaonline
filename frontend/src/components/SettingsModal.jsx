@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle, Volume2, Type } from 'lucide-react'
+import { X, Check, Loader2, Languages, ChevronDown, BookOpen, ToggleLeft, ToggleRight, AlertCircle, Volume2, Type } from 'lucide-react'
 import { api } from '../utils/api'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { setTtsEngine, getTtsEngine } from '../utils/speech'
@@ -253,11 +253,6 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
     nativeLang: t.settingsNativeLang || '母语',
   }
 
-  const sectionIcons = {
-    general: Settings,
-    nativeLang: Languages,
-  }
-
   const renderGeneralSection = () => (
     <div className="space-y-5">
       {/* TTS Engine */}
@@ -444,10 +439,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-aged-200/80 bg-parchment-50/60 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <Settings className="w-4 h-4 text-ink-500" />
-              <h2 className="font-display text-sm font-bold text-ink-800">{t.settings || '设置'}</h2>
-            </div>
+            <h2 className="font-display text-sm font-bold text-ink-800">{t.settings || '设置'}</h2>
             <button
               onClick={onClose}
               className="btn-ghost p-1 text-ink-400 hover:text-ink-600 rounded-md transition-colors"
@@ -457,23 +449,21 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
           </div>
 
           {/* Body: Sidebar + Content */}
-          <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
+          <div className="flex flex-1 min-h-0 flex-row">
             {/* Left Sidebar */}
-            <div className="flex flex-row overflow-x-auto sm:flex-col sm:w-[130px] sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-aged-200/60 bg-parchment-100/40 py-2">
+            <div className="flex flex-col w-[110px] sm:w-[130px] shrink-0 border-r border-aged-200/60 bg-parchment-100/40 py-2">
               {SECTIONS.map(key => {
-                const Icon = sectionIcons[key]
                 const isActive = activeSection === key
                 return (
                   <button
                     key={key}
                     onClick={() => setActiveSection(key)}
-                    className={`sm:w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                    className={`w-full flex items-center px-4 py-2.5 text-xs font-medium transition-colors text-left ${
                       isActive
                         ? 'bg-amber-50/80 text-amber-600 border-r-2 border-amber-400 shrink-0'
                         : 'text-ink-500 hover:text-ink-700 hover:bg-parchment-50/60 shrink-0'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
                     <span>{sectionLabels[key]}</span>
                   </button>
                 )

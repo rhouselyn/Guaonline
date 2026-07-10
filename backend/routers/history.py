@@ -161,3 +161,18 @@ async def rename_history(file_id: str, request: dict, current_user: TokenData = 
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/history/{file_id}/touch")
+async def touch_history(file_id: str, current_user: TokenData = Depends(require_auth)):
+    """点击最近条目时更新 updated_at，使返回主页时历史顺序立即正确。"""
+    try:
+        records = storage.load_history(user_id=current_user.user_id)
+        if not any(r.get("file_id") == file_id for r in records):
+            raise HTTPException(status_code=404, detail="Record not found")
+        storage.touch_history_record(file_id)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

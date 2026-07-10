@@ -173,6 +173,11 @@ export const api = {
     return response.data;
   },
 
+  touchHistory: async (fileId) => {
+    const response = await axios.post(`${baseUrl}/api/history/${fileId}/touch`);
+    return response.data;
+  },
+
   getUnitStars: async (fileId) => {
     const response = await axios.get(`${baseUrl}/api/learn/${fileId}/unit-stars`);
     return response.data;
