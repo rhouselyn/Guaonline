@@ -44,9 +44,10 @@ def _mc_options_already_valid(cached: dict) -> bool:
 
 @router.get("/vocab/{file_id}")
 async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
-                    sort: str = "asc", include_total: bool = False):
+                    sort: str = "asc", include_total: bool = False, words_only: bool = False):
     """获取词汇表。ponytail: 支持 offset/limit/q/sort 服务端分页与搜索，按需返回当前页，
-    避免一次性传输全量数据拖慢首屏。limit<=0 表示返回全量（兼容旧调用）。"""
+    避免一次性传输全量数据拖慢首屏。limit<=0 表示返回全量（兼容旧调用）。
+    words_only=true 时跳过 word_cache 富化，仅返回排序后的词表（供前端构建字母/单词分页索引）。"""
     try:
         vocab = storage.load_vocab(file_id)
         if isinstance(vocab, dict) and "vocab" in vocab:
@@ -55,6 +56,15 @@ async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
             vocab_list = vocab
         else:
             vocab_list = []
+
+        # words_only：跳过富化，只返回排序后的词字符串列表（轻量，无 DB word_cache 查询）
+        if words_only:
+            word_strs = [e.get("word", "") for e in vocab_list if e.get("word")]
+            if q:
+                ql = q.lower()
+                word_strs = [w for w in word_strs if ql in w.lower()]
+            word_strs.sort(key=lambda w: w.lower(), reverse=(sort == "desc"))
+            return {"words": word_strs, "total": len(word_strs)}
 
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")

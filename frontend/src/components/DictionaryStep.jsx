@@ -74,6 +74,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [sentFetching, setSentFetching] = useState(false)
   const [vocabSearchDebounced, setVocabSearchDebounced] = useState(vocabSearch)
   const [sentenceSearchDebounced, setSentenceSearchDebounced] = useState(sentenceSearch)
+  // 全量词表（仅词字符串，轻量），用于构建字母→页、单词→页索引，支持跨页跳转
+  const [allWords, setAllWords] = useState([])
+  const allWordsSeq = useRef(0)
   const vocabFetchSeq = useRef(0)
   const vocabListRef = useRef(null)
   const sentenceListRef = useRef(null)
@@ -289,12 +292,57 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return () => { cancelled = true }
   }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, sentenceLength])
 
+  // 拉取全量词表（仅词字符串，轻量 words_only），用于构建字母→页、单词→页索引。
+  // 依赖文件/排序/搜索/生成进度（vocabLength 变化时 Stage1/2 新增词需补入索引）。
+  useEffect(() => {
+    if (!currentFileId) return
+    let cancelled = false
+    const seq = ++allWordsSeq.current
+    api.getVocab(currentFileId, { words_only: true, sort: sortOrder, q: vocabSearchDebounced }).then(data => {
+      if (cancelled || seq !== allWordsSeq.current) return
+      setAllWords(Array.isArray(data.words) ? data.words : [])
+    }).catch(() => {
+      if (cancelled || seq !== allWordsSeq.current) return
+      setAllWords([])
+    })
+    return () => { cancelled = true }
+  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength])
+
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
 
   const pagedFilteredVocab = pagedVocab
   const pagedFilteredSentences = pagedSent
+
+  // 分表字母→页、单词→页索引（基于全量词表 + 当前排序/搜索）
+  const allLetters = useMemo(() => {
+    const letters = []
+    const seen = new Set()
+    for (const w of allWords) {
+      const letter = (w[0] || '#').toUpperCase()
+      if (!seen.has(letter)) { seen.add(letter); letters.push(letter) }
+    }
+    return letters
+  }, [allWords])
+
+  const letterToPage = useMemo(() => {
+    const m = new Map()
+    allWords.forEach((w, i) => {
+      const letter = (w[0] || '#').toUpperCase()
+      const page = Math.floor(i / pageSize) + 1
+      if (!m.has(letter)) m.set(letter, page)
+    })
+    return m
+  }, [allWords, pageSize])
+
+  const wordToPage = useMemo(() => {
+    const m = new Map()
+    allWords.forEach((w, i) => {
+      m.set(w.toLowerCase(), Math.floor(i / pageSize) + 1)
+    })
+    return m
+  }, [allWords, pageSize])
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -326,9 +374,20 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return groupedGlobalVocab.map(([letter]) => letter)
   }, [groupedGlobalVocab])
 
-  // ponytail: 字母索引基于当前页（不再跨页跳转，因后端分页无全量数据）
-  const allLetterIndex = letterIndex
+  // 分表字母索引=全量字母（来自 allWords），点击跳转到对应页；总表同理（全量客户端分页）
+  const allLetterIndex = allLetters
   const allGlobalLetterIndex = useMemo(() => groupVocab(filteredGlobalVocab).map(([letter]) => letter), [filteredGlobalVocab])
+
+  // 总表字母→页索引（客户端分页，基于全量 filteredGlobalVocab）
+  const globalLetterToPage = useMemo(() => {
+    const m = new Map()
+    filteredGlobalVocab.forEach((w, i) => {
+      const letter = (w.word[0] || '#').toUpperCase()
+      const page = Math.floor(i / pageSize) + 1
+      if (!m.has(letter)) m.set(letter, page)
+    })
+    return m
+  }, [filteredGlobalVocab, pageSize])
 
   const vocabTotalPages = useMemo(() => Math.max(1, Math.ceil(vocabTotal / pageSize)), [vocabTotal, pageSize])
   const sentenceTotalPages = useMemo(() => Math.max(1, Math.ceil(sentTotal / pageSize)), [sentTotal, pageSize])
@@ -429,6 +488,27 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   }, [pagedVocab, pagedSent])
 
   const scrollToLetter = (letter) => {
+    // 分表：用 letterToPage 跳到对应页再滚动；总表：用 globalLetterToPage 跳页
+    if (showGlobalVocab) {
+      const page = globalLetterToPage.get(letter)
+      if (page && page !== globalVocabPage) {
+        pendingScrollWord.current = `letter-${letter}`
+        setGlobalVocabPage(page)
+      } else {
+        _scrollToLetterEl(letter)
+      }
+    } else {
+      const page = letterToPage.get(letter)
+      if (page && page !== vocabPage) {
+        pendingScrollWord.current = `letter-${letter}`
+        setVocabPage(page)
+      } else {
+        _scrollToLetterEl(letter)
+      }
+    }
+  }
+
+  const _scrollToLetterEl = (letter) => {
     const el = document.getElementById(`dict-group-${letter}`)
     if (el && vocabListRef.current) {
       const container = vocabListRef.current
@@ -438,7 +518,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       const scrollOffset = elRect.top - containerRect.top + container.scrollTop - stickyOffset
       container.scrollTo({ top: scrollOffset, behavior: 'smooth' })
     }
-    // ponytail: 字母索引基于当前页，字母不在当前页则不再跨页跳转（后端分页无全量数据）
   }
 
   // 页面切换后滚动到目标字母
@@ -555,51 +634,44 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceWord.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    const matchedWord = pagedFilteredVocab.find(w => {
-      const wordLower = w.word.toLowerCase()
-      if (wordLower === sourceLower) return true
-      if (wordLower === sourceNoHyphen) return true
-      if (wordLower.replace(/-/g, ' ') === sourceLower) return true
-      if (w.tokens && w.tokens.some(t => t.toLowerCase() === sourceLower)) return true
-      if (sourceStripped && sourceStripped !== sourceLower && wordLower === sourceStripped) return true
-      if (sourceStripped && sourceStripped !== sourceLower && w.tokens && w.tokens.some(t => t.toLowerCase() === sourceStripped)) return true
+    // 在全量词表中匹配（不再仅限当前页），获取规范 wordKey
+    const matchedWordStr = allWords.find(w => {
+      const wLower = w.toLowerCase()
+      if (wLower === sourceLower) return true
+      if (wLower === sourceNoHyphen) return true
+      if (wLower.replace(/-/g, ' ') === sourceLower) return true
+      if (sourceStripped && sourceStripped !== sourceLower && wLower === sourceStripped) return true
       return false
     })
 
-    if (!matchedWord) return
+    if (!matchedWordStr) return
 
-    const wordKey = matchedWord.word
+    const wordKey = matchedWordStr
     if (expandedWord === wordKey) {
       setExpandedWord(null)
       return
     }
 
-    // ponytail: 从句子点击——记录该句 token 的上下文释义/词性/音标，覆盖全局释义。
+    // 从句子点击——记录该句 token 的上下文释义/词性/音标，覆盖条目行展示。
     const ctx = (sentenceToken && (sentenceToken.meaning || sentenceToken.morphology || sentenceToken.phonetic))
       ? { wordKey, meaning: sentenceToken.meaning || '', morphology: sentenceToken.morphology || '', phonetic: sentenceToken.phonetic || '' }
       : null
 
-    // ponytail: 后端分页后无全量 vocab，改为「按词搜索」定位——把该词设为搜索词，
-    // 后端 /vocab?q=word 会返回含该词的当前页（通常第 1 页即命中），再展开。
+    // 从总表切到分表
     if (showGlobalVocab) {
       if (vocabListRef.current) {
         globalVocabScrollPos.current = vocabListRef.current.scrollTop
       }
-      pendingScrollWord.current = wordKey
       setShowGlobalVocab(false)
-      setVocabSearch(wordKey)
-      setVocabPage(1)
+    }
+
+    // 跳转到该词所在页（基于全量词表索引），再滚动定位
+    const page = wordToPage.get(wordKey.toLowerCase())
+    if (page && page !== vocabPage) {
+      setVocabPage(page)
+      pendingScrollWord.current = wordKey
     } else {
-      const currentFilteredVocab = filteredVocabRef.current
-      const onCurrentPage = currentFilteredVocab.some(w => w.word.toLowerCase() === wordKey.toLowerCase())
-      if (onCurrentPage) {
-        scrollToWord(wordKey, 0)
-      } else {
-        // 不在当前页：用该词搜索定位
-        setVocabSearch(wordKey)
-        setVocabPage(1)
-        pendingScrollWord.current = wordKey
-      }
+      scrollToWord(wordKey, 0)
     }
 
     setTimeout(() => {
@@ -611,7 +683,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
     if (!isDesktop) switchPanel(1)
-  }, [pagedFilteredVocab, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
+  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
