@@ -1021,6 +1021,37 @@ async def retry_failed_sentences(file_id: str, user_id: str = None, tier: str = 
     )
 
 
+def _persist_partial_and_update_status(file_id, results_dict, sentences, total_sentences,
+                                        completed_stage2, stage2_count, source_lang, preserve_base):
+    """增量存 pipeline_data + 重建 vocab + 更新 processing_status。
+
+    供 Stage 1 完成和 Stage 2 完成两个时点复用，让前端渐变可见。
+    """
+    # 构建 pipeline（未处理的句子保留空 translation_result）
+    incremental_pipeline = []
+    for si in range(total_sentences):
+        if si in results_dict:
+            incremental_pipeline.append(results_dict[si])
+        else:
+            incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
+    storage.save_pipeline_data(file_id, incremental_pipeline)
+
+    # 重建 vocab（从所有已处理句子提取，空壳也含 text，Stage 2 完成的带释义）
+    all_vocab = _extract_vocab_from_sentences(incremental_pipeline, source_lang)
+
+    # 进度按 Stage 2 完成数计
+    progress = int(stage2_count / total_sentences * 100) if total_sentences > 0 else 0
+    processing_status[file_id] = {
+        "status": "processing",
+        "progress": progress,
+        "current_sentence": stage2_count,
+        "total_sentences": total_sentences,
+        "vocab": all_vocab,
+        "sentence_translations": incremental_pipeline,
+        **preserve_base,
+    }
+
+
 async def process_text_background(file_id: str, text: str, source_lang: str, target_lang: str, user_id: str = None, tier: str = "free"):
     try:
         t_total_start = time.time()
@@ -1046,19 +1077,21 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": total_sentences, **_preserve2}
 
         results_dict = {}
-        completed_indices = set()
+        completed_stage2 = set()
+        stage2_count = 0
+        _preserve_base = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
 
         async def process_single_sentence(idx, sentence):
-            """处理单句。失败时返回失败哨兵，不抛异常——单句失败不应拖垮整个任务。"""
+            """处理单句（两阶段）。失败时返回失败哨兵。"""
             if not sentence.strip():
-                return idx, None
+                return idx, None, False
             try:
                 return await _process_single_sentence_impl(idx, sentence)
             except Exception as e:
                 import traceback as _tb
                 print(f"[ERROR] 句子 {idx+1} 处理失败，将标记为待重试: {e}")
                 _tb.print_exc()
-                return idx, {"__failed__": True, "sentence": sentence, "error": str(e)}
+                return idx, {"__failed__": True, "sentence": sentence, "error": str(e)}, False
 
         async def _process_single_sentence_impl(idx, sentence):
 
@@ -1070,114 +1103,90 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
 
             t_sentence_start = time.time()
 
-            t_llm_start = time.time()
-            print(f"[DEBUG] 正在翻译句子 {idx+1}/{total_sentences}: {repr(sentence)}")
-            llm_shim = _LLMApiShim(user_id, tier)
-            sentence_translation_result = await text_processor.process_translation(
-                sentence,
-                source_lang,
-                target_lang,
-                llm_shim,
-                context_sentences
+            # ── Stage 1：纯分词 ──
+            t_seg_start = time.time()
+            print(f"[DEBUG] 句子 {idx+1}/{total_sentences} Stage 1 分词: {repr(sentence)}")
+            stage1_words = await _gateway_segment_sentence(
+                user_id, tier, sentence, source_lang, context_sentences
             )
-            t_llm_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} LLM翻译调用: {t_llm_end - t_llm_start:.3f}s")
+            # 校验 + 重试一次
+            if not text_processor.validate_segmentation(sentence, stage1_words, source_lang):
+                print(f"[DEBUG] 句子 {idx+1} Stage 1 校验失败，重试一次")
+                stage1_words = await _gateway_segment_sentence(
+                    user_id, tier, sentence, source_lang, context_sentences
+                )
+                if not text_processor.validate_segmentation(sentence, stage1_words, source_lang):
+                    print(f"[WARN] 句子 {idx+1} Stage 1 仍不匹配，best-effort 落库: {stage1_words}")
+            t_seg_end = time.time()
+            print(f"[TIMING] 句子 {idx+1} Stage 1 分词: {t_seg_end - t_seg_start:.3f}s, 词数: {len(stage1_words)}")
 
-            t_extract_start = time.time()
-            sentence_words = text_processor.extract_words(sentence, source_lang)
-            t_extract_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 单词提取: {t_extract_end - t_extract_start:.3f}s")
+            # Stage 1 完成 → 立即落库空壳 + 重建 vocab（让前端看到单词链接与纯单词条目）
+            if stage1_words:
+                shell_translation = {
+                    "translation": [
+                        {"text": w, "phonetic": "", "morphology": "", "meaning": ""}
+                        for w in stage1_words
+                    ],
+                    "tokenized_translation": "",
+                    "grammar_explanation": "",
+                    "translation_phrases": [],
+                    "redundant_tokens": [],
+                }
+                stage1_data = {
+                    "sentence": sentence,
+                    "source_lang": source_lang,
+                    "translation_result": shell_translation,
+                }
+                results_dict[idx] = stage1_data
+                _persist_partial_and_update_status(
+                    file_id, results_dict, sentences, total_sentences,
+                    completed_stage2, stage2_count, source_lang, _preserve_base
+                )
 
-            # ponytail: 补漏——抽到 _fill_missing_words，进入条目批量补漏也复用同一逻辑。
-            sentence_translation_result, missing_spans, retry_count = await _fill_missing_words(
-                sentence, sentence_words, sentence_translation_result, source_lang, target_lang, user_id, tier, f"句子 {idx+1}")
-            if missing_spans:
-                print(f"[DEBUG] 句子 {idx+1} 补漏后仍有漏词(将留空壳): {missing_spans}")
-            elif retry_count > 0:
-                print(f"[DEBUG] 句子 {idx+1} 补漏成功，无漏词")
-
-            t_validate_start = time.time()
-            sentence_translation_result = text_processor.validate_and_complete_translation(
-                sentence, sentence_translation_result, source_lang
+            # ── Stage 2：填充 ──
+            t_fill_start = time.time()
+            print(f"[DEBUG] 句子 {idx+1} Stage 2 填充")
+            llm_result = await _gateway_fill_sentence(
+                user_id, tier, sentence, source_lang, target_lang, stage1_words, context_sentences
             )
-            t_validate_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 验证补全: {t_validate_end - t_validate_start:.3f}s")
+            # 关键字段为空 → 重试一次
+            if not (isinstance(llm_result, dict) and llm_result.get("tokenized_translation")):
+                print(f"[DEBUG] 句子 {idx+1} Stage 2 关键字段为空，重试一次")
+                llm_result = await _gateway_fill_sentence(
+                    user_id, tier, sentence, source_lang, target_lang, stage1_words, context_sentences
+                )
+            t_fill_end = time.time()
+            print(f"[TIMING] 句子 {idx+1} Stage 2 填充: {t_fill_end - t_fill_start:.3f}s")
+
+            # 回填（text 以 Stage 1 为准）
+            translation_result = text_processor.backfill_stage2_result(stage1_words, llm_result)
+            translation_result = text_processor.validate_and_complete_translation(
+                sentence, translation_result, source_lang
+            )
 
             sentence_data = {
                 "sentence": sentence,
                 "source_lang": source_lang,
-                "translation_result": sentence_translation_result
+                "translation_result": translation_result,
             }
             t_sentence_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 总耗时: {t_sentence_end - t_sentence_start:.3f}s")
-            return idx, sentence_data
+            return idx, sentence_data, True  # 第三个元素标记 Stage 2 完成
 
         tasks = [asyncio.create_task(process_single_sentence(i, s)) for i, s in enumerate(sentences)]
 
         for coro in asyncio.as_completed(tasks):
-            idx, sentence_data = await coro
+            idx, sentence_data, stage2_done = await coro
             if sentence_data is not None:
                 results_dict[idx] = sentence_data
-            completed_indices.add(idx)
-
-            max_sequential = -1
-            for ci in sorted(completed_indices):
-                if ci == max_sequential + 1:
-                    max_sequential = ci
-                else:
-                    break
-
-            all_completed_translations = []
-            for si in sorted(results_dict.keys()):
-                all_completed_translations.append(results_dict[si])
-
-            partial_vocab = []
-            for si, sd in enumerate(all_completed_translations):
-                tr = sd.get("translation_result", {})
-                if isinstance(tr, dict) and "translation" in tr:
-                    for ti, token in enumerate(tr["translation"]):
-                        if isinstance(token, dict) and "text" in token:
-                            entry = {
-                                "word": token["text"],
-                                "ipa": token.get("phonetic", ""),
-                                "meaning": token.get("meaning", "") or token.get("context_meaning", ""),
-                                "tokens": [token["text"]],
-                                "morphology": token.get("morphology", ""),
-                                "sentence_index": si,
-                                "token_index": ti
-                            }
-                            partial_vocab.append(entry)
-
-            seen = set()
-            unique_partial = []
-            for entry in partial_vocab:
-                word = entry.get("word", "").lower()
-                if word not in seen and word:
-                    seen.add(word)
-                    unique_partial.append(entry)
-            unique_partial.sort(key=vocab_sort_key)
-
-            progress = int(len(completed_indices) / total_sentences * 100)
-            _preserve3 = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
-            processing_status[file_id] = {
-                "status": "processing",
-                "progress": progress,
-                "current_sentence": len(completed_indices),
-                "total_sentences": total_sentences,
-                "vocab": unique_partial,
-                "sentence_translations": all_completed_translations,
-                **_preserve3
-            }
-            print(f"[DEBUG] 更新状态: 进度 {progress}%, 已处理 {len(completed_indices)} 个句子, 词汇 {len(unique_partial)} 个")
-
-            # 增量更新 DB：把已翻译的句子写回 pipeline_data，前端 refetch 即可看到翻译结果
-            incremental_pipeline = []
-            for si in range(total_sentences):
-                if si in results_dict:
-                    incremental_pipeline.append(results_dict[si])
-                else:
-                    incremental_pipeline.append({"sentence": sentences[si], "translation_result": {}})
-            storage.save_pipeline_data(file_id, incremental_pipeline)
+                if stage2_done and not (isinstance(sentence_data, dict) and sentence_data.get("__failed__")):
+                    completed_stage2.add(idx)
+                    stage2_count = len(completed_stage2)
+                    _persist_partial_and_update_status(
+                        file_id, results_dict, sentences, total_sentences,
+                        completed_stage2, stage2_count, source_lang, _preserve_base
+                    )
+                    print(f"[DEBUG] 更新状态: 进度 {int(stage2_count / total_sentences * 100)}%, Stage 2 完成 {stage2_count}/{total_sentences}")
 
         sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
 
