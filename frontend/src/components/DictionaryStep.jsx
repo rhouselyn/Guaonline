@@ -61,6 +61,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [titleInput, setTitleInput] = useState('')
   const [vocabPage, setVocabPage] = useState(saved.vocabPage || 1)
   const [sentencePage, setSentencePage] = useState(saved.sentencePage || 1)
+  const [jumpPage, setJumpPage] = useState('')
   const [globalVocabPage, setGlobalVocabPage] = useState(saved.globalVocabPage || 1)
   const [wordGenProgress, setWordGenProgress] = useState(null)
   const [meaningOverrides, setMeaningOverrides] = useState({})
@@ -835,7 +836,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const renderPagination = (currentPage, totalPages, onPageChange) => {
     if (totalPages <= 1) return null
-    const [jumpPage, setJumpPage] = useState(currentPage.toString())
     
     const handleJump = (e) => {
       e.preventDefault()
@@ -843,7 +843,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (!isNaN(page) && page >= 1 && page <= totalPages) {
         onPageChange(page)
       }
-      setJumpPage(currentPage.toString())
+      setJumpPage('')
     }
     
     if (!isDesktop) {
@@ -864,6 +864,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               max={totalPages}
               value={jumpPage}
               onChange={(e) => setJumpPage(e.target.value)}
+              placeholder={String(currentPage)}
               className="w-12 text-[11px] text-center px-1.5 py-0.5 border border-aged-200 rounded-sm bg-parchment-50 text-ink-600 focus:outline-none focus:border-amber-400"
             />
             <span className="text-[11px] text-ink-400">/ {totalPages}</span>
