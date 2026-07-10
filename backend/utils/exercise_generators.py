@@ -38,8 +38,9 @@ class _LLMApiShim:
 async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None, fixed_words=None):
     """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。
 
-    ponytail: fixed_words 非空时（Stage2 充实）在 system_prompt 末尾追加强制词表约束，
-    要求 translation 数组严格等于该词表。与 _enforce_word_list 结构性回填互为双保险。
+    ponytail: fixed_words 非空时（Stage2 充实）不再用 prompt 强调，而是把分词结果
+    直接填入 JSON 模板的 translation 数组（text 已填，其余留空），作为用户消息让 LLM "填空"。
+    结构性保证输出词表与 Stage1 一致。_enforce_word_list 作为最终兜底回填。
     """
     source_lang_name = get_lang_name(source_lang)
     target_lang_name = get_lang_name(target_lang)
@@ -143,20 +144,32 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 
 【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
 
-    # ponytail: Stage2 强制词表——fixed_words 非空时追加强制词表约束，translation 数组必须严格等于它
+    # ponytail: Stage2 固定词表——不再用 prompt 强调，而是把分词结果直接填入 JSON 模板的 translation 数组
+    # （text 已填，phonetic/morphology/meaning 留空），作为用户消息传给 LLM 让它"填空"。
+    # 结构性保证：LLM 看到的是已含全部词的完整 JSON，只需补全属性，无法增减/合并/拆分词。
+    template_section = ""
     if fixed_words:
-        words_list_str = "\n".join(f"{i+1}. {w}" for i, w in enumerate(fixed_words))
-        system_prompt += f"""
+        template_translation = [
+            {"text": w, "phonetic": "", "morphology": "", "meaning": ""}
+            for w in fixed_words
+        ]
+        template_json = json.dumps({
+            "original": text,
+            "translation": template_translation,
+            "tokenized_translation": "",
+            "translation_phrases": [],
+            "grammar_explanation": "",
+            "redundant_tokens": [],
+        }, ensure_ascii=False, indent=2)
+        template_section = f"""
 
-═══════════════════════════════════════════════════════════
-【极其重要·强制词表！！！translation 数组必须严格等于以下词表】
-═══════════════════════════════════════════════════════════
-本次分词已预先确定，translation 数组必须且只能包含以下单词，按此顺序，数量一致，不得增减、合并或拆分：
-{words_list_str}
+【极其重要·分词已确定！！！】
+以下 JSON 的 translation 数组已预填本次分词结果（每个 text 已确定）。你必须严格保持 translation 数组中每个 text 不变、数量不变、顺序不变，只为每个词填写 phonetic/morphology/meaning，并补全其余字段。禁止增减、合并、拆分任何词。
 
-你必须为上表中每一个词填写 phonetic/morphology/meaning，禁止留空。text 字段必须与上表完全一致。"""
+请基于以下模板补全（直接输出完整工具调用 JSON）：
+{template_json}"""
 
-    user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
+    user_content = f"{context_section}\n【待处理文本】\n{text}{template_section}" if context_section else f"【待处理文本】\n{text}{template_section}"
 
     messages = [
         {"role": "system", "content": system_prompt},
