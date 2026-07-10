@@ -293,8 +293,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
 
-  const pagedFilteredVocab = progress < 100 && Array.isArray(vocab) && vocab.length > 0 ? vocab : pagedVocab
-  const pagedFilteredSentences = progress < 100 && Array.isArray(sentenceTranslations) && sentenceTranslations.length > 0 ? sentenceTranslations : pagedSent
+  // ponytail: 单词表面板用分页 pagedVocab；句子高亮/点击改用句子自身 tokens（见 renderOriginalSentence / handleTokenClick），
+  // 不再依赖分页 vocab 做高亮——分页只有 50 个词，跨页词会漏链接。
+  const pagedFilteredVocab = pagedVocab
+  const pagedFilteredSentences = pagedSent
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -566,9 +568,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return false
     })
 
-    if (!matchedWord) return
-
-    const wordKey = matchedWord.word
+    // ponytail: 词不在当前分页——但句子 token 有这个词，仍可点击（后续 setVocabSearch 会通过 API 定位）
+    const wordKey = matchedWord?.word || sentenceToken?.text
+    if (!wordKey) return
     if (expandedWord === wordKey) {
       setExpandedWord(null)
       return
@@ -808,7 +810,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       <div className="font-medium text-[15px] text-ink-800 mb-1.5 leading-relaxed sentence-text">
         {parts.map((part, i) => {
           if (!part) return null
-          const clickable = findVocabWordBySourceText(part)
+          // ponytail: 优先用句子自身 tokens 判断可点击性（永远完整），无 tokens 时回退到 vocab 匹配
+          const clickable = tokens ? !!findTokenForPart(tokens, part) : findVocabWordBySourceText(part)
           if (clickable) {
             return (
               <span
