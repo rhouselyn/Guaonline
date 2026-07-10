@@ -143,18 +143,23 @@ translation 数组中每个条目的 text 字段代表原文中的一个"词"。
 
 【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
 
-    # ponytail: Stage2 强制词表——fixed_words 非空时追加强制词表约束，translation 数组必须严格等于它
+    # ponytail: Stage2 预填骨架——fixed_words 非空时直接在 prompt 给出 translation 数组完整 JSON 骨架，
+    # text 全部预填、其余字段留 "___" 待 LLM 填空。比自然语言词表约束更硬：LLM 只需替换占位符，无法增删 text。
     if fixed_words:
-        words_list_str = "\n".join(f"{i+1}. {w}" for i, w in enumerate(fixed_words))
+        skeleton_translation = json.dumps([
+            {"text": w, "phonetic": "___", "morphology": "___", "meaning": "___"}
+            for w in fixed_words
+        ], ensure_ascii=False, indent=2)
         system_prompt += f"""
 
 ═══════════════════════════════════════════════════════════
-【极其重要·强制词表！！！translation 数组必须严格等于以下词表】
+【极其重要·预填骨架！！！translation 数组已固定，只能填空不能改结构】
 ═══════════════════════════════════════════════════════════
-本次分词已预先确定，translation 数组必须且只能包含以下单词，按此顺序，数量一致，不得增减、合并或拆分：
-{words_list_str}
+translation 数组已预先确定如下，text 字段不可修改、不可增删、不可调序：
+{skeleton_translation}
 
-你必须为上表中每一个词填写 phonetic/morphology/meaning，禁止留空。text 字段必须与上表完全一致。"""
+你的任务：保持每个对象的 text 原样不变，把所有 "___" 占位符替换为实际内容（phonetic/morphology/meaning 均禁止留空）。
+返回的 translation 数组必须与上方骨架完全一致（顺序、数量、text 文本），仅占位符被填充。"""
 
     user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
 
