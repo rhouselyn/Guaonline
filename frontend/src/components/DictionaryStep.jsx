@@ -1230,7 +1230,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                 </div>
               )}
             </div>
-            {renderPagination(sentencePage, sentenceTotalPages, setSentencePage)}
+            {renderPagination(sentencePage, sentenceTotalPages, setSentencePage, sentenceJumpInput, setSentenceJumpInput)}
           </div>
         </div>
 
@@ -1530,8 +1530,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               </div>
             </div>
             {showGlobalVocab
-              ? renderPagination(globalVocabPage, globalVocabTotalPages, setGlobalVocabPage)
-              : renderPagination(vocabPage, vocabTotalPages, setVocabPage)
+              ? renderPagination(globalVocabPage, globalVocabTotalPages, setGlobalVocabPage, globalVocabJumpInput, setGlobalVocabJumpInput)
+              : renderPagination(vocabPage, vocabTotalPages, setVocabPage, vocabJumpInput, setVocabJumpInput)
             }
           </div>
         </div>
