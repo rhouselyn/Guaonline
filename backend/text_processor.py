@@ -759,6 +759,39 @@ class TextProcessor:
         words_normalized = self._normalize_text_for_compare(''.join(words))
         return sentence_normalized == words_normalized and bool(sentence_normalized)
 
+    def backfill_stage2_result(self, stage1_words: List[str], llm_result: dict) -> dict:
+        """把 Stage 2 LLM 结果回填到 Stage 1 锁定的 translation 数组。
+
+        - text 始终以 Stage 1 为准（防止 LLM 偷改边界）
+        - phonetic/morphology/meaning 按位置回填
+        - 若 LLM 返回数组短于 Stage 1，多出的词保留空壳
+        - tokenized_translation/grammar_explanation/translation_phrases/redundant_tokens 直接覆盖
+        """
+        llm_translation = []
+        if isinstance(llm_result, dict):
+            t = llm_result.get("translation", [])
+            if isinstance(t, list):
+                llm_translation = t
+
+        translation = []
+        for i, word in enumerate(stage1_words):
+            entry = {"text": word, "phonetic": "", "morphology": "", "meaning": ""}
+            if i < len(llm_translation) and isinstance(llm_translation[i], dict):
+                src = llm_translation[i]
+                for field in ("phonetic", "morphology", "meaning"):
+                    val = src.get(field, "")
+                    if val:
+                        entry[field] = val
+            translation.append(entry)
+
+        return {
+            "translation": translation,
+            "tokenized_translation": (llm_result or {}).get("tokenized_translation", "") if isinstance(llm_result, dict) else "",
+            "grammar_explanation": (llm_result or {}).get("grammar_explanation", "") if isinstance(llm_result, dict) else "",
+            "translation_phrases": (llm_result or {}).get("translation_phrases", []) if isinstance(llm_result, dict) else [],
+            "redundant_tokens": (llm_result or {}).get("redundant_tokens", []) if isinstance(llm_result, dict) else [],
+        }
+
     def generate_masked_sentence(self, sentence: str, vocab: List[Dict], translation_tokens: List[str] = None, all_sentences: List[Dict] = None, mask_seed: int = None, source_lang: str = "en", mask_version: int = 0, max_distractors: int = 2) -> Dict[str, Any]:
         if translation_tokens:
             words = translation_tokens
