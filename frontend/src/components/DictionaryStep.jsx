@@ -823,17 +823,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceText.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    return pagedFilteredVocab.some(w => {
-      const wordLower = w.word.toLowerCase()
-      if (wordLower === sourceLower) return true
-      if (wordLower === sourceNoHyphen) return true
-      if (wordLower.replace(/-/g, ' ') === sourceLower) return true
-      if (w.tokens && w.tokens.some(t => t.toLowerCase() === sourceLower)) return true
-      if (sourceStripped && sourceStripped !== sourceLower && wordLower === sourceStripped) return true
-      if (sourceStripped && sourceStripped !== sourceLower && w.tokens && w.tokens.some(t => t.toLowerCase() === sourceStripped)) return true
+    // ponytail: 用全量 allWords 匹配（不再仅限当前页），大小写不敏感。
+    return allWords.some(w => {
+      const wLower = w.toLowerCase()
+      if (wLower === sourceLower) return true
+      if (wLower === sourceNoHyphen) return true
+      if (wLower.replace(/-/g, ' ') === sourceLower) return true
+      if (sourceStripped && sourceStripped !== sourceLower && wLower === sourceStripped) return true
       return false
     })
-  }, [pagedFilteredVocab])
+  }, [allWords])
 
   // ponytail: 在当前句子的 token 数组里找出与可点击文本对应的那个 token（含其上下文释义/词性/音标）。
   const findTokenForPart = useCallback((tokens, part) => {
@@ -863,16 +862,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         })
       : []
 
-    const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
+    const vocabTexts = allWords.filter(Boolean)
 
-    const allWords = [...new Set([...tokenTexts, ...vocabTexts])]
-    if (allWords.length === 0) {
+    const allWordsSet = [...new Set([...tokenTexts, ...vocabTexts])]
+    if (allWordsSet.length === 0) {
       return <div className="font-medium text-[15px] text-ink-800 mb-1.5 sentence-text">{sentence}</div>
     }
 
-    allWords.sort((a, b) => b.length - a.length)
+    allWordsSet.sort((a, b) => b.length - a.length)
 
-    const escapedWords = allWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const escapedWords = allWordsSet.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     const pattern = new RegExp(`(${escapedWords.join('|')})`, 'gi')
     const parts = sentence.split(pattern)
 
