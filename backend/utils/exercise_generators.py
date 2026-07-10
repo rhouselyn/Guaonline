@@ -35,6 +35,66 @@ class _LLMApiShim:
         )
 
 
+async def _gateway_segment_sentence(user_id, tier, text, source_lang, context_sentences=None):
+    """Stage 1：纯分词。LLM 输出一行一词，解析为 List[str]。
+
+    无 tool call 开销，纯 content 解析。失败时返回空列表（调用方负责重试/兜底）。
+    """
+    source_lang_name = get_lang_name(source_lang)
+
+    context_section = ""
+    if context_sentences:
+        before = context_sentences.get("before", [])
+        after = context_sentences.get("after", [])
+        parts = []
+        if before:
+            parts.append("前文：\n" + "\n".join(before))
+        if after:
+            parts.append("后文：\n" + "\n".join(after))
+        if parts:
+            context_section = "\n【上下文】\n" + "\n".join(parts) + "\n"
+
+    system_prompt = f"""处理以下 {source_lang_name} 文本。
+
+【任务】
+把句子分成一个个词，每行输出一个词，不要输出其他任何内容。
+
+【分词原则】
+1. 遵循 {source_lang_name} 自身的自然词边界，你是精通该语言正字法和语法规则的语言专家
+2. 一个"词"是该语言词典中可查到的最小意义单位（变位/屈折形式是单个词，不拆词干+词缀）
+3. 标点符号完全丢弃，绝不附着在任何词上（. , ! ? : ; 等全部去掉）
+4. 词内部的连字符(-)和撇号(')保留（如它们是该语言的词内组成部分）
+5. 固定搭配/多词表达（语义不可组合、词典有独立词条、替换任一词含义即变）整行输出，内部用空格
+6. 输出条目按原文顺序，去掉标点后拼接必须等于原文去掉标点后的内容，不得增减
+
+【输出格式】
+- 每行一个词
+- 不要编号、引号、解释、空行
+- 多词表达在同一行内用空格分隔"""
+
+    user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=0.0,
+        request_type="segment_sentence",
+    )
+
+    try:
+        choice = response.get("choices", [{}])[0]
+        content = choice.get("message", {}).get("content", "")
+        if content:
+            return text_processor.parse_segmentation_output(content)
+    except Exception as e:
+        print(f"[WARN] segment_sentence parse failed: {e}")
+    return []
+
+
 async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
     """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
     source_lang_name = get_lang_name(source_lang)
