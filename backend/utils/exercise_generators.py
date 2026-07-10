@@ -95,6 +95,142 @@ async def _gateway_segment_sentence(user_id, tier, text, source_lang, context_se
     return []
 
 
+async def _gateway_fill_sentence(user_id, tier, text, source_lang, target_lang, stage1_words, context_sentences=None):
+    """Stage 2：填充。用 Stage 1 的词构造固定 JSON 模板，LLM 只填充空字段。
+
+    tool schema 复用 _gateway_process_text_with_dictionary 的定义。
+    返回 LLM 原始结果 dict（调用方用 text_processor.backfill_stage2_result 回填）。
+    """
+    source_lang_name = get_lang_name(source_lang)
+    target_lang_name = get_lang_name(target_lang)
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "process_text_with_dictionary",
+            "description": "填充已给定模板的空字段",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "string", "description": "原文文本"},
+                    "translation": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string", "description": "已锁定的词，不得修改"},
+                                "phonetic": {"type": "string", "description": "发音标注"},
+                                "morphology": {"type": "string", "description": "词性缩写"},
+                                "meaning": {"type": "string", "description": "上下文释义"},
+                            },
+                            "required": ["text", "phonetic", "morphology", "meaning"],
+                        },
+                    },
+                    "tokenized_translation": {"type": "string", "description": "完整自然翻译"},
+                    "translation_phrases": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "分词结果，至少2个片段",
+                    },
+                    "grammar_explanation": {"type": "string", "description": "语法解释"},
+                    "redundant_tokens": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "4个冗余词",
+                    },
+                },
+                "required": ["original", "translation", "tokenized_translation", "translation_phrases", "grammar_explanation", "redundant_tokens"],
+            },
+        },
+    }]
+
+    context_section = ""
+    if context_sentences:
+        before = context_sentences.get("before", [])
+        after = context_sentences.get("after", [])
+        parts = []
+        if before:
+            parts.append("前文：\n" + "\n".join(before))
+        if after:
+            parts.append("后文：\n" + "\n".join(after))
+        if parts:
+            context_section = "\n【上下文】\n" + "\n".join(parts) + "\n"
+
+    # 构造预填模板——Stage 1 的词硬编码进 translation 数组
+    import json as _json
+    template_entries = ",\n  ".join(
+        _json.dumps({"text": w, "phonetic": "", "morphology": "", "meaning": ""}, ensure_ascii=False)
+        for w in stage1_words
+    )
+    template_str = f"[\n  {template_entries}\n]"
+
+    system_prompt = f"""处理以下 {source_lang_name} 文本，并翻译成 {target_lang_name}。
+
+【非常非常重要的说明！！！】
+1. 所有翻译和解释都必须使用 {target_lang_name}（目标语言）
+2. 不要单独给每个词语法解释 - 只给整个句子一个完整的语法解释
+3. 词性标注（morphology）只能使用以下缩写，不要加其他文字：
+   - n (名词), v (动词), adj (形容词), adv (副词), pron (代词), prep (介词), conj (连词), interj (感叹词), det (限定词)
+4. morphology 字段必须只包含缩写，不要有其他内容！
+5. 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可
+6. 【极其重要·保留说话人标签】如果原文以说话人标签开头（如 "A:" "B:" "John:" 等），tokenized_translation 必须在开头保留同样的说话人标签，冒号使用目标语言习惯的全角或半角形式，不得省略
+
+【核心约束·已给定模板】
+translation 数组已经预填好——每个条目的 text 字段是原文的词（顺序、拼写已锁定），你只能填充以下空字段：
+- phonetic: 该词的发音标注，使用 {source_lang_name} 最常用、最被广泛认可的注音系统（IPA/拼音/罗马字等），声调语言需标声调
+- morphology: 词性缩写（仅限第3条列出的缩写）
+- meaning: 基于上下文的 {target_lang_name} 释义，简洁的几个独立词，不要完整句子解释
+
+【极其重要·禁止改动模板】
+1. 不得修改任何条目的 text
+2. 不得增加、删除、重排任何条目
+3. 不得修改条目顺序或数量
+4. 只填充 phonetic / morphology / meaning 三个字段
+
+【其他字段】
+- tokenized_translation: 完整自然的 {target_lang_name} 翻译
+- translation_phrases: 将 tokenized_translation 按目标语言的词分词，至少拆为2个片段
+- grammar_explanation: 整个文本的一个完整语法解释，用 {target_lang_name}
+- redundant_tokens: 4个与原文相关的合理冗余词，用于测验，必须全部使用 {target_lang_name}，每个必须是单个独立的词
+
+【极其重要·禁止空白字段】translation 数组中每个条目的 phonetic、morphology、meaning 字段都必须有实际内容，绝对不能留空！"""
+
+    user_content = f"""{context_section}
+【待处理文本】
+{text}
+
+【translation 数组预填模板·必须严格遵循】
+{template_str}"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    response = await gateway.call(
+        user_id, tier, messages,
+        temperature=0.0,
+        request_type="process_text", tools=tools,
+    )
+
+    try:
+        choice = response.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+        if tool_calls:
+            arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
+            return json.loads(arguments_str)
+        content = message.get("content", "")
+        if content:
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        print(f"[WARN] fill_sentence tool call parse failed: {e}")
+    return {}
+
+
 async def _gateway_process_text_with_dictionary(user_id, tier, text, source_lang, target_lang, context_sentences=None):
     """通过 gateway.call() 实现文本翻译+词典生成（tool call 模式）。"""
     source_lang_name = get_lang_name(source_lang)
