@@ -401,7 +401,8 @@ function App() {
         }
       }
       if (status.vocab) {
-        setVocabLength(status.vocab.length)
+        // ponytail: 用 vocab_sig（递增计数器）替代 length——阶段1 加词、阶段2 填释义都会变化
+        setVocabLength(status.vocab_sig !== undefined ? status.vocab_sig : status.vocab.length)
       }
       if (status.progress !== undefined) {
         setProgress(status.progress)
@@ -438,7 +439,7 @@ function App() {
 
       if (status.status === 'completed') {
         console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
-        setVocabLength(status.vocab ? status.vocab.length : 0)
+        setVocabLength(status.vocab_sig !== undefined ? status.vocab_sig : (status.vocab ? status.vocab.length : 0))
         if (status.total_sentences) {
           setSentenceLength(status.total_sentences * 1000 + (status.total_sentences + 1))
         }

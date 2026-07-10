@@ -1007,6 +1007,10 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             unique_partial.sort(key=vocab_sort_key)
 
             progress = int(len(completed_indices) / total_sentences * 100) if total_sentences else 0
+            # ponytail: vocab_sig 递增计数器——阶段1 加词、阶段2 填释义都会让 vocab 内容变化，
+            # 但 length 可能不变（阶段2 只填释义）。前端 vocabLength 改读 vocab_sig 才能触发 refetch。
+            prev_sig = processing_status.get(file_id, {}).get("vocab_sig", 0)
+            vocab_sig = prev_sig + 1
             _preserve = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
             processing_status[file_id] = {
                 "status": "processing",
@@ -1014,6 +1018,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                 "current_sentence": len(completed_indices),
                 "total_sentences": total_sentences,
                 "vocab": unique_partial,
+                "vocab_sig": vocab_sig,
                 "sentence_translations": all_completed_translations,
                 **_preserve
             }
