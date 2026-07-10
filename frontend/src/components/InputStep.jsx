@@ -636,12 +636,21 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
   const navigate = useNavigate()
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // ponytail: 复用 auth.getQuota() 显示额度（与 AccountMenu 同源），移动端在发送箭头左侧展示
+  // ponytail: 主页进入/刷新/窗口聚焦时主动打 /api/auth/quota 触发后端 check_and_refill_quota
+  // 旧的 30s 轮询只读 localStorage 缓存，额度不会即时恢复
   const [quota, setQuota] = useState(() => auth.getQuota())
   useEffect(() => {
-    const refresh = () => { const q = auth.getQuota(); if (q) setQuota(q) }
+    const refresh = async () => {
+      const q = await auth.refreshQuota()
+      if (q) setQuota(q)
+      else { const c = auth.getQuota(); if (c) setQuota(c) }
+    }
     refresh()
     const interval = setInterval(refresh, 30000)
-    return () => clearInterval(interval)
+    // 切回标签页/窗口聚焦时也刷新一次（覆盖刷新 & 从其他 tab 返回的场景）
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus) }
   }, [])
   // 记住直接输入模式的语言选择，默认 auto
   const directModeLangRef = useRef('auto')

@@ -86,6 +86,22 @@ export const auth = {
     }
   },
 
+  // ponytail: 轻量额度刷新——只打 /api/auth/quota（触发后端 check_and_refill_quota + 回写 localStorage）
+  // 用于主页进入/刷新/窗口重新聚焦时即时恢复额度
+  async refreshQuota() {
+    const token = this.getAccessToken();
+    if (!token) return null;
+    try {
+      const resp = await axios.get('/api/auth/quota', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      this.setQuota(resp.data);
+      return resp.data;
+    } catch {
+      return null;
+    }
+  },
+
   async changePassword(currentPassword, newPassword) {
     const response = await axios.post('/api/auth/change-password', {
       current_password: currentPassword,
