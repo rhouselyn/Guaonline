@@ -1407,8 +1407,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                         const isExpanded = expandedWord === wordKey
                         const isLoading = loadingWords[wordKey]
                         const detail = wordDetails[wordKey]
-                        // ponytail: 若是从句子点击进来的，用该句 token 的释义/词性/音标覆盖全局释义。
+                        // 两阶段：若是从句子点击进来的，用该句 token 的释义/词性/音标覆盖条目行展示。
+                        // 详情区（WordDetail）不受影响，始终用全局 detail。
                         const ctx = (activeSentenceContext && activeSentenceContext.wordKey === wordKey) ? activeSentenceContext : null
+                        const displayMeaning = ctx ? (ctx.meaning || meaningOverrides[word.word] || word.meaning || word.context_meaning) : (meaningOverrides[word.word] || word.meaning || word.context_meaning)
+                        const displayMorphology = ctx ? (ctx.morphology || word.morphology) : word.morphology
+                        const displayIpa = ctx ? (ctx.phonetic || word.ipa) : word.ipa
 
                         return (
                           <motion.div
@@ -1428,18 +1432,18 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                 <span className={`text-[14px] font-bold text-ink-800 tracking-tight shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
                                   {word.word}
                                 </span>
-                                {word.ipa && (
+                                {displayIpa && (
                                   <span className={`text-[11px] text-ink-400 ipa-font shrink-0 ${vocabDisplayMode === 2 && !isExpanded ? 'invisible' : ''}`}>
-                                    {word.ipa.startsWith('/') ? word.ipa : `/${word.ipa}/`}
+                                    {displayIpa.startsWith('/') ? displayIpa : `/${displayIpa}/`}
                                   </span>
                                 )}
-                                {word.morphology && (
+                                {displayMorphology && (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide shrink-0">
-                                    {word.morphology}
+                                    {displayMorphology}
                                   </span>
                                 )}
                                 <span className={`text-[12px] text-ink-500 truncate ${vocabDisplayMode === 1 && !isExpanded ? 'invisible' : ''}`}>
-                                  {meaningOverrides[word.word] || word.meaning || word.context_meaning}
+                                  {displayMeaning}
                                 </span>
                               </div>
                               {isExpanded && (
@@ -1483,18 +1487,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                             )}
                                           </h3>
                                           <p className="text-[13px] text-ink-700 leading-relaxed">
-                                            {ctx ? (ctx.meaning || detail.enriched_meaning || detail.meaning || detail.context_meaning) : (detail.enriched_meaning || detail.meaning || detail.context_meaning)}
+                                            {detail.enriched_meaning || detail.meaning || detail.context_meaning}
                                           </p>
-                                          {ctx && (ctx.morphology || ctx.phonetic) && (
-                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                              {ctx.morphology && (
-                                                <span className="text-[10px] px-1.5 py-0.5 bg-parchment-100 text-ink-500 rounded font-medium tracking-wide">{ctx.morphology}</span>
-                                              )}
-                                              {ctx.phonetic && (
-                                                <span className="text-[11px] text-ink-400 ipa-font">{ctx.phonetic.startsWith('/') ? ctx.phonetic : `/${ctx.phonetic}/`}</span>
-                                              )}
-                                            </div>
-                                          )}
                                         </div>
                                         <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={sourceLang} hideDefinition />
                                       </div>
