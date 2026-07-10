@@ -364,6 +364,7 @@ class LLMGateway:
         "generate_multiple_choice": "word",
         "admin_vocab_refresh": "word",
         "process_text": "sentence",
+        "segment_sentence": "sentence",
         "process_remaining_words": "sentence",
         "translate": "sentence",
         "generate": "sentence",
