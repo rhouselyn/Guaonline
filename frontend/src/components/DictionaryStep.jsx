@@ -783,6 +783,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const tr = item.translation_result
     const tokens = (tr && tr.translation && Array.isArray(tr.translation)) ? tr.translation : null
 
+    // ponytail: 点词链接只用本句 token——阶段1 分词完就有链接（token 释义可能空，阶段2 补全）；
+    // 不再用全局 vocab 匹配，避免"未处理句子因别句同词提前打链接但点不出释义"
     const tokenTexts = tokens
       ? tokens.filter(t => typeof t === 'object' && t.text).flatMap(t => {
           const raw = t.text
@@ -791,16 +793,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         })
       : []
 
-    const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
-
-    const allWords = [...new Set([...tokenTexts, ...vocabTexts])]
-    if (allWords.length === 0) {
+    if (tokenTexts.length === 0) {
       return <div className="font-medium text-[15px] text-ink-800 mb-1.5 sentence-text">{sentence}</div>
     }
 
-    allWords.sort((a, b) => b.length - a.length)
+    tokenTexts.sort((a, b) => b.length - a.length)
 
-    const escapedWords = allWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const escapedWords = tokenTexts.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     const pattern = new RegExp(`(${escapedWords.join('|')})`, 'gi')
     const parts = sentence.split(pattern)
 
@@ -808,12 +807,12 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       <div className="font-medium text-[15px] text-ink-800 mb-1.5 leading-relaxed sentence-text">
         {parts.map((part, i) => {
           if (!part) return null
-          const clickable = findVocabWordBySourceText(part)
-          if (clickable) {
+          const matchedToken = findTokenForPart(tokens, part)
+          if (matchedToken) {
             return (
               <span
                 key={i}
-                onClick={(e) => { e.stopPropagation(); handleTokenClick(part, findTokenForPart(tokens, part)) }}
+                onClick={(e) => { e.stopPropagation(); handleTokenClick(part, matchedToken) }}
                 className="cursor-pointer rounded px-0.5 -mx-0.5 hover:bg-amber-100 hover:text-amber-800 transition-colors duration-150 border-b border-amber-300/50"
               >
                 {part}

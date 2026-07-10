@@ -1089,13 +1089,21 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             t_llm_end = time.time()
             print(f"[TIMING] 句子 {idx+1} 阶段2填释义: {t_llm_end - t_llm_start:.3f}s")
 
-            # 兜底：补全空字段。阶段1 已分词、阶段2 已对齐，不再需要 _fill_missing_words 补漏
-            t_validate_start = time.time()
-            sentence_translation_result = text_processor.validate_and_complete_translation(
-                sentence, sentence_translation_result, source_lang
-            )
-            t_validate_end = time.time()
-            print(f"[TIMING] 句子 {idx+1} 验证补全: {t_validate_end - t_validate_start:.3f}s")
+            # ponytail: 两阶段后跳过 validate_and_complete_translation——
+            # 它用本地 tokenize 重新对齐/去重/合并 token，会破坏阶段1 的分词结果
+            # （如固定搭配被拆、多出的 token 被丢）。_align 已保证 text 与阶段1 一致。
+            # 兜底：若 LLM 返回异常（无 translation 字段），用阶段1 tokens 重建空壳，绝不丢词。
+            if not (isinstance(sentence_translation_result, dict)
+                    and isinstance(sentence_translation_result.get("translation"), list)
+                    and sentence_translation_result["translation"]):
+                sentence_translation_result = {
+                    "original": sentence,
+                    "translation": [{"text": t, "phonetic": "", "morphology": "", "meaning": ""} for t in tokens],
+                    "tokenized_translation": "",
+                    "translation_phrases": [],
+                    "grammar_explanation": "",
+                    "redundant_tokens": [],
+                }
 
             sentence_data = {
                 "sentence": sentence,
