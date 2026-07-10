@@ -1032,6 +1032,8 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             }
             incremental = [results_dict.get(si, {"sentence": sentences[si], "translation_result": {}}) for si in range(total_sentences)]
             storage.save_pipeline_data(file_id, incremental)
+            # ponytail: 增量存 vocab——/vocab API 从 storage.load_vocab 读数据，不存则前端 refetch 显示"暂无单词"
+            storage.save_vocab(file_id, unique_partial)
             print(f"[DEBUG] 更新状态: 进度 {progress}%, 已处理 {done}, 词汇 {len(unique_partial)} 个")
 
         def _ctx_for(idx):
