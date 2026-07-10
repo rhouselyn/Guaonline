@@ -726,7 +726,39 @@ class TextProcessor:
         if language in NO_SPACE_LANGUAGES:
             return _tokenize_by_char(sentence)
         return _tokenize_by_space(sentence)
-    
+
+    def parse_segmentation_output(self, output: str) -> List[str]:
+        """解析 Stage 1 LLM 输出（一行一词）。
+
+        - 按 \\n 切分
+        - 每行 strip()
+        - 用 strip_edge_punctuation 去首尾标点（处理 LLM 可能附加的编号/引号/逗号等）
+        - 过滤空行
+        """
+        if not output or not isinstance(output, str):
+            return []
+        import re
+        words = []
+        for line in output.split('\n'):
+            stripped = line.strip()
+            stripped = re.sub(r'^\d+[.)]\s*', '', stripped)
+            cleaned = strip_edge_punctuation(stripped)
+            if cleaned:
+                words.append(cleaned)
+        return words
+
+    def validate_segmentation(self, sentence: str, words: List[str], source_lang: str) -> bool:
+        """校验分词结果是否覆盖原句（归一化比较，无 extract_words 兜底）。
+
+        把 words 拼接后与原句同样归一化（去标点、去空格、小写）后比较。
+        匹配返回 True，否则 False。
+        """
+        if not words:
+            return False
+        sentence_normalized = self._normalize_text_for_compare(sentence)
+        words_normalized = self._normalize_text_for_compare(''.join(words))
+        return sentence_normalized == words_normalized and bool(sentence_normalized)
+
     def generate_masked_sentence(self, sentence: str, vocab: List[Dict], translation_tokens: List[str] = None, all_sentences: List[Dict] = None, mask_seed: int = None, source_lang: str = "en", mask_version: int = 0, max_distractors: int = 2) -> Dict[str, Any]:
         if translation_tokens:
             words = translation_tokens
