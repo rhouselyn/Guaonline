@@ -955,7 +955,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
             <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-              {safeProcessingInfo.current}/{safeProcessingInfo.total}
+              {Math.round(safeProcessingInfo.current / safeProcessingInfo.total * 100)}%
             </span>
             <div className={barCls}>
               <motion.div
@@ -972,7 +972,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         ) : wordGenProgress && wordGenProgress.completed < wordGenProgress.total ? (
           <div className={innerCls}>
             <span className="text-[10px] text-amber-500 tabular-nums whitespace-nowrap">
-              {wordGenProgress.completed}/{wordGenProgress.total}
+              {Math.round(wordGenProgress.completed / wordGenProgress.total * 100)}%
             </span>
             <div className={barCls}>
               <motion.div
