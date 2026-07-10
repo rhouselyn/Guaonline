@@ -657,11 +657,16 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
     learned_words_set = set()
     for entry in all_vocab:
         word = entry.get("word", "").lower()
-        if word and storage.find_global_word_cache(word, source_lang):
+        if not word:
+            continue
+        # ponytail: 去重改用跨文件 vocab（finalize 时已同步落库），不再依赖异步生成的 word_cache。
+        # 之前用 find_global_word_cache 会在连续创建重复文件时因 word_cache 未生成完而全部漏判。
+        if storage.find_word_in_other_files_vocab(word, source_lang, file_id):
             learned_words_set.add(word)
+    # 显式保存（空集合也存），避免"未保存"与"保存空集"歧义
+    storage.save_learned_words(file_id, sorted(learned_words_set))
     if learned_words_set:
-        storage.save_learned_words(file_id, sorted(learned_words_set))
-        print(f"[DEBUG] 已识别 {len(learned_words_set)} 个已学单词: {sorted(learned_words_set)}")
+        print(f"[DEBUG] 已识别 {len(learned_words_set)} 个已学单词（跨文件 vocab 去重）: {sorted(learned_words_set)}")
 
     storage.save_pipeline_data(file_id, sentence_translations)
     storage.save_vocab(file_id, all_vocab)

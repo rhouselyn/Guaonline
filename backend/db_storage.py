@@ -466,6 +466,30 @@ class DatabaseStorage:
 
         return None
 
+    def find_word_in_other_files_vocab(self, word: str, source_lang: str, exclude_file_id: str) -> bool:
+        """判断 word 是否已存在于其它同 source_lang 文件的 vocab 中。
+
+        用于 only_new_words 去重：vocab 在 _finalize_pipeline 中同步落库（早于异步 word_cache 生成），
+        因此比 find_global_word_cache 更确定，能正确识别连续创建的重复文件。
+        """
+        word_lower = word.lower()
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT v.vocab FROM vocab v "
+            "JOIN language_settings ls ON v.file_id = ls.file_id "
+            "WHERE ls.source_lang = ? AND v.file_id != ?",
+            (source_lang, exclude_file_id)
+        ).fetchall()
+        for r in rows:
+            try:
+                entries = json.loads(r["vocab"]) if r["vocab"] else []
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict) and entry.get("word", "").lower() == word_lower:
+                    return True
+        return False
+
     # ── language_settings ──────────────────────────────────
 
     def save_language_settings(self, file_id: str, source_lang: str, target_lang: str, original_text: str = None, prompt: str = None):

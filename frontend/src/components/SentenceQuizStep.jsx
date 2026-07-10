@@ -83,11 +83,11 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
       exit={{ opacity: 0, y: -20 }}
       className="max-w-3xl mx-auto"
     >
-      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-5 sm:mb-8">
-        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+      <div className="flex items-center gap-1 sm:gap-2 mb-5 sm:mb-8">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
           <motion.button
             onClick={onBack}
-            className="hidden md:flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
+            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -95,10 +95,12 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
             <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <div className="flex-1 flex items-center justify-center min-w-0">
           {totalItemsInUnit > 0 && (
             <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">{(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}</span>
           )}
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink-0">
           {onOpenVocabList && (
             <motion.button
               onClick={onOpenVocabList}

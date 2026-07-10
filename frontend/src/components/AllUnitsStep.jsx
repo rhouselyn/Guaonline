@@ -260,21 +260,23 @@ function AllUnitsStep({
         setTimeout(() => { touchState.current.scrolling = false }, 350)
       }}
     >
-      <div className="flex items-center gap-1 sm:gap-2 flex-wrap mb-6">
-        <button
-          onClick={onBack}
-          className="btn-ghost p-2 hidden md:flex"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
+      <div className="flex items-center gap-1 sm:gap-2 mb-6">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <button
+            onClick={onBack}
+            className="btn-ghost p-2 hidden md:flex"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        </div>
 
         {fileTitle && (
-          <span className="text-base font-bold text-ink-500 truncate min-w-0 max-w-[55%] md:max-w-[280px]">
+          <span className="text-base font-bold text-ink-500 truncate min-w-0 flex-1 text-center px-2">
             {fileTitle}
           </span>
         )}
 
-        <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <label className="flex items-center gap-1.5 cursor-pointer select-none group">
             <span className="text-xs text-ink-400 group-hover:text-ink-600 transition-colors flex items-center gap-1">
               <Sparkles className="w-3 h-3" />

@@ -7,18 +7,8 @@ import { useMediaQuery } from '../utils/useMediaQuery'
 function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, onOptionSelect, onNextWord, onBack, onOpenVocabList, loading, t, sourceLang, skipListening, reviewMode, reviewIndex, wrongItemsCount }) {
   const speakTimerRef = useRef(null)
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  // 手机端学习模式：0=句子练习（题目），1=单词学习（单词卡）
-  const [activeMode, setActiveMode] = useState(showWordCard ? 1 : 0)
-  const touchState = useRef({ x: 0, y: 0, t: 0, scrolling: false })
-
-  // 父组件 showWordCard 变化时（如答对自动展示单词卡）同步本地模式
-  useEffect(() => {
-    setActiveMode(showWordCard ? 1 : 0)
-  }, [showWordCard])
-
-  const switchMode = (idx) => {
-    setActiveMode(idx)
-  }
+  // 学习模式由父组件 showWordCard 控制：0=题目，1=单词卡（答对后自动切换）
+  const activeMode = showWordCard ? 1 : 0
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -69,46 +59,27 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       className="max-w-3xl mx-auto"
-      onTouchStart={(e) => {
-        if (isDesktop) return
-        const t = e.touches[0]
-        touchState.current = { x: t.clientX, y: t.clientY, t: Date.now(), scrolling: false }
-      }}
-      onTouchEnd={(e) => {
-        if (isDesktop || touchState.current.scrolling) return
-        const t = e.changedTouches[0]
-        const dx = t.clientX - touchState.current.x
-        const dy = t.clientY - touchState.current.y
-        const dt = Date.now() - touchState.current.t
-        // 横向位移必须明显大于纵向，避免误触垂直滚动
-        if (Math.abs(dx) < Math.abs(dy) * 1.5) return
-        const isSwipe = Math.abs(dx) > 40 || (dt > 0 && Math.abs(dx) / dt > 0.3)
-        if (!isSwipe) return
-        const targetIdx = dx < 0 ? Math.min(1, activeMode + 1) : Math.max(0, activeMode - 1)
-        if (targetIdx === activeMode) return
-        touchState.current.scrolling = true
-        switchMode(targetIdx)
-        setTimeout(() => { touchState.current.scrolling = false }, 350)
-      }}
     >
-      <div className="flex items-center justify-between gap-1 sm:gap-2 mb-5 sm:mb-8">
-        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+      <div className="flex items-center gap-1 sm:gap-2 mb-5 sm:mb-8">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
           <motion.button
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={onBack}
-            className="hidden md:flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
+            className="flex items-center gap-1 sm:gap-2 btn-ghost px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm whitespace-nowrap"
           >
             <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="truncate">{t.back}</span>
           </motion.button>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <div className="flex-1 flex items-center justify-center min-w-0">
           {totalItemsInUnit > 0 && (
             <span className="text-xs sm:text-sm text-ink-500 font-medium whitespace-nowrap tabular-nums">
               {(t.stepProgress || '第 {0} / {1} 题').replace('{0}', stepInUnit).replace('{1}', totalItemsInUnit)}
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink-0">
           {onOpenVocabList && (
             <motion.button
               initial={{ opacity: 0, x: 10 }}
@@ -122,26 +93,6 @@ function LearningStep({ learningData, showWordCard, selectedOption, isCorrect, o
           )}
         </div>
       </div>
-
-      {/* 手机端顶部模式切换 — 紧凑分段控件 */}
-      {!isDesktop && (
-        <div className="flex justify-center mb-4 md:hidden">
-          <div className="inline-flex items-center bg-parchment-100 rounded-full p-0.5">
-            <button
-              onClick={() => switchMode(0)}
-              className={`px-5 py-1 rounded-full text-xs font-bold transition-all ${activeMode === 0 ? 'bg-amber-400 text-white shadow-sm' : 'text-ink-400'}`}
-            >
-              {t.question || '题目'}
-            </button>
-            <button
-              onClick={() => switchMode(1)}
-              className={`px-5 py-1 rounded-full text-xs font-bold transition-all ${activeMode === 1 ? 'bg-amber-400 text-white shadow-sm' : 'text-ink-400'}`}
-            >
-              {t.wordCard || '单词卡'}
-            </button>
-          </div>
-        </div>
-      )}
 
       <AnimatePresence mode="wait">
         {activeMode === 0 ? (

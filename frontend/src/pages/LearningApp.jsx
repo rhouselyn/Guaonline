@@ -193,12 +193,23 @@ function App() {
   }, [isDesktop, fontScaleMobile, fontScaleDesktop, showSettings])
 
   // === 浏览器历史导航：popstate 监听（回退/前进）===
+  const stepRef = useRef('input')
+  useEffect(() => { stepRef.current = step }, [step])
   useEffect(() => {
     const handlePopState = (event) => {
       // 单词总表/收藏面板打开时，回退仅关闭面板，不切换 step（回到主页）
       if (wordPanelOpenRef.current) {
         setWordListLang(null)
         setFavoriteLang(null)
+        return
+      }
+      const current = stepRef.current
+      // ponytail: 在学习/题目步骤按系统返回键时，不直接退出，弹确认框（与点返回按钮一致）
+      const QUIZ_STEPS = ['learning', 'sentence-quiz', 'listening-quiz', 'phase-exercise']
+      if (QUIZ_STEPS.includes(current)) {
+        // 重新压入当前 step，抵消这次回退，保持页面不变
+        window.history.pushState({ step: current }, '')
+        handleConfirmBack('input')
         return
       }
       const targetStep = event.state?.step
