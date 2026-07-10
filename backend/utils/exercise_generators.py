@@ -1058,7 +1058,6 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                     user_id, tier, sentence, source_lang, target_lang, _ctx_for(idx), fixed_words=words
                 )
                 enforced = _enforce_word_list(raw, words, sentence)
-                enforced = text_processor.validate_and_complete_translation(sentence, enforced, source_lang)
                 return idx, {"sentence": sentence, "source_lang": source_lang, "translation_result": enforced}
             except Exception as e:
                 print(f"[ERROR] 句子 {idx+1} Stage2 充实失败: {e}")
