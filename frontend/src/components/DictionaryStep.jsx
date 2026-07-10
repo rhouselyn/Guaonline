@@ -848,6 +848,20 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <span>{t.prevPage || '上一页'}</span>
           </button>
           <span className="text-[11px] text-ink-400 tabular-nums">{currentPage} / {totalPages}</span>
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            placeholder={`${t.jumpToPage || '跳至'}`}
+            className="w-12 text-[11px] text-center border border-aged-200 rounded-sm px-1 py-0.5 focus:outline-none focus:border-amber-300"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const p = parseInt(e.target.value, 10)
+                if (p >= 1 && p <= totalPages) { onPageChange(p); e.target.value = '' }
+                e.target.blur()
+              }
+            }}
+          />
           <button
             onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
@@ -902,6 +916,25 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
+        {totalPages > 7 && (
+          <div className="flex items-center gap-1 ml-2">
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              placeholder={`${t.jumpToPage || '跳至'}`}
+              className="w-12 text-[11px] text-center border border-aged-200 rounded-sm px-1 py-0.5 focus:outline-none focus:border-amber-300"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const p = parseInt(e.target.value, 10)
+                  if (p >= 1 && p <= totalPages) { onPageChange(p); e.target.value = '' }
+                  e.target.blur()
+                }
+              }}
+            />
+            <span className="text-[10px] text-aged-300">/ {totalPages}</span>
+          </div>
+        )}
       </div>
     )
   }
