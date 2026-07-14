@@ -267,7 +267,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setPagedVocab([]); setVocabTotal(0)
     }).finally(() => { if (!cancelled && seq === vocabFetchSeq.current) setVocabFetching(false) })
     return () => { cancelled = true }
-  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength])
+  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength, sentenceLength])
 
   // ponytail: 按页拉取句子翻译（仅当前页 + total）。
   const sentFetchSeq = useRef(0)
@@ -306,7 +306,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setAllWords([])
     })
     return () => { cancelled = true }
-  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength])
+  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength, sentenceLength])
 
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
