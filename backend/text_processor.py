@@ -486,9 +486,15 @@ class TextProcessor:
         return re.sub(r'[\s\u3000]+', '', re.sub(r'[^\w\u00C0-\u024F\u0400-\u052F\u0370-\u03FF\u0600-\u06FF\u0900-\u0D7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1000-\u109F\u10A0-\u10FF\u1100-\u11FF]', '', text)).lower()
 
     def validate_and_complete_translation(self, sentence: str, translation_result: dict, source_lang: str) -> dict:
+        """Stage 2 后的轻量清理：只去标点、去空壳，绝不重建 token 数组。
+
+        Stage 1 的分词边界由 LLM 决定（含多词表达如 "New York"），
+        这里不再用规则分词（按空格切）覆盖或 merge，避免破坏多词表达。
+        仅当 translation 数组完全为空时，才用规则分词兜底（Stage 1 失败的防线）。
+        """
         if not isinstance(translation_result, dict) or 'translation' not in translation_result:
             return translation_result
-        
+
         existing_tokens = []
         if 'translation' in translation_result:
             for token in translation_result['translation']:
@@ -501,7 +507,8 @@ class TextProcessor:
                         token['text'] = cleaned
                     if cleaned:
                         existing_tokens.append(token)
-        
+
+        # 完全为空时才用规则分词兜底（Stage 1 彻底失败的防线）
         if not existing_tokens:
             original_words = self.tokenize_sentence(sentence, language=source_lang)
             cleaned_original = []
@@ -516,191 +523,12 @@ class TextProcessor:
                 for w in cleaned_original
             ]
             return translation_result
-        
-        sentence_normalized = self._normalize_text_for_compare(sentence)
-        tokens_normalized = self._normalize_text_for_compare(''.join(t['text'] for t in existing_tokens))
-        
-        if source_lang in NO_SPACE_LANGUAGES:
-            if tokens_normalized == sentence_normalized:
-                deduped = self._dedup_tokens(existing_tokens, sentence_normalized)
-                translation_result['translation'] = deduped
-                return translation_result
-            
-            if tokens_normalized and sentence_normalized.startswith(tokens_normalized):
-                remaining = sentence[len(''.join(t['text'] for t in existing_tokens)):]
-                remaining = remaining.strip()
-                if remaining:
-                    import re
-                    remaining_clean = re.sub(r'[^\w]+', '', remaining)
-                    if remaining_clean:
-                        existing_tokens.append({
-                            'text': remaining_clean,
-                            'phonetic': '',
-                            'morphology': '',
-                            'meaning': ''
-                        })
-                translation_result['translation'] = existing_tokens
-                return translation_result
-            
-            if len(tokens_normalized) > len(sentence_normalized):
-                deduped = self._dedup_tokens(existing_tokens, sentence_normalized)
-                translation_result['translation'] = deduped
-                return translation_result
-            
-            translation_result['translation'] = existing_tokens
-            return translation_result
-        
-        original_words = self.tokenize_sentence(sentence, language=source_lang)
-        cleaned_original = []
-        for w in original_words:
-            if is_punctuation_only(w):
-                continue
-            cw = strip_edge_punctuation(w)
-            if cw:
-                cleaned_original.append(cw)
-        original_words = cleaned_original
-        
-        original_word_counts = {}
-        for w in original_words:
-            key = w.lower()
-            original_word_counts[key] = original_word_counts.get(key, 0) + 1
-        
-        deduped_tokens = []
-        token_seen_counts = {}
-        for token in existing_tokens:
-            key = token['text'].lower()
-            allowed = original_word_counts.get(key, 1)
-            current = token_seen_counts.get(key, 0)
-            if current < allowed:
-                token_seen_counts[key] = current + 1
-                deduped_tokens.append(token)
-            else:
-                for prev in deduped_tokens:
-                    if prev['text'].lower() == key:
-                        for field in ('phonetic', 'morphology', 'meaning'):
-                            if not prev.get(field) and token.get(field):
-                                prev[field] = token[field]
-                        break
-        existing_tokens = deduped_tokens
-        
-        existing_text_joined = ''.join(t['text'] for t in existing_tokens).lower()
-        original_joined = ''.join(original_words).lower()
-        
-        if existing_text_joined == original_joined and len(existing_tokens) == len(original_words):
-            translation_result['translation'] = existing_tokens
-            return translation_result
-        
-        if existing_text_joined == original_joined and len(existing_tokens) != len(original_words):
-            merged = []
-            orig_idx = 0
-            tok_idx = 0
-            while orig_idx < len(original_words) and tok_idx < len(existing_tokens):
-                orig = original_words[orig_idx]
-                combined = ''
-                combined_tokens = []
-                while tok_idx < len(existing_tokens):
-                    combined += existing_tokens[tok_idx]['text']
-                    combined_tokens.append(existing_tokens[tok_idx])
-                    if combined.lower() == orig.lower():
-                        if len(combined_tokens) == 1:
-                            merged.append(combined_tokens[0])
-                        else:
-                            merged.append({
-                                'text': orig,
-                                'phonetic': combined_tokens[0].get('phonetic', ''),
-                                'morphology': '；'.join(t.get('morphology', '') for t in combined_tokens if t.get('morphology')),
-                                'meaning': '；'.join(t.get('meaning', '') or t.get('context_meaning', '') or t.get('translation', '') for t in combined_tokens if t.get('meaning') or t.get('context_meaning') or t.get('translation')),
-                            })
-                        tok_idx += 1
-                        break
-                    tok_idx += 1
-                orig_idx += 1
-            translation_result['translation'] = merged
-            return translation_result
-        
-        completed_translation = []
-        used_existing = set()
-        covered_original_indices = set()
-        
-        # Pre-compute: for multi-word tokens, find which consecutive original words they cover
-        token_to_orig_range = {}  # token_index -> (start_orig_idx, end_orig_idx)
-        for i, token in enumerate(existing_tokens):
-            token_text = token['text']
-            token_words = token_text.split()
-            if len(token_words) > 1:
-                token_lower_words = [w.lower() for w in token_words]
-                for start_idx in range(len(original_words)):
-                    end_idx = start_idx + len(token_words)
-                    if end_idx > len(original_words):
-                        break
-                    orig_slice = [w.lower() for w in original_words[start_idx:end_idx]]
-                    if orig_slice == token_lower_words:
-                        token_to_orig_range[i] = (start_idx, end_idx)
-                        break
-        
-        orig_idx = 0
-        while orig_idx < len(original_words):
-            if orig_idx in covered_original_indices:
-                orig_idx += 1
-                continue
-            
-            orig_word = original_words[orig_idx]
-            orig_lower = orig_word.lower()
-            found = False
-            
-            # First, try to find a multi-word token that starts at this position
-            for i, (start, end) in token_to_orig_range.items():
-                if i in used_existing:
-                    continue
-                if start == orig_idx:
-                    completed_translation.append(existing_tokens[i])
-                    used_existing.add(i)
-                    for j in range(start, end):
-                        covered_original_indices.add(j)
-                    found = True
-                    orig_idx = end
-                    break
-            
-            if found:
-                continue
-            
-            # Then try single-word exact match
-            for i, token in enumerate(existing_tokens):
-                if i in used_existing:
-                    continue
-                token_lower = token['text'].lower()
-                if token_lower == orig_lower:
-                    completed_translation.append(token)
-                    used_existing.add(i)
-                    found = True
-                    break
-            if not found:
-                for i, token in enumerate(existing_tokens):
-                    if i in used_existing:
-                        continue
-                    token_lower = token['text'].lower()
-                    if token_lower == orig_lower.replace('-', ' '):
-                        completed_translation.append(token)
-                        used_existing.add(i)
-                        found = True
-                        break
-                    if token_lower.replace('-', ' ') == orig_lower:
-                        completed_translation.append({**token, 'text': orig_word})
-                        used_existing.add(i)
-                        found = True
-                        break
-            if not found:
-                completed_translation.append({
-                    'text': orig_word,
-                    'phonetic': '',
-                    'morphology': '',
-                    'meaning': ''
-                })
-            
-            orig_idx += 1
-        
-        translation_result['translation'] = completed_translation
+
+        # Stage 1 的分词边界原样保留，不做去重——句子中重复出现的词是合理的，
+        # 去重会破坏 token 数组并导致 filter_eligible_sentences 误判（word_count<2 被过滤）。
+        translation_result['translation'] = existing_tokens
         return translation_result
+
     
     def _dedup_tokens(self, tokens, sentence_normalized):
         deduped = []
@@ -728,16 +556,40 @@ class TextProcessor:
         return _tokenize_by_space(sentence)
 
     def parse_segmentation_output(self, output: str) -> List[str]:
-        """解析 Stage 1 LLM 输出（一行一词）。
+        """解析 Stage 1 LLM 输出。
 
-        - 按 \\n 切分
-        - 每行 strip()
-        - 用 strip_edge_punctuation 去首尾标点（处理 LLM 可能附加的编号/引号/逗号等）
-        - 过滤空行
+        优先解析 JSON（{"words": [...]}），失败则回退按行解析（一行一词）。
+        - JSON: 提取 words 数组，逐项 strip + strip_edge_punctuation
+        - 行模式: 按 \\n 切分，每行 strip，去编号前缀，strip_edge_punctuation
+        - 过滤空串
         """
         if not output or not isinstance(output, str):
             return []
         import re
+        import json as _json
+
+        # 优先尝试 JSON 解析（支持 markdown 代码块包裹）
+        try:
+            content = output.strip()
+            # 去掉 ```json ... ``` 包裹
+            if content.startswith('```'):
+                content = re.sub(r'^```(?:json)?\s*', '', content)
+                content = re.sub(r'\s*```$', '', content)
+            obj = _json.loads(content)
+            if isinstance(obj, dict) and isinstance(obj.get("words"), list):
+                words = []
+                for w in obj["words"]:
+                    if not isinstance(w, str):
+                        continue
+                    cleaned = strip_edge_punctuation(w.strip())
+                    if cleaned:
+                        words.append(cleaned)
+                if words:
+                    return words
+        except Exception:
+            pass
+
+        # 回退：按行解析
         words = []
         for line in output.split('\n'):
             stripped = line.strip()

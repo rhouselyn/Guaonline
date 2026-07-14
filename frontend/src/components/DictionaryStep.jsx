@@ -267,7 +267,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setPagedVocab([]); setVocabTotal(0)
     }).finally(() => { if (!cancelled && seq === vocabFetchSeq.current) setVocabFetching(false) })
     return () => { cancelled = true }
-  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength])
+  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength, sentenceLength])
 
   // ponytail: 按页拉取句子翻译（仅当前页 + total）。
   const sentFetchSeq = useRef(0)
@@ -306,7 +306,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setAllWords([])
     })
     return () => { cancelled = true }
-  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength])
+  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength, sentenceLength])
 
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
@@ -823,7 +823,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceText.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    return pagedFilteredVocab.some(w => {
+    // 先在当前页 pagedFilteredVocab 找（含 tokens），再在全量 allWords 词字符串里找（跨页）
+    const inPage = pagedFilteredVocab.some(w => {
       const wordLower = w.word.toLowerCase()
       if (wordLower === sourceLower) return true
       if (wordLower === sourceNoHyphen) return true
@@ -833,7 +834,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (sourceStripped && sourceStripped !== sourceLower && w.tokens && w.tokens.some(t => t.toLowerCase() === sourceStripped)) return true
       return false
     })
-  }, [pagedFilteredVocab])
+    if (inPage) return true
+    return allWords.some(w => {
+      const wordLower = w.toLowerCase()
+      if (wordLower === sourceLower) return true
+      if (wordLower === sourceNoHyphen) return true
+      if (wordLower.replace(/-/g, ' ') === sourceLower) return true
+      if (sourceStripped && sourceStripped !== sourceLower && wordLower === sourceStripped) return true
+      return false
+    })
+  }, [pagedFilteredVocab, allWords])
 
   // ponytail: 在当前句子的 token 数组里找出与可点击文本对应的那个 token（含其上下文释义/词性/音标）。
   const findTokenForPart = useCallback((tokens, part) => {
@@ -865,14 +875,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
 
-    const allWords = [...new Set([...tokenTexts, ...vocabTexts])]
-    if (allWords.length === 0) {
+    // 用全局 allWords（words_only 全量）+ 当前句 token，保证跨页单词也能匹配上链接
+    const matchWords = [...new Set([...tokenTexts, ...allWords, ...vocabTexts])]
+    if (matchWords.length === 0) {
       return <div className="font-medium text-[15px] text-ink-800 mb-1.5 sentence-text">{sentence}</div>
     }
 
-    allWords.sort((a, b) => b.length - a.length)
+    matchWords.sort((a, b) => b.length - a.length)
 
-    const escapedWords = allWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const escapedWords = matchWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     const pattern = new RegExp(`(${escapedWords.join('|')})`, 'gi')
     const parts = sentence.split(pattern)
 
@@ -1027,7 +1038,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
             <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-              {Math.round(safeProcessingInfo.current / safeProcessingInfo.total * 100)}%
+              {Math.round(progress)}%
             </span>
             <div className={barCls}>
               <motion.div
@@ -1081,7 +1092,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </button>
 
         {actualSourceLang && actualSourceLang !== 'auto' && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 order-last md:order-none">
             <LangIcon langCode={actualSourceLang} size="md" />
             <span className="text-sm font-bold text-ink-700">
               {LANGUAGES.find(l => l.value === actualSourceLang)?.native || actualSourceLang?.toUpperCase()}
@@ -1177,7 +1188,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
-                  <Languages className={`w-4 h-4 transition-colors cursor-pointer ${sentenceDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }} title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal} />
+                  <div
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-aged-200 bg-parchment-100/60 cursor-pointer active:bg-amber-100 active:border-amber-400 transition-colors duration-150"
+                    onClick={(e) => { e.stopPropagation(); setSentenceDisplayMode(v => (v + 1) % 3) }}
+                    title={sentenceDisplayMode === 0 ? t.showAll : sentenceDisplayMode === 1 ? t.hideTranslation : t.hideOriginal}
+                  >
+                    <Languages className="w-4 h-4 text-ink-500" />
+                  </div>
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleShowOriginal}>
                       <span className={!showOriginal ? tabActiveCls : tabInactiveCls}>{t.sentTranslation}</span>
@@ -1286,7 +1303,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
             <div className="px-3 py-2 md:px-5 md:py-3.5 border-b border-aged-200/80 bg-parchment-50/60">
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="flex items-center gap-2 shrink-0 md:min-w-[140px]">
-                  <BookOpen className={`w-4 h-4 transition-colors cursor-pointer ${vocabDisplayMode !== 0 ? 'text-amber-500' : 'text-ink-500 hover:text-amber-500'}`} onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }} title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : t.hideWord} />
+                  <div
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-aged-200 bg-parchment-100/60 cursor-pointer active:bg-amber-100 active:border-amber-400 transition-colors duration-150"
+                    onClick={(e) => { e.stopPropagation(); setVocabDisplayMode(v => (v + 1) % 3) }}
+                    title={vocabDisplayMode === 0 ? t.showAll : vocabDisplayMode === 1 ? t.hideMeaning : vocabDisplayMode === 2 ? t.hideWord : t.showAll}
+                  >
+                    <BookOpen className="w-4 h-4 text-ink-500" />
+                  </div>
                   <h3 className="text-sm font-bold text-ink-700 font-display">
                     <span className="cursor-pointer select-none" onClick={handleToggleGlobalVocab}>
                       <span className={!showGlobalVocab ? tabActiveCls : tabInactiveCls}>{t.vocabList}</span>
@@ -1552,11 +1575,6 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                           <h3 className="label-warm mb-0.5 flex items-center gap-1">
                                             <Brain className="w-3 h-3 text-amber-500" />
                                             {t.definition || '释义'}
-                                            {ctx && (
-                                              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium tracking-wide">
-                                                {t.thisSentenceContext || '本句上下文'}
-                                              </span>
-                                            )}
                                           </h3>
                                           <p className="text-[13px] text-ink-700 leading-relaxed">
                                             {detail.enriched_meaning || detail.meaning || detail.context_meaning}

@@ -683,6 +683,19 @@ class DatabaseStorage:
             "file_id = ? AND phase = ?", (file_id, phase), "exercise_order", None
         )
 
+    def delete_exercise_order(self, file_id: str, phase: int = None):
+        """删除 exercise_order（指定 phase 或全部）。处理完成后调用，清除处理期间
+        用部分句子生成的过时 exercise_order，让下次进入时基于完整数据重新生成。"""
+        conn = self._get_conn()
+        if phase is not None:
+            conn.execute("DELETE FROM exercise_order WHERE file_id = ? AND phase = ?", (file_id, phase))
+            self._invalidate(("exercise_order", file_id, phase))
+        else:
+            conn.execute("DELETE FROM exercise_order WHERE file_id = ?", (file_id,))
+            self._invalidate(("exercise_order", file_id, 1))
+            self._invalidate(("exercise_order", file_id, 2))
+        conn.commit()
+
     # ── phase2_progress ────────────────────────────────────
 
     def save_phase2_progress(self, file_id: str, current_exercise_index: int):
