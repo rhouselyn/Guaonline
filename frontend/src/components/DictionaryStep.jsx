@@ -1092,7 +1092,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         </button>
 
         {actualSourceLang && actualSourceLang !== 'auto' && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 order-last md:order-none">
             <LangIcon langCode={actualSourceLang} size="md" />
             <span className="text-sm font-bold text-ink-700">
               {LANGUAGES.find(l => l.value === actualSourceLang)?.native || actualSourceLang?.toUpperCase()}
