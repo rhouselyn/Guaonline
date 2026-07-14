@@ -997,6 +997,10 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
             print(f"[ERROR] 文件 {file_id} 有 {len(failed_sentences)} 个句子失败：{[f['index']+1 for f in failed_sentences]}，已保存部分结果，等待重试")
             return  # 不抛异常、不删历史、不退额度，等待用户重试失败句子
 
+        # 最后一句 Stage 2 落库后，让出一次事件循环，确保 SSE 轮询能读到中间态
+        # 否则 _finalize_pipeline 紧接着把 status 置为 completed，最后一句的增量更新会被吞掉
+        await asyncio.sleep(0.5)
+
         all_vocab = _finalize_pipeline(
             file_id, sentence_translations, total_sentences,
             source_lang, target_lang, user_id, tier, t_total_start
