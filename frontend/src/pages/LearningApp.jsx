@@ -1394,8 +1394,11 @@ function App() {
     setShowWordCard(false)
     setSelectedOption(null)
     setIsCorrect(null)
-    // ponytail: 点击最近条目即更新 updated_at，使返回主页时历史顺序立即正确（缓存刷新）
-    api.touchHistory(fileId).then(() => setHistoryRefresh(v => v + 1)).catch(() => {})
+    // ponytail: 点击最近条目即持久化 updated_at。不触发 historyRefresh——前端已有乐观重排
+    // （HistorySidebar.handleNavigate 把条目移到第一位），refetch 反而可能因多 worker 读延迟
+    // 读到旧 updated_at，导致条目先跳到 created_at 位置再到第一位。返回主页时 sidebar 重新挂载
+    // 自带 loadHistory，届时 touchHistory 早已提交，顺序自然正确。
+    api.touchHistory(fileId).catch(() => {})
     try {
       setCurrentFileId(fileId)
       setFileId(fileId)

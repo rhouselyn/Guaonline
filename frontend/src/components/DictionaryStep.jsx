@@ -293,12 +293,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, sentenceLength])
 
   // 拉取全量词表（仅词字符串，轻量 words_only），用于构建字母→页、单词→页索引。
-  // 依赖文件/排序/搜索/生成进度（vocabLength 变化时 Stage1/2 新增词需补入索引）。
+  // ponytail: 不传 q——allWords 供句子链接跨页匹配（findVocabWordBySourceText / wordToPage），
+  // 必须是全量词表；搜索过滤由分页词表各自负责，否则搜索时句子链接会漏掉不匹配搜索词的单词。
   useEffect(() => {
     if (!currentFileId) return
     let cancelled = false
     const seq = ++allWordsSeq.current
-    api.getVocab(currentFileId, { words_only: true, sort: sortOrder, q: vocabSearchDebounced }).then(data => {
+    api.getVocab(currentFileId, { words_only: true, sort: sortOrder }).then(data => {
       if (cancelled || seq !== allWordsSeq.current) return
       setAllWords(Array.isArray(data.words) ? data.words : [])
     }).catch(() => {
@@ -306,7 +307,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setAllWords([])
     })
     return () => { cancelled = true }
-  }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength, sentenceLength])
+  }, [currentFileId, sortOrder, vocabLength, sentenceLength])
 
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
