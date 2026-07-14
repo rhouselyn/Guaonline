@@ -74,10 +74,17 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [sentFetching, setSentFetching] = useState(false)
   const [vocabSearchDebounced, setVocabSearchDebounced] = useState(vocabSearch)
   const [sentenceSearchDebounced, setSentenceSearchDebounced] = useState(sentenceSearch)
-  // 全量词表（仅词字符串，轻量），用于构建字母→页、单词→页索引，支持跨页跳转
+  // 全量词表（仅词字符串，轻量），用于构建字母→页、单词→页索引，支持跨页跳转。
+  // allWords 受 vocabSearchDebounced 过滤，仅给字母侧栏用；
+  // allWordsFull 始终未过滤，专供句子链接渲染/点击跳转——否则搜索时句子链接会漏掉非匹配词。
   const [allWords, setAllWords] = useState([])
+  const [allWordsFull, setAllWordsFull] = useState([])
   const allWordsSeq = useRef(0)
+  const allWordsFullSeq = useRef(0)
   const vocabFetchSeq = useRef(0)
+  // ponytail: 从句子点击单词跳转时，若分表处于搜索态会先清空 vocabSearch；
+  // 该 ref 用于抑制清空触发的"页码重置为1"——我们要跳到目标词所在页，不是回首页。
+  const suppressVocabPageReset = useRef(false)
   const vocabListRef = useRef(null)
   const sentenceListRef = useRef(null)
   const wordRefs = useRef({})
@@ -238,7 +245,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   // ponytail: 搜索去抖——输入停 300ms 后才触发后端 fetch，避免每个按键都请求。
   useEffect(() => {
-    const id = setTimeout(() => { setVocabSearchDebounced(vocabSearch); setVocabPage(1) }, 300)
+    const id = setTimeout(() => {
+      setVocabSearchDebounced(vocabSearch)
+      // 用户输入或手动清空搜索时回到第1页；
+      // 从句子点击单词跳转时 suppressVocabPageReset=true 跳过重置，保持目标词所在页。
+      if (!suppressVocabPageReset.current) setVocabPage(1)
+      suppressVocabPageReset.current = false
+    }, 300)
     return () => clearTimeout(id)
   }, [vocabSearch])
   useEffect(() => {
@@ -308,6 +321,22 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return () => { cancelled = true }
   }, [currentFileId, sortOrder, vocabSearchDebounced, vocabLength, sentenceLength])
 
+  // 拉取未过滤的全量词表，专供句子链接渲染/点击跳转使用——
+  // 不受 vocabSearchDebounced 影响，保证搜索时句子里的词仍能全部被索引到。
+  useEffect(() => {
+    if (!currentFileId) return
+    let cancelled = false
+    const seq = ++allWordsFullSeq.current
+    api.getVocab(currentFileId, { words_only: true, sort: sortOrder }).then(data => {
+      if (cancelled || seq !== allWordsFullSeq.current) return
+      setAllWordsFull(Array.isArray(data.words) ? data.words : [])
+    }).catch(() => {
+      if (cancelled || seq !== allWordsFullSeq.current) return
+      setAllWordsFull([])
+    })
+    return () => { cancelled = true }
+  }, [currentFileId, sortOrder, vocabLength, sentenceLength])
+
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
   pageSizeRef.current = pageSize
@@ -343,6 +372,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     })
     return m
   }, [allWords, pageSize])
+
+  // 单词→页索引（基于未过滤的全量词表），用于从句子点击单词时的跨页跳转——
+  // 与 vocabSearch 解耦：搜索时仍能定位到该词在完整词表中的真实页码。
+  const wordToPageFull = useMemo(() => {
+    const m = new Map()
+    allWordsFull.forEach((w, i) => {
+      m.set(w.toLowerCase(), Math.floor(i / pageSize) + 1)
+    })
+    return m
+  }, [allWordsFull, pageSize])
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -634,8 +673,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceWord.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    // 在全量词表中匹配（不再仅限当前页），获取规范 wordKey
-    const matchedWordStr = allWords.find(w => {
+    // 在未过滤的全量词表中匹配（不再仅限当前页，也不再受 vocabSearch 影响），获取规范 wordKey
+    const matchedWordStr = allWordsFull.find(w => {
       const wLower = w.toLowerCase()
       if (wLower === sourceLower) return true
       if (wLower === sourceNoHyphen) return true
@@ -665,8 +704,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setShowGlobalVocab(false)
     }
 
-    // 跳转到该词所在页（基于全量词表索引），再滚动定位
-    const page = wordToPage.get(wordKey.toLowerCase())
+    // 若分表当前处于搜索态，先清空搜索——否则 pagedVocab 仍是过滤结果，
+    // 跳到目标页时该页可能根本没有目标词（漏词根因）。
+    if (vocabSearch || vocabSearchDebounced) {
+      suppressVocabPageReset.current = true
+      setVocabSearch('')
+      setVocabSearchDebounced('')
+    }
+
+    // 跳转到该词在未过滤全量词表中的真实页码，再滚动定位
+    const page = wordToPageFull.get(wordKey.toLowerCase())
     if (page && page !== vocabPage) {
       setVocabPage(page)
       pendingScrollWord.current = wordKey
@@ -683,7 +730,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
     if (!isDesktop) switchPanel(1)
-  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
+  }, [allWordsFull, wordToPageFull, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, vocabSearch, vocabSearchDebounced])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -823,7 +870,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceText.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    // 先在当前页 pagedFilteredVocab 找（含 tokens），再在全量 allWords 词字符串里找（跨页）
+    // 先在当前页 pagedFilteredVocab 找（含 tokens），再在全量 allWordsFull 词字符串里找（跨页）。
+    // 用 allWordsFull（未过滤）而非 allWords，否则搜索时非匹配词的句子链接会全部漏掉。
     const inPage = pagedFilteredVocab.some(w => {
       const wordLower = w.word.toLowerCase()
       if (wordLower === sourceLower) return true
@@ -835,7 +883,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return false
     })
     if (inPage) return true
-    return allWords.some(w => {
+    return allWordsFull.some(w => {
       const wordLower = w.toLowerCase()
       if (wordLower === sourceLower) return true
       if (wordLower === sourceNoHyphen) return true
@@ -843,7 +891,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (sourceStripped && sourceStripped !== sourceLower && wordLower === sourceStripped) return true
       return false
     })
-  }, [pagedFilteredVocab, allWords])
+  }, [pagedFilteredVocab, allWordsFull])
 
   // ponytail: 在当前句子的 token 数组里找出与可点击文本对应的那个 token（含其上下文释义/词性/音标）。
   const findTokenForPart = useCallback((tokens, part) => {
@@ -875,8 +923,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
 
-    // 用全局 allWords（words_only 全量）+ 当前句 token，保证跨页单词也能匹配上链接
-    const matchWords = [...new Set([...tokenTexts, ...allWords, ...vocabTexts])]
+    // 用全局 allWordsFull（words_only 全量、未过滤）+ 当前句 token，保证跨页单词也能匹配上链接。
+    // 不用 allWords（受 vocabSearchDebounced 过滤），否则搜索状态下非匹配词的链接全部漏掉。
+    const matchWords = [...new Set([...tokenTexts, ...allWordsFull, ...vocabTexts])]
     if (matchWords.length === 0) {
       return <div className="font-medium text-[15px] text-ink-800 mb-1.5 sentence-text">{sentence}</div>
     }
