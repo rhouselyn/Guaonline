@@ -524,21 +524,9 @@ class TextProcessor:
             ]
             return translation_result
 
-        # 有 token 则原样保留 Stage 1 的分词边界，只做去重（同词合并空字段）
-        deduped_tokens = []
-        seen_keys = {}
-        for token in existing_tokens:
-            key = token['text'].lower()
-            if key not in seen_keys:
-                seen_keys[key] = token
-                deduped_tokens.append(token)
-            else:
-                prev = seen_keys[key]
-                for field in ('phonetic', 'morphology', 'meaning'):
-                    if not prev.get(field) and token.get(field):
-                        prev[field] = token[field]
-
-        translation_result['translation'] = deduped_tokens
+        # Stage 1 的分词边界原样保留，不做去重——句子中重复出现的词是合理的，
+        # 去重会破坏 token 数组并导致 filter_eligible_sentences 误判（word_count<2 被过滤）。
+        translation_result['translation'] = existing_tokens
         return translation_result
 
     

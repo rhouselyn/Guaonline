@@ -593,6 +593,10 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
     storage.save_pipeline_data(file_id, sentence_translations)
     storage.save_vocab(file_id, all_vocab)
 
+    # 清除处理期间可能用部分句子生成的过时 exercise_order，
+    # 让下次进入题目时基于完整数据重新生成
+    storage.delete_exercise_order(file_id)
+
     if all_vocab:
         generate_and_save_learning_plan(file_id, all_vocab, sentence_translations)
 
