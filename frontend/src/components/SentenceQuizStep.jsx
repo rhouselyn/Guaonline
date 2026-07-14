@@ -129,13 +129,13 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
             <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {t.translationQuiz || '翻译题'}
           </motion.div>
-          {/* 句子翻译：单行显示，过长时横向滚动，发音按钮始终可见 */}
-          <div className="flex items-center gap-2">
+          {/* 句子翻译：过长自动换行，发音按钮始终可见 */}
+          <div className="flex items-start gap-2">
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="text-sm sm:text-lg text-ink-600 whitespace-nowrap overflow-x-auto flex-1 min-w-0 py-1 text-left"
+              className="text-sm sm:text-lg text-ink-600 flex-1 min-w-0 py-1 text-left break-words"
             >
               {quizData.original_sentence}
             </motion.p>

@@ -395,7 +395,9 @@ function App() {
       console.log('SSE 状态:', status)
 
       if (status.total_sentences !== undefined && status.total_sentences > 0) {
-        const signal = status.total_sentences * 1000 + (status.current_sentence || 0)
+        // current_sentence = stage1_count*100 + stage2_count（后端两阶段进度合并信号）
+        // 用 total*10000 + current_sentence 作为 refetch 信号，确保 Stage 1 完成时也能触发句子/词表刷新
+        const signal = status.total_sentences * 10000 + (status.current_sentence || 0)
         if (signal !== sentenceLength) {
           setSentenceLength(signal)
         }
@@ -440,7 +442,7 @@ function App() {
         console.log('处理完成，词汇表长度:', status.vocab ? status.vocab.length : 0)
         setVocabLength(status.vocab ? status.vocab.length : 0)
         if (status.total_sentences) {
-          setSentenceLength(status.total_sentences * 1000 + (status.total_sentences + 1))
+          setSentenceLength(status.total_sentences * 10000 + (status.total_sentences + 1))
         }
         setProgress(100)
         setProcessingInfo(null)

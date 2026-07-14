@@ -57,20 +57,19 @@ async def _gateway_segment_sentence(user_id, tier, text, source_lang, context_se
     system_prompt = f"""处理以下 {source_lang_name} 文本。
 
 【任务】
-把句子分成一个个词，每行输出一个词，不要输出其他任何内容。
+把句子分成一个个词，以 JSON 对象输出，不要输出其他任何内容。
 
 【分词原则】
 1. 遵循 {source_lang_name} 自身的自然词边界，你是精通该语言正字法和语法规则的语言专家
 2. 一个"词"是该语言词典中可查到的最小意义单位（变位/屈折形式是单个词，不拆词干+词缀）
 3. 标点符号完全丢弃，绝不附着在任何词上（. , ! ? : ; 等全部去掉）
 4. 词内部的连字符(-)和撇号(')保留（如它们是该语言的词内组成部分）
-5. 固定搭配/多词表达（语义不可组合、词典有独立词条、替换任一词含义即变）整行输出，内部用空格
+5. 把"单词本上会作为一个词条出现的词"整体输出——包括专有名词词组、固定搭配、习语、多词表达等；其余按自然词边界拆分为独立单词
 6. 输出条目按原文顺序，去掉标点后拼接必须等于原文去掉标点后的内容，不得增减
 
 【输出格式】
-- 每行一个词
-- 不要编号、引号、解释、空行
-- 多词表达在同一行内用空格分隔"""
+严格输出如下 JSON（不要 markdown 代码块、不要注释、不要多余文本）：
+{{"words": ["词1", "词2", "多词表达 a b", ...]}}"""
 
     user_content = f"{context_section}\n【待处理文本】\n{text}" if context_section else f"【待处理文本】\n{text}"
 
@@ -765,10 +764,12 @@ async def retry_failed_sentences(file_id: str, user_id: str = None, tier: str = 
 
 
 def _persist_partial_and_update_status(file_id, results_dict, sentences, total_sentences,
-                                        completed_stage2, stage2_count, source_lang, preserve_base):
+                                        completed_stage1, completed_stage2, stage2_count, source_lang, preserve_base):
     """增量存 pipeline_data + 重建 vocab + 更新 processing_status。
 
     供 Stage 1 完成和 Stage 2 完成两个时点复用，让前端渐变可见。
+    进度：每句计 2 单位（Stage 1 + Stage 2），progress = (stage1_count + stage2_count) / (total*2) * 100。
+    current_sentence 信号 = stage1_count*100 + stage2_count，让前端在 Stage 1 完成时也能感知变化并 refetch。
     """
     # 构建 pipeline（未处理的句子保留空 translation_result）
     incremental_pipeline = []
@@ -782,12 +783,13 @@ def _persist_partial_and_update_status(file_id, results_dict, sentences, total_s
     # 重建 vocab（从所有已处理句子提取，空壳也含 text，Stage 2 完成的带释义）
     all_vocab = _extract_vocab_from_sentences(incremental_pipeline, source_lang)
 
-    # 进度按 Stage 2 完成数计
-    progress = int(stage2_count / total_sentences * 100) if total_sentences > 0 else 0
+    stage1_count = len(completed_stage1)
+    # 进度：每句 2 单位（Stage1 + Stage2）
+    progress = int((stage1_count + stage2_count) / (total_sentences * 2) * 100) if total_sentences > 0 else 0
     processing_status[file_id] = {
         "status": "processing",
         "progress": progress,
-        "current_sentence": stage2_count,
+        "current_sentence": stage1_count * 100 + stage2_count,
         "total_sentences": total_sentences,
         "vocab": all_vocab,
         "sentence_translations": incremental_pipeline,
@@ -820,6 +822,7 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
         processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": total_sentences, **_preserve2}
 
         results_dict = {}
+        completed_stage1 = set()
         completed_stage2 = set()
         stage2_count = 0
         _preserve_base = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status[file_id]}
@@ -881,9 +884,10 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                     "translation_result": shell_translation,
                 }
                 results_dict[idx] = stage1_data
+                completed_stage1.add(idx)
                 _persist_partial_and_update_status(
                     file_id, results_dict, sentences, total_sentences,
-                    completed_stage2, stage2_count, source_lang, _preserve_base
+                    completed_stage1, completed_stage2, stage2_count, source_lang, _preserve_base
                 )
 
             # ── Stage 2：填充 ──
@@ -927,9 +931,9 @@ async def process_text_background(file_id: str, text: str, source_lang: str, tar
                     stage2_count = len(completed_stage2)
                     _persist_partial_and_update_status(
                         file_id, results_dict, sentences, total_sentences,
-                        completed_stage2, stage2_count, source_lang, _preserve_base
+                        completed_stage1, completed_stage2, stage2_count, source_lang, _preserve_base
                     )
-                    print(f"[DEBUG] 更新状态: 进度 {int(stage2_count / total_sentences * 100)}%, Stage 2 完成 {stage2_count}/{total_sentences}")
+                    print(f"[DEBUG] 更新状态: 进度 {int((len(completed_stage1) + stage2_count) / (total_sentences * 2) * 100)}%, Stage 2 完成 {stage2_count}/{total_sentences}")
 
         sentence_translations = [results_dict.get(i, {"sentence": sentences[i], "translation_result": {}}) for i in range(total_sentences)]
 

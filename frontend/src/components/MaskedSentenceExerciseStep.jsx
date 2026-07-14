@@ -99,12 +99,12 @@ function MaskedSentenceExerciseStep({ data, onNext, onBack, onComplete, loading,
             <PenLine className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {t.maskedSentenceTitle || '选词填空'}
           </motion.div>
-          {/* 句子展示：单行显示，过长时横向滚动 */}
-          <div className="flex items-center justify-center gap-2">
+          {/* 句子展示：过长自动换行 */}
+          <div className="flex items-start justify-center gap-2">
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-sm sm:text-lg text-ink-600 whitespace-nowrap overflow-x-auto flex-1 min-w-0 py-1"
+              className="text-sm sm:text-lg text-ink-600 flex-1 min-w-0 py-1 break-words text-left"
             >
               {data.masked_sentence}
             </motion.p>

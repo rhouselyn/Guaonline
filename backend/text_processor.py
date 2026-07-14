@@ -728,16 +728,40 @@ class TextProcessor:
         return _tokenize_by_space(sentence)
 
     def parse_segmentation_output(self, output: str) -> List[str]:
-        """解析 Stage 1 LLM 输出（一行一词）。
+        """解析 Stage 1 LLM 输出。
 
-        - 按 \\n 切分
-        - 每行 strip()
-        - 用 strip_edge_punctuation 去首尾标点（处理 LLM 可能附加的编号/引号/逗号等）
-        - 过滤空行
+        优先解析 JSON（{"words": [...]}），失败则回退按行解析（一行一词）。
+        - JSON: 提取 words 数组，逐项 strip + strip_edge_punctuation
+        - 行模式: 按 \\n 切分，每行 strip，去编号前缀，strip_edge_punctuation
+        - 过滤空串
         """
         if not output or not isinstance(output, str):
             return []
         import re
+        import json as _json
+
+        # 优先尝试 JSON 解析（支持 markdown 代码块包裹）
+        try:
+            content = output.strip()
+            # 去掉 ```json ... ``` 包裹
+            if content.startswith('```'):
+                content = re.sub(r'^```(?:json)?\s*', '', content)
+                content = re.sub(r'\s*```$', '', content)
+            obj = _json.loads(content)
+            if isinstance(obj, dict) and isinstance(obj.get("words"), list):
+                words = []
+                for w in obj["words"]:
+                    if not isinstance(w, str):
+                        continue
+                    cleaned = strip_edge_punctuation(w.strip())
+                    if cleaned:
+                        words.append(cleaned)
+                if words:
+                    return words
+        except Exception:
+            pass
+
+        # 回退：按行解析
         words = []
         for line in output.split('\n'):
             stripped = line.strip()
