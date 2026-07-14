@@ -1038,7 +1038,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
             <span className="text-[10px] text-ink-400 tabular-nums whitespace-nowrap">
-              {Math.round(safeProcessingInfo.current / safeProcessingInfo.total * 100)}%
+              {Math.round(progress)}%
             </span>
             <div className={barCls}>
               <motion.div

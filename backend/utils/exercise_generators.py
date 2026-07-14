@@ -769,7 +769,7 @@ def _persist_partial_and_update_status(file_id, results_dict, sentences, total_s
 
     供 Stage 1 完成和 Stage 2 完成两个时点复用，让前端渐变可见。
     进度：每句计 2 单位（Stage 1 + Stage 2），progress = (stage1_count + stage2_count) / (total*2) * 100。
-    current_sentence 信号 = stage1_count*100 + stage2_count，让前端在 Stage 1 完成时也能感知变化并 refetch。
+    current_sentence = stage2_count（Stage 2 完成数，用于前端展示）；stage1_count 单独输出供前端 refetch。
     """
     # 构建 pipeline（未处理的句子保留空 translation_result）
     incremental_pipeline = []
@@ -782,6 +782,9 @@ def _persist_partial_and_update_status(file_id, results_dict, sentences, total_s
 
     # 重建 vocab（从所有已处理句子提取，空壳也含 text，Stage 2 完成的带释义）
     all_vocab = _extract_vocab_from_sentences(incremental_pipeline, source_lang)
+    # 关键：同步落库 vocab，否则 /api/vocab 与 words_only 端点读到的仍是旧数据，
+    # 前端无法在 Stage 1 完成时实时显示单词分表与句子内的单词跳转链接。
+    storage.save_vocab(file_id, all_vocab)
 
     stage1_count = len(completed_stage1)
     # 进度：每句 2 单位（Stage1 + Stage2）
@@ -789,7 +792,10 @@ def _persist_partial_and_update_status(file_id, results_dict, sentences, total_s
     processing_status[file_id] = {
         "status": "processing",
         "progress": progress,
-        "current_sentence": stage1_count * 100 + stage2_count,
+        # current_sentence = Stage 2 完成数（用于前端"已处理/总数"展示）
+        "current_sentence": stage2_count,
+        # stage1_count 单独输出，前端据此感知 Stage 1 完成并 refetch（不污染 current_sentence 显示）
+        "stage1_count": stage1_count,
         "total_sentences": total_sentences,
         "vocab": all_vocab,
         "sentence_translations": incremental_pipeline,
