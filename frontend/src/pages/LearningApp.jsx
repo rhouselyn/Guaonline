@@ -1394,11 +1394,9 @@ function App() {
     setShowWordCard(false)
     setSelectedOption(null)
     setIsCorrect(null)
-    // ponytail: 点击最近条目即持久化 updated_at。不触发 historyRefresh——前端已有乐观重排
-    // （HistorySidebar.handleNavigate 把条目移到第一位），refetch 反而可能因多 worker 读延迟
-    // 读到旧 updated_at，导致条目先跳到 created_at 位置再到第一位。返回主页时 sidebar 重新挂载
-    // 自带 loadHistory，届时 touchHistory 早已提交，顺序自然正确。
-    api.touchHistory(fileId).catch(() => {})
+    // ponytail: 点击条目即持久化 updated_at。与后续 /info 等请求并行，
+    // setStep 前 await 确保 sidebar 卸载时后端已提交，否则返回主页 loadHistory 读到旧值条目回退。
+    const touchPromise = api.touchHistory(fileId).catch(() => {})
     try {
       setCurrentFileId(fileId)
       setFileId(fileId)
@@ -1451,6 +1449,7 @@ function App() {
       setSkipPolling(false)
 
       api.startWordGen(fileId).catch(() => {})
+      await touchPromise
       setStep('dictionary')
     } catch (error) {
       console.error('Failed to load record:', error)
