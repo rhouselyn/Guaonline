@@ -617,19 +617,26 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }
   }, [])
 
+  // ponytail: 跨页跳转滚动——必须在 pagedVocab 真正渲染出新页后才能找到目标词 DOM。
+  // 旧实现只依赖 vocabPage，此刻异步 fetch 未返回，scrollToWord 找不到元素静默失败，
+  // 新页数据到达后又无 effect 重跑，导致词停留在其自然位置（视口中间）。加 pagedVocab 依赖，
+  // 并在元素不存在时保留 pendingScrollWord 等待下次渲染，直到 DOM 就绪再滚动并清除。
   useEffect(() => {
-    if (!showGlobalVocab && pendingScrollWord.current) {
-      const wordKey = pendingScrollWord.current
-      pendingScrollWord.current = null
-      scrollToWord(wordKey, 200)
-    }
-  }, [showGlobalVocab, scrollToWord, vocabPage])
+    if (showGlobalVocab || !pendingScrollWord.current) return
+    const wordKey = pendingScrollWord.current
+    const el = wordRefs.current[wordKey]
+      || (vocabListRef.current && vocabListRef.current.querySelector(`[data-word-key="${CSS.escape(wordKey)}"]`))
+    if (!el) return // 新页数据尚未渲染，保留 pendingScrollWord 等待下次 pagedVocab 变化
+    pendingScrollWord.current = null
+    scrollToWord(wordKey, 0)
+  }, [showGlobalVocab, pagedVocab, scrollToWord])
 
+  // ponytail: 同上——expandedWord 滚动也要等 pagedVocab 渲染完成才能定位元素
   useEffect(() => {
     if (expandedWord && !expandedWord.startsWith('global-') && !showGlobalVocab) {
-      scrollToWord(expandedWord, 200)
+      scrollToWord(expandedWord, 50)
     }
-  }, [expandedWord, showGlobalVocab, scrollToWord, vocabPage])
+  }, [expandedWord, showGlobalVocab, scrollToWord, pagedVocab])
 
   const handleTokenClick = useCallback(async (sourceWord, sentenceToken) => {
     const sourceLower = sourceWord.toLowerCase()
