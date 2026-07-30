@@ -1375,7 +1375,6 @@ function App() {
   }
 
   const handleNavigateToRecord = async (fileId, srcLang, tgtLang, title) => {
-    setLoading(true)
     // 先清空上一个条目的数据，避免显示旧内容
     setVocab([])
     setDisplayVocab([])
@@ -1394,69 +1393,55 @@ function App() {
     setShowWordCard(false)
     setSelectedOption(null)
     setIsCorrect(null)
-    // ponytail: 点击条目即持久化 updated_at。与后续 /info 等请求并行，
-    // setStep 前 await 确保 sidebar 卸载时后端已提交，否则返回主页 loadHistory 读到旧值条目回退。
-    const touchPromise = api.touchHistory(fileId).catch(() => {})
-    try {
-      setCurrentFileId(fileId)
-      setFileId(fileId)
-      if (title) setFileTitle(title)
-      // ponytail: 不再全量加载 vocab/sentences——DictionaryStep 改为按页自取（/vocab、/sentences 带 offset/limit/q）。
-      // 入口只需 /info（原文、提示词、has_failed、sentence_count），大幅减少首屏传输与反序列化。
-      let infoData = {}
-      try {
-        const infoResp = await fetch(`/api/file/${fileId}/info`)
-        infoData = await infoResp.json()
-        if (infoData.original_text) {
-          setOriginalText(infoData.original_text)
-        }
+
+    // ponytail: 立即跳转到字典页——DictionaryStep 按页自取数据（/vocab、/sentences、/info），
+    // 用户立即看到字典页（带 loading 骨架），不再停在主页等待所有数据加载完成。
+    // touchHistory / info / phase units / refill / startWordGen 全部后台并行，不阻塞跳转。
+    // HistorySidebar 已做前端乐观重排（updated_at），无需 await 后端 touch。
+    setCurrentFileId(fileId)
+    setFileId(fileId)
+    if (title) setFileTitle(title)
+    setSkipPolling(false)
+    setStep('dictionary')
+    setLoading(false)
+
+    // 点击条目即持久化 updated_at（后台补持久化，HistorySidebar 已乐观重排）
+    api.touchHistory(fileId).catch(() => {})
+
+    // /info：原文 / 提示词。DictionaryStep 也会自取（用于 actualSourceLang），这里填充 prop。
+    fetch(`/api/file/${fileId}/info`)
+      .then(r => r.json())
+      .then(infoData => {
+        if (infoData.original_text) setOriginalText(infoData.original_text)
         setEntryPrompt(infoData.prompt || '')
-      } catch (e) {
-        // /info 失败不阻塞，原文留空
-      }
-      try {
-        const [phase1UnitsData, phase2UnitsData, starsData] = await Promise.all([
-          api.getPhaseUnits(fileId, 1),
-          api.getPhaseUnits(fileId, 2),
-          api.getUnitStars(fileId)
-        ])
-        setPhase1Units(phase1UnitsData.units)
-        setPhase2Units(phase2UnitsData.units)
-        setCurrentPhase1Unit(phase1UnitsData.current_unit)
-        setCurrentPhase2Unit(phase2UnitsData.current_unit)
-        setUnitStarCounts(starsData.stars || {})
-        const genUnits = new Set()
-        phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
-        setGeneratingUnits(genUnits)
-      } catch (e) {
-        console.error('Failed to load phase units:', e)
-      }
+      })
+      .catch(() => {})
 
-      // ponytail: 进入条目时检查并补漏缺词。在启动轮询前调用——有漏词则后端置 refilling 状态，
-      // 轮询拿到 refilling 不停止，实时更新句子与词汇表；无漏词则后端置 completed，轮询正常停止。
-      // 正在处理中的条目后端会跳过（skipping），不干扰主流程。
-      try {
-        const refillResp = await api.refillMissingWords(fileId)
-        if (refillResp.needs_refill) {
-          // 有漏词——保持 loading 让用户看到补漏进度，轮询会在 completed 时清掉 loading
-          setLoading(true)
-        }
-      } catch (e) {
-        // 补漏检查失败不阻塞，按已有数据展示
-        console.error('refill check failed:', e)
-      }
+    // phase units / stars：进入 all-units 才需要，后台预取
+    Promise.all([
+      api.getPhaseUnits(fileId, 1),
+      api.getPhaseUnits(fileId, 2),
+      api.getUnitStars(fileId)
+    ]).then(([phase1UnitsData, phase2UnitsData, starsData]) => {
+      setPhase1Units(phase1UnitsData.units)
+      setPhase2Units(phase2UnitsData.units)
+      setCurrentPhase1Unit(phase1UnitsData.current_unit)
+      setCurrentPhase2Unit(phase2UnitsData.current_unit)
+      setUnitStarCounts(starsData.stars || {})
+      const genUnits = new Set()
+      phase1UnitsData.units.forEach((u, i) => { if (u.generating) genUnits.add(i) })
+      setGeneratingUnits(genUnits)
+    }).catch(e => {
+      console.error('Failed to load phase units:', e)
+    })
 
-      setSkipPolling(false)
+    // 进入条目时检查并补漏缺词。有漏词则后端置 refilling 状态，
+    // SSE 实时推送，DictionaryStep 显示补漏进度；无漏词则后端置 completed。
+    api.refillMissingWords(fileId).catch(e => {
+      console.error('refill check failed:', e)
+    })
 
-      api.startWordGen(fileId).catch(() => {})
-      await touchPromise
-      setStep('dictionary')
-    } catch (error) {
-      console.error('Failed to load record:', error)
-      showAlert(t.cannotLoadHistory || '无法加载学习记录，请重试')
-    } finally {
-      setLoading(false)
-    }
+    api.startWordGen(fileId).catch(() => {})
   }
 
   const handleSkipListeningChange = (value) => {
