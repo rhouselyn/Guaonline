@@ -702,6 +702,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     // 跳转到该词所在页（基于全量词表索引），再滚动定位
     const page = wordToPage.get(wordKey.toLowerCase())
     if (page && page !== vocabPage) {
+      // 先预取目标页数据再切页——DOM 已有目标页词汇，pendingScrollWord effect 立即定位单词，
+      // 无需等 fetch effect 异步返回。fetch effect 仍会后台 refetch（数据一致，无感刷新）。
+      try {
+        const data = await api.getVocab(currentFileId, {
+          offset: (page - 1) * pageSize,
+          limit: pageSize,
+          q: vocabSearchDebounced,
+          sort: sortOrder,
+          include_total: true
+        })
+        setPagedVocab(Array.isArray(data.vocab) ? data.vocab : [])
+        setVocabTotal(typeof data.total === 'number' ? data.total : (Array.isArray(data.vocab) ? data.vocab.length : 0))
+      } catch (e) {
+        // 预取失败则回退到常规流程（fetch effect 会补取）
+      }
       setVocabPage(page)
       pendingScrollWord.current = wordKey
     } else {
@@ -717,7 +732,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     // 手机端：点击句子中的单词后自动滑动到词汇表面板
     if (!isDesktop) switchPanel(1)
-  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel])
+  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, currentFileId, pageSize, sortOrder, vocabSearchDebounced])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
