@@ -89,6 +89,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const sentenceRefs = useRef({})
   const titleInputRef = useRef(null)
   const pendingScrollWord = useRef(null)
+  // ponytail: handleTokenClick 预取目标页数据后，跳过 useEffect 里那次重复 fetch。
+  const skipNextVocabFetch = useRef(false)
   const localVocabScrollPos = useRef(saved.vocabScrollPos || 0)
   const globalVocabScrollPos = useRef(saved.globalVocabScrollPos || 0)
   const sentenceTranslationScrollPos = useRef(saved.sentenceTranslationScrollPos || 0)
@@ -261,6 +263,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   // ponytail: 按页拉取词汇表（仅当前页 + total）。依赖 currentFileId/page/pageSize/搜索/排序/生成进度。
   useEffect(() => {
     if (!currentFileId || showGlobalVocab) return
+    // handleTokenClick 已预取并 setPagedVocab，此处跳过避免重复请求与闪烁
+    if (skipNextVocabFetch.current) {
+      skipNextVocabFetch.current = false
+      return
+    }
     let cancelled = false
     const seq = ++vocabFetchSeq.current
     setVocabFetching(true)
@@ -699,11 +706,18 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setShowGlobalVocab(false)
     }
 
+    // 手机端：先切换到词汇表面板，让用户立即看到反馈
+    if (!isDesktop) switchPanel(1)
+
     // 跳转到该词所在页（基于全量词表索引），再滚动定位
     const page = wordToPage.get(wordKey.toLowerCase())
     if (page && page !== vocabPage) {
-      // 先预取目标页数据再切页——DOM 已有目标页词汇，pendingScrollWord effect 立即定位单词，
-      // 无需等 fetch effect 异步返回。fetch effect 仍会后台 refetch（数据一致，无感刷新）。
+      // ponytail: 预取目标页数据——切页前先把数据拿到，setVocabPage 与 setPagedVocab 同批提交，
+      // 渲染时 DOM 已包含目标词，scrollToWord 的 effect 在首次渲染后即可定位，
+      // 不再出现"切页→等 fetch→再滚动"的延迟感。
+      // 同时递增 vocabFetchSeq 让此前 in-flight 的分页 fetch 回调失效，避免覆盖预取数据。
+      ++vocabFetchSeq.current
+      setVocabFetching(true)
       try {
         const data = await api.getVocab(currentFileId, {
           offset: (page - 1) * pageSize,
@@ -712,10 +726,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
           sort: sortOrder,
           include_total: true
         })
+        skipNextVocabFetch.current = true
         setPagedVocab(Array.isArray(data.vocab) ? data.vocab : [])
         setVocabTotal(typeof data.total === 'number' ? data.total : (Array.isArray(data.vocab) ? data.vocab.length : 0))
       } catch (e) {
-        // 预取失败则回退到常规流程（fetch effect 会补取）
+        // 预取失败，回退到常规流程（useEffect 会重新 fetch）
+      } finally {
+        setVocabFetching(false)
       }
       setVocabPage(page)
       pendingScrollWord.current = wordKey
@@ -729,10 +746,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       speakText(wordKey, sourceLang)
       fetchWordDetail(wordKey)
     }, 150)
-
-    // 手机端：点击句子中的单词后自动滑动到词汇表面板
-    if (!isDesktop) switchPanel(1)
-  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, currentFileId, pageSize, sortOrder, vocabSearchDebounced])
+  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, currentFileId, pageSize, vocabSearchDebounced, sortOrder, sourceLang])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
