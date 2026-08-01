@@ -78,6 +78,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [allWords, setAllWords] = useState([])
   const allWordsSeq = useRef(0)
   const vocabFetchSeq = useRef(0)
+  // ponytail: 生成进度信号去抖——vocabLength/sentenceLength 在生成期间每 0.3s 变一次，
+  // 直接做 fetch 依赖会不断取消 in-flight 请求（用户跳页的 fetch 也被取消 → pagedVocab 永不更新 →
+  // 跨页滚动失败、只跳到目标页定位不到词）。去抖 400ms 后再驱动 refetch：生成期间不取消用户导航，
+  // 生成结束后一次性刷新当前页。用户翻页（vocabPage/sentencePage）仍立即触发，不受去抖影响。
+  const [progressVersion, setProgressVersion] = useState(0)
   const vocabListRef = useRef(null)
   const sentenceListRef = useRef(null)
   const wordRefs = useRef({})
@@ -248,6 +253,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return () => clearTimeout(id)
   }, [sentenceSearch])
 
+  // ponytail: 进度信号去抖——vocabLength/sentenceLength 稳定 400ms 后才 bump progressVersion，
+  // 触发分页/全量词表的 refetch。避免生成期间每 0.3s 取消重发。
+  useEffect(() => {
+    const id = setTimeout(() => setProgressVersion(v => v + 1), 400)
+    return () => clearTimeout(id)
+  }, [vocabLength, sentenceLength])
+
   // ponytail: 按页拉取词汇表（仅当前页 + total）。依赖 currentFileId/page/pageSize/搜索/排序/生成进度。
   useEffect(() => {
     if (!currentFileId || showGlobalVocab) return
@@ -274,7 +286,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setPagedVocab([]); setVocabTotal(0)
     }).finally(() => { if (!cancelled && seq === vocabFetchSeq.current) setVocabFetching(false) })
     return () => { cancelled = true }
-  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, vocabLength, sentenceLength])
+  }, [currentFileId, vocabPage, pageSize, vocabSearchDebounced, sortOrder, showGlobalVocab, progressVersion])
 
   // ponytail: 按页拉取句子翻译（仅当前页 + total）。
   const sentFetchSeq = useRef(0)
@@ -297,7 +309,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setPagedSent([]); setSentTotal(0)
     }).finally(() => { if (!cancelled && seq === sentFetchSeq.current) setSentFetching(false) })
     return () => { cancelled = true }
-  }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, sentenceLength])
+  }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, progressVersion])
 
   // 拉取全量词表（仅词字符串，轻量 words_only），用于构建字母→页、单词→页索引。
   // ponytail: 不传 q——allWords 供句子链接跨页匹配（findVocabWordBySourceText / wordToPage），
@@ -314,7 +326,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       setAllWords([])
     })
     return () => { cancelled = true }
-  }, [currentFileId, sortOrder, vocabLength, sentenceLength])
+  }, [currentFileId, sortOrder, progressVersion])
 
   filteredVocabRef.current = pagedVocab
   vocabPageRef.current = vocabPage
@@ -351,6 +363,19 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     })
     return m
   }, [allWords, pageSize])
+
+  // ponytail: 全量词表的 O(1) 查找集合（含连字符变体），供 renderOriginalSentence /
+  // findVocabWordBySourceText 判断片段是否可点击，避免对每个片段做 O(n) 的 .some() 全表扫描。
+  const allWordsSet = useMemo(() => {
+    const s = new Set()
+    for (const w of allWords) {
+      const l = w.toLowerCase()
+      s.add(l)
+      const noHyphen = l.replace(/-/g, ' ')
+      if (noHyphen !== l) s.add(noHyphen)
+    }
+    return s
+  }, [allWords])
 
   const filteredGlobalVocab = useMemo(() => {
     if (!vocabSearch.trim()) return globalVocab
@@ -419,9 +444,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     if (globalVocabPage > globalVocabTotalPages) setGlobalVocabPage(globalVocabTotalPages)
   }, [globalVocabPage, globalVocabTotalPages])
 
-  // 切换页数时滚动条置顶（有待滚动定位的单词时跳过，避免置顶→再跳单词的双重位移）
+  // 切换页数时滚动条置顶（跨页点词滚动进行中时跳过，避免覆盖定位）
   useEffect(() => {
-    if (vocabListRef.current && !pendingScrollWord.current) vocabListRef.current.scrollTop = 0
+    if (pendingScrollWord.current) return
+    if (vocabListRef.current) vocabListRef.current.scrollTop = 0
   }, [vocabPage, globalVocabPage])
 
   useEffect(() => {
@@ -860,7 +886,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceLower = sourceText.toLowerCase()
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
-    // 先在当前页 pagedFilteredVocab 找（含 tokens），再在全量 allWords 词字符串里找（跨页）
+    // 先在当前页 pagedFilteredVocab 找（含 tokens），再用 allWordsSet O(1) 查跨页词
     const inPage = pagedFilteredVocab.some(w => {
       const wordLower = w.word.toLowerCase()
       if (wordLower === sourceLower) return true
@@ -872,15 +898,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return false
     })
     if (inPage) return true
-    return allWords.some(w => {
-      const wordLower = w.toLowerCase()
-      if (wordLower === sourceLower) return true
-      if (wordLower === sourceNoHyphen) return true
-      if (wordLower.replace(/-/g, ' ') === sourceLower) return true
-      if (sourceStripped && sourceStripped !== sourceLower && wordLower === sourceStripped) return true
-      return false
-    })
-  }, [pagedFilteredVocab, allWords])
+    if (allWordsSet.has(sourceLower)) return true
+    if (allWordsSet.has(sourceNoHyphen)) return true
+    if (sourceStripped && sourceStripped !== sourceLower && allWordsSet.has(sourceStripped)) return true
+    return false
+  }, [pagedFilteredVocab, allWordsSet])
 
   // ponytail: 在当前句子的 token 数组里找出与可点击文本对应的那个 token（含其上下文释义/词性/音标）。
   const findTokenForPart = useCallback((tokens, part) => {
@@ -912,8 +934,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
     const vocabTexts = pagedFilteredVocab.map(w => w.word).filter(Boolean)
 
-    // 用全局 allWords（words_only 全量）+ 当前句 token，保证跨页单词也能匹配上链接
-    const matchWords = [...new Set([...tokenTexts, ...allWords, ...vocabTexts])]
+    // ponytail: 切分句子只用品符 tokenTexts（本句自身的分词）+ 当前页 vocabTexts，
+    // 不再把全量 allWords（可能上千词）拼进正则——巨型正则的 split 是主线程冻结的根因。
+    // 跨页单词的可点击性由 findVocabWordBySourceText 的 allWordsSet O(1) 查找保证：
+    // 只要该词在本句 token 里（tokenTexts 已覆盖本句所有词），就能被切分出来并识别为可点击。
+    const matchWords = [...new Set([...tokenTexts, ...vocabTexts])]
     if (matchWords.length === 0) {
       return <div className="font-medium text-[15px] text-ink-800 mb-1.5 sentence-text">{sentence}</div>
     }
