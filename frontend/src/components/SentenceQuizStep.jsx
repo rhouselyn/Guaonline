@@ -232,8 +232,8 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
               <span className={`font-bold text-lg ${isCorrect ? 'text-olive-600' : 'text-rust-500'}`}>{isCorrect ? t.correct : t.incorrect}</span>
             </div>
             {!isCorrect && (
-              <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{quizData.correct_translation || (quizData.correct_tokens ? quizData.correct_tokens.join('') : '')}
+              <p className="text-ink-700 font-medium border-l-2 border-amber-300 pl-2.5 italic">
+                {quizData.correct_translation || (quizData.correct_tokens ? quizData.correct_tokens.join('') : '')}
               </p>
             )}
           </motion.div>

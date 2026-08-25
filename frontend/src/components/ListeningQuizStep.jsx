@@ -242,12 +242,12 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
               </span>
             </div>
             {(isSkipped || !isCorrect) && (
-              <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{correctWords.map(w => stripPunct(w)).join(' ')}
+              <p className="text-ink-700 font-medium border-l-2 border-amber-300 pl-2.5 italic">
+                {correctWords.map(w => stripPunct(w)).join(' ')}
               </p>
             )}
             {quizData.sentence_translation && (
-              <p className="mt-2 text-ink-700 font-medium">{quizData.sentence_translation}</p>
+              <p className="mt-2 text-ink-700 font-medium border-l-2 border-amber-300 pl-2.5 italic">{quizData.sentence_translation}</p>
             )}
           </motion.div>
         )}

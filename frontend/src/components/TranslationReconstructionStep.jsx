@@ -206,8 +206,8 @@ function TranslationReconstructionStep({ data, onNext, onBack, onComplete, loadi
               <span className={`font-bold text-lg ${isCorrect ? 'text-olive-600' : 'text-rust-500'}`}>{isCorrect ? t.correct : t.incorrect}</span>
             </div>
             {!isCorrect && (
-              <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{data.original_tokens.join(' ')}
+              <p className="text-ink-700 font-medium border-l-2 border-amber-300 pl-2.5 italic">
+                {data.original_tokens.join(' ')}
               </p>
             )}
             {isCorrect && isLastExercise && (

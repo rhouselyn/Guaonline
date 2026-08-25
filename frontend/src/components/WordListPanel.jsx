@@ -62,7 +62,7 @@ function WordDetailCard({ word, sourceLang, detailLoading, t }) {
                   {word.examples.slice(0, 3).map((ex, i) => (
                     <div key={i} className="border-l-2 border-amber-200 pl-2.5">
                       <div className="flex items-start gap-1.5">
-                        <p className="text-ink-700 text-[13px] leading-snug flex-1">{ex.sentence}</p>
+                        <p className="italic text-ink-700 text-[13px] leading-snug flex-1">{ex.sentence}</p>
                         {ex.sentence && (
                           <button
                             onClick={(e) => { e.stopPropagation(); speakText(ex.sentence, sourceLang) }}
