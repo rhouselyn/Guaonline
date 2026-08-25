@@ -22,9 +22,45 @@ from vocab import global_vocab, user_vocab
 router = APIRouter(prefix="/api", tags=["text-processing"])
 
 
-async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free", consumed_quota: int = 0):
+async def _translate_for_learning(text: str, to_lang: str, from_lang: str, user_id: str = None, tier: str = "free") -> str:
+    """把文本从 from_lang 翻译到 to_lang（学习语言）。复用网关，返回翻译结果，失败返回空串。"""
+    source_lang_name = get_lang_name(to_lang)
+    target_lang_name = get_lang_name(from_lang)
+    gateway.reload()
+    messages = [
+        {
+            "role": "system",
+            "content": f"You are a professional translator. Translate the following text from {target_lang_name} to {source_lang_name}. Output ONLY the translated text, nothing else. Do not add any explanations, notes, or commentary. The translation should be natural and fluent. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
+        },
+        {"role": "user", "content": text}
+    ]
+    response = await gateway.call(user_id or "system", tier, messages, temperature=0.3, request_type="translate")
+    if "choices" in response and len(response["choices"]) > 0:
+        translated = response["choices"][0].get("message", {}).get("content", "").strip()
+        if translated:
+            return translated
+    return ""
+
+
+async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_lang: str, mode: str, original_text: str, user_id: str = None, tier: str = "free", consumed_quota: int = 0, images: list = None):
     """后台任务：先做翻译/生成/语言检测，再执行文本处理。"""
     try:
+        # 直接输入 + 显式指定了学习语言(source_lang != auto)：
+        # 先 AI 检测输入文本语种，若与所选学习语言不一致，则自动翻译成该学习语言
+        # （与自动翻译模式逻辑一致，复用检测与翻译 helper）。
+        merged_translated = False
+        if mode == "direct" and source_lang != "auto":
+            try:
+                detected = await detect_language(text)
+            except Exception as e:
+                print(f"[WARN] Merged auto-translate language detection failed: {e}")
+                detected = None
+            if detected and detected != "auto" and detected != source_lang:
+                translated = await _translate_for_learning(text, source_lang, detected, user_id, tier)
+                if translated:
+                    text = translated
+                    merged_translated = True
+
         # 直接输入模式：原文就是用户输入的文本，立即保存
         if mode == "direct":
             if file_id in processing_status:
@@ -62,12 +98,20 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
             processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", **_preserve_gen}
             source_lang_name = get_lang_name(source_lang)
             gateway.reload()
+            _gen_sys = f"You are a text generator. Generate a text in {source_lang_name} based on the user's description. CRITICAL RULES: 1. Generate text content that can include articles, stories, essays, descriptions, dialogues, conversations, or any other natural text form. 2. If the user requests dialogue or conversation content, generate natural exchanges between speakers with clear speaker labels (e.g. A:, B:, or names). 3. Do NOT include any meta-commentary, explanations, or notes about the text itself. 4. The text should be natural, coherent, and suitable for language learning. 5. The text should be at least 3-5 sentences long (or 3-5 exchanges for dialogue). 6. Output ONLY the generated text, nothing else. 7. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
+            if images:
+                _gen_sys += " The user has attached image(s). Use the image(s) together with the description/prompt to determine what to write about."
+            if images:
+                # qwen-vl OpenAI 兼容多模态格式：content 为数组，图片在前、文字提示在后
+                _user_content = [
+                    *[{"type": "image_url", "image_url": {"url": img}} for img in images],
+                    {"type": "text", "text": text},
+                ]
+            else:
+                _user_content = text
             messages = [
-                {
-                    "role": "system",
-                    "content": f"You are a text generator. Generate a text in {source_lang_name} based on the user's description. CRITICAL RULES: 1. Generate text content that can include articles, stories, essays, descriptions, dialogues, conversations, or any other natural text form. 2. If the user requests dialogue or conversation content, generate natural exchanges between speakers with clear speaker labels (e.g. A:, B:, or names). 3. Do NOT include any meta-commentary, explanations, or notes about the text itself. 4. The text should be natural, coherent, and suitable for language learning. 5. The text should be at least 3-5 sentences long (or 3-5 exchanges for dialogue). 6. Output ONLY the generated text, nothing else. 7. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
-                },
-                {"role": "user", "content": text}
+                {"role": "system", "content": _gen_sys},
+                {"role": "user", "content": _user_content}
             ]
             response = await gateway.call(user_id, tier, messages, temperature=0.7, request_type="generate")
             if "choices" in response and len(response["choices"]) > 0:
@@ -120,7 +164,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         # 3. 更新语言设置和历史记录
         # ponytail: translate/generate 模式保存用户提示词（original_text 入参即用户原始输入），
         # direct 模式无提示词。prompt 单独存储，不覆盖 original_text（已存为生成/翻译结果）。
-        user_prompt = original_text if mode in ("translate", "generate") else None
+        user_prompt = original_text if (mode in ("translate", "generate") or merged_translated) else None
         storage.save_language_settings(file_id, source_lang, target_lang, original_text=text, prompt=user_prompt)
         # 同步更新 processing_status 中的 source_lang，让前端轮询能拿到
         if file_id in processing_status:
@@ -221,6 +265,8 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         source_lang = request.get("source_language", "en")
         target_lang = request.get("target_language", "en")
         mode = request.get("mode", "direct")
+        # 自由生成模式附带的多模态图片（base64 data URL 列表，qwen-vl 图像输入格式）
+        images = request.get("images") or []
 
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
@@ -295,7 +341,7 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         storage.add_history_record(file_id, "", source_lang, target_lang, text_preview, user_id=current_user.user_id)
 
         # 所有耗时操作（翻译/生成/语言检测/标题生成/文本处理）全部在后台执行
-        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value, consumed_quota)
+        background_tasks.add_task(_preprocess_and_run, file_id, text, source_lang, target_lang, mode, text, current_user.user_id, current_user.tier.value, consumed_quota, images)
 
         return {
             "file_id": file_id,

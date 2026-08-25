@@ -53,6 +53,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [step, setStep] = useState('input')
   const [text, setText] = useState('')
+  const [images, setImages] = useState([])
   const [sourceLang, setSourceLang] = useState('auto')
   const [detectedLang, setDetectedLang] = useState(null)
   const [targetLang, setTargetLang] = useState('zh')
@@ -561,7 +562,9 @@ function App() {
     
     try {
       // 所有模式统一调用 processText，翻译/生成/语言检测在后台执行，不会超时
-      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode)
+      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode, images)
+      // 发送后清空已附加的图片
+      setImages([])
       
       if (response && response.file_id) {
         const fileId = response.file_id
@@ -1591,6 +1594,8 @@ function App() {
                       key="input"
                       text={text}
                       setText={setText}
+                      images={images}
+                      setImages={setImages}
                       sourceLang={sourceLang}
                       setSourceLang={setSourceLang}
                       uiLang={uiLang}
@@ -1631,6 +1636,8 @@ function App() {
                   <InputStep
                     text={text}
                     setText={setText}
+                    images={images}
+                    setImages={setImages}
                     sourceLang={sourceLang}
                     setSourceLang={setSourceLang}
                     uiLang={uiLang}

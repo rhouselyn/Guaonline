@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, Languages, Wand2, Zap } from 'lucide-react'
+import { Loader2, Search, X, ChevronDown, ChevronRight, ArrowRight, PenLine, ImagePlus, Wand2, Zap } from 'lucide-react'
 import { useMediaQuery } from '../utils/useMediaQuery'
 import { auth } from '../utils/auth'
 
@@ -604,7 +604,6 @@ function FrogLogo({ size = 40 }) {
 
 const MODES = [
   { key: 'direct', icon: PenLine, color: 'amber' },
-  { key: 'translate', icon: Languages, color: 'blue' },
   { key: 'generate', icon: Wand2, color: 'violet' },
 ]
 
@@ -613,7 +612,7 @@ function ModeSelector({ mode, setMode, t }) {
     <div className="flex gap-0.5">
       {MODES.map(({ key, icon: Icon, color }) => {
         const isActive = mode === key
-        const labelMap = { direct: t.modeDirect, translate: t.modeTranslate, generate: t.modeGenerate }
+        const labelMap = { direct: t.modeDirect, generate: t.modeGenerate }
         return (
           <button
             key={key}
@@ -632,7 +631,55 @@ function ModeSelector({ mode, setMode, t }) {
   )
 }
 
-function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
+function GenerateAttachment({ images, setImages, disabled }) {
+  const fileInputRef = useRef(null)
+  const handleFiles = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        setImages((prev) => [...prev, reader.result])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={disabled}
+        title={t.attachImages || '附加图片'}
+        className={`p-1.5 rounded-sm border-2 transition-colors ${
+          disabled
+            ? 'border-parchment-100 text-ink-300 cursor-not-allowed'
+            : 'border-aged-200 text-ink-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50'
+        }`}
+      >
+        <ImagePlus className="w-4 h-4" />
+      </button>
+      {images.map((img, i) => (
+        <div key={`${i}-${img.slice(0, 24)}`} className="relative w-9 h-9 rounded-sm overflow-hidden border-2 border-aged-200 shrink-0 group">
+          <img src={img} alt="" className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+            className="absolute -top-1 -right-1 w-4 h-4 bg-rust-500 text-white rounded-full flex items-center justify-center border border-white shadow-sm hover:bg-rust-600 transition-colors"
+            title={t.removeImage || '删除'}
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function InputStep({ text, setText, images, setImages, sourceLang, setSourceLang, uiLang, loading, onProcess, t, inputMode, setInputMode, recentLanguages }) {
   const navigate = useNavigate()
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // ponytail: 复用 auth.getQuota() 显示额度（与 AccountMenu 同源），移动端在发送箭头左侧展示
@@ -750,31 +797,37 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
                 <Zap className="w-3 h-3" />
                 {isUnlimited ? '∞' : `${available}/${max}`}
               </span>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onProcess}
-                disabled={loading || !text.trim()}
-                className={`p-2.5 rounded-sm transition-all duration-200 ${
-                  loading || !text.trim()
-                    ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
-                    : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
-                }`}
-              >
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </motion.span>
-                  ) : (
-                    <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <ArrowRight className="w-4 h-4" />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
+              <div className="flex items-center gap-2">
+                {inputMode === 'generate' && <GenerateAttachment images={images} setImages={setImages} disabled={loading} />}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={onProcess}
+                  disabled={loading || (!text.trim() && images.length === 0)}
+                  className={`p-2.5 rounded-sm transition-all duration-200 ${
+                    loading || (!text.trim() && images.length === 0)
+                      ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
+                      : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
+                  }`}
+                >
+                  <AnimatePresence mode="wait">
+                    {loading ? (
+                      <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </motion.span>
+                    ) : (
+                      <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <ArrowRight className="w-4 h-4" />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              </div>
             </div>
           </div>
+          {inputMode === 'direct' && sourceLang !== 'auto' && (
+            <p className="mt-2 text-[12px] text-ink-400 leading-snug">{t.autoTranslateHint || '选择与输入文字不同的语种时，系统将自动翻译成该语种'}</p>
+          )}
         </div>
       </div>
     )
@@ -853,13 +906,20 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
 
             {/* Submit button inside textarea, bottom-right */}
             <div className="flex items-center justify-end px-3 pb-3">
+              <AnimatePresence>
+                {inputMode === 'generate' && (
+                  <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
+                    <GenerateAttachment images={images} setImages={setImages} disabled={loading} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onProcess}
-                disabled={loading || !text.trim()}
+                disabled={loading || (!text.trim() && images.length === 0)}
                 className={`p-2 rounded-sm transition-all duration-200 ${
-                  loading || !text.trim()
+                  loading || (!text.trim() && images.length === 0)
                     ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
                     : 'bg-amber-500 text-white shadow-retro hover:bg-amber-500 hover:shadow-retro-lg'
                 }`}
@@ -879,6 +939,9 @@ function InputStep({ text, setText, sourceLang, setSourceLang, uiLang, loading, 
             </div>
           </div>
         </div>
+        {inputMode === 'direct' && sourceLang !== 'auto' && (
+          <p className="mt-2 text-[12px] text-ink-400 leading-snug text-center">{t.autoTranslateHint || '选择与输入文字不同的语种时，系统将自动翻译成该语种'}</p>
+        )}
       </div>
     </div>
   )
