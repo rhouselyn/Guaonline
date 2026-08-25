@@ -246,6 +246,11 @@ function ListeningQuizStep({ quizData, onNextQuestion, onBack, loading, t, onOpe
                 {t.correctAnswer || '正确答案'}：{correctWords.map(w => stripPunct(w)).join(' ')}
               </p>
             )}
+            {quizData.sentence_translation && (
+              <p className="mt-2 text-ink-700 font-medium">
+                {t.sentenceMeaning || '句子释义'}：{quizData.sentence_translation}
+              </p>
+            )}
           </motion.div>
         )}
 
