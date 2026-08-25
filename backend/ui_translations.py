@@ -30,7 +30,6 @@ UI_TRANSLATION_SCHEMA = {
     "grammar": {"desc": "Label for grammar explanation", "zh": "语法详解", "en": "Grammar Explanation"},
     "loading": {"desc": "Loading state text", "zh": "加载中...", "en": "Loading..."},
     "nextQuestion": {"desc": "Button for next question", "zh": "下一题", "en": "Next Question"},
-    "correctAnswer": {"desc": "Label for correct answer", "zh": "正确答案", "en": "Correct Answer"},
     "options": {"desc": "Label for answer options", "zh": "选项", "en": "Options"},
     "context": {"desc": "Label for context", "zh": "上下文", "en": "Context"},
     "studyThisWord": {"desc": "Button to study a word", "zh": "学习这个单词", "en": "Study This Word"},
