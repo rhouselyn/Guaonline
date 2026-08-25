@@ -743,10 +743,10 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     setTimeout(() => {
       setExpandedWord(wordKey)
       setActiveSentenceContext(ctx)
-      speakText(wordKey, sourceLang)
+      speakText(wordKey, actualSourceLang && actualSourceLang !== 'auto' ? actualSourceLang : sourceLang)
       fetchWordDetail(wordKey)
     }, 150)
-  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, currentFileId, pageSize, vocabSearchDebounced, sortOrder, sourceLang])
+  }, [allWords, wordToPage, vocabPage, expandedWord, scrollToWord, fetchWordDetail, showGlobalVocab, isDesktop, switchPanel, currentFileId, pageSize, vocabSearchDebounced, sortOrder, actualSourceLang, sourceLang])
 
   const handleVocabWordClick = useCallback(async (word) => {
     const wordKey = word.word
@@ -827,8 +827,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
 
   const speakWord = useCallback((text, e) => {
     if (e) e.stopPropagation()
-    speakText(text, sourceLang)
-  }, [sourceLang])
+    const lang = actualSourceLang && actualSourceLang !== 'auto' ? actualSourceLang : sourceLang
+    speakText(text, lang)
+  }, [actualSourceLang, sourceLang])
 
   const handleRegenerateWord = useCallback(async (wordKey, isGlobal = false) => {
     const localKey = wordKey
@@ -1642,7 +1643,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
                                             {detail.enriched_meaning || detail.meaning || detail.context_meaning}
                                           </p>
                                         </div>
-                                        <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={sourceLang} hideDefinition />
+                                        <WordDetail word={detail} t={t} onSentenceClick={handleSentenceJump} sourceLang={actualSourceLang} hideDefinition />
                                       </div>
                                     ) : (
                                       <div className="pt-3 text-center text-ink-400 text-[12px]">
