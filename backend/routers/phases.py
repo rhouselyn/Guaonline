@@ -290,6 +290,8 @@ async def get_phase_unit_exercise(file_id: str, phase_number: int, unit_id: int)
                     max_distractors=3
                 )
 
+                masked_exercise["sentence_translation"] = translation_result.get("tokenized_translation", "")
+
                 return {
                     "exercise_type": "masked_sentence",
                     "exercise_index_in_unit": exercise_index_in_unit,

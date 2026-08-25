@@ -205,6 +205,9 @@ function MaskedSentenceExerciseStep({ data, onNext, onBack, onComplete, loading,
                 {t.correctAnswer || '正确答案'}：{data.answer_words.join(' ')}
               </p>
             )}
+            {data.sentence_translation && (
+              <p className="mt-2 text-ink-700 font-medium">{data.sentence_translation}</p>
+            )}
             {isCorrect && isLastExercise && (
               <p className="font-medium mt-3 text-lg text-olive-600">
                 🎉 {reviewMode ? (t.reviewComplete || '错题已复习完！') : (t.unitStudyComplete || '该单元学习已完成！')}
