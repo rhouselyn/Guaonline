@@ -142,39 +142,11 @@ function warmupSpeech() {
   // Edge TTS 不需要 warmup；Web Speech API 可预热
   if (ttsEngine === 'webspeech' && 'speechSynthesis' in window) {
     window.speechSynthesis.getVoices()
-    // voices 是异步加载的，首次 getVoices() 返回空数组，需等 voiceschanged 事件
-    if (!window.speechSynthesis.onvoiceschanged) {
-      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices()
-    }
   }
-}
-
-// 从已加载的 voices 中查找匹配该语种的 voice
-function getMatchedVoice(lang) {
-  const voices = window.speechSynthesis.getVoices()
-  const langPrefix = lang.split('-')[0].toLowerCase()
-  return voices.find(v => v.lang === lang)
-    || voices.find(v => v.lang && v.lang.toLowerCase() === lang.toLowerCase())
-    || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix))
-}
-
-// 等待 voices 异步加载完成（最多一次 voiceschanged），返回是否有匹配 voice
-function waitForVoices(lang) {
-  if (getMatchedVoice(lang)) return Promise.resolve(true)
-  if (!('speechSynthesis' in window) || !window.speechSynthesis.onvoiceschanged) {
-    return Promise.resolve(false)
-  }
-  return new Promise((resolve) => {
-    const handler = () => {
-      window.speechSynthesis.onvoiceschanged = null
-      resolve(!!getMatchedVoice(lang))
-    }
-    window.speechSynthesis.onvoiceschanged = handler
-  })
 }
 
 // Web Speech API 发音
-async function speakWithWebSpeech(text, lang, slow) {
+function speakWithWebSpeech(text, lang, slow) {
   if (!('speechSynthesis' in window)) {
     console.warn('Web Speech API not available')
     return
@@ -183,10 +155,13 @@ async function speakWithWebSpeech(text, lang, slow) {
   // 停止当前播放
   window.speechSynthesis.cancel()
 
-  // ponytail: 先检查是否有匹配该语种的 voice。voices 在 Chrome 中异步加载，
-  // 首次 getVoices() 返回空数组，需先等加载完成，否则会静默跳过（表现为"有时无效"）。
-  await waitForVoices(lang)
-  const matchedVoice = getMatchedVoice(lang)
+  // ponytail: 先检查是否有匹配该语种的 voice。Web Speech 传入不支持的 lang 会触发 error 事件，
+  // 且部分浏览器会播放默认语种（发音错乱）。无匹配 voice 时直接静默返回，不生成语音。
+  const voices = window.speechSynthesis.getVoices()
+  const langPrefix = lang.split('-')[0].toLowerCase()
+  const matchedVoice = voices.find(v => v.lang === lang)
+    || voices.find(v => v.lang && v.lang.toLowerCase() === lang.toLowerCase())
+    || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix))
   if (!matchedVoice) {
     console.warn(`[webspeech] 无匹配 voice for lang=${lang}，跳过语音生成（避免传入不支持的 lang 触发 error）`)
     return
@@ -277,7 +252,7 @@ async function speakText(text, sourceLang = 'en', slow = false) {
 
   try {
     if (ttsEngine === 'webspeech') {
-      await speakWithWebSpeech(text, lang, slow)
+      speakWithWebSpeech(text, lang, slow)
     } else {
       await speakWithEdgeTts(text, lang, slow)
     }
