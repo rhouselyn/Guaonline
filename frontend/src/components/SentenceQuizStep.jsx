@@ -16,9 +16,9 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
 
   const autoSpeak = useCallback(() => {
     if (quizData?.original_sentence) {
-      setTimeout(() => speakText(quizData.original_sentence, sourceLang), 300)
+      setTimeout(() => speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang), 300)
     }
-  }, [quizData?.original_sentence, sourceLang])
+  }, [quizData?.original_sentence, quizData?.clean_sentence, sourceLang])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -142,7 +142,7 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
             <motion.button
               whileHover={{ scale: 1.15 }}
               whileTap={{ scale: 0.9 }}
-              onClick={(e) => { e.stopPropagation(); speakText(quizData.original_sentence, sourceLang) }}
+              onClick={(e) => { e.stopPropagation(); speakText(quizData.clean_sentence || quizData.original_sentence, sourceLang) }}
               className="p-1.5 sm:p-2 text-amber-500 hover:text-amber-500 hover:bg-amber-50 rounded-none transition-colors shrink-0"
             >
               <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />

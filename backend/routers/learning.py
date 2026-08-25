@@ -26,6 +26,14 @@ from utils.exercise_generators import (
 router = APIRouter(prefix="/api/learn", tags=["learning"])
 
 
+def clean_sentence_for_speech(sentence: str) -> str:
+    """去掉句首说话人标签（如 "A: "、"B："），避免把标签读进 TTS 语音。"""
+    if not sentence:
+        return sentence
+    # 匹配 "A:" / "B:" / "A：" / "AB: " 等句首说话人标签
+    return re.sub(r'^\s*[A-Za-z]{1,3}\s*[:：]\s*', '', sentence)
+
+
 @router.post("/{file_id}/start-word-gen")
 async def start_word_gen(file_id: str):
     try:
@@ -252,6 +260,7 @@ async def get_random_word(file_id: str, current_user: TokenData = Depends(requir
                         "type": "sentence_quiz",
                         "flat_index": current_index,
                         "original_sentence": current_item["sentence"],
+                        "clean_sentence": clean_sentence_for_speech(current_item["sentence"]),
                         "correct_translation": current_item.get("correct_translation", ""),
                         "correct_tokens": current_item.get("correct_tokens", []),
                         "tokens": tokens,
@@ -316,6 +325,7 @@ async def get_random_word(file_id: str, current_user: TokenData = Depends(requir
                         "type": "listening_quiz",
                         "flat_index": current_index,
                         "original_sentence": correct_sentence,
+                        "clean_sentence": clean_sentence_for_speech(correct_sentence),
                         "correct_words": sentence_words_display,
                         "options": options,
                         "sentence_translation": (current_sentence_data or {}).get("translation_result", {}).get("tokenized_translation", ""),
@@ -571,6 +581,7 @@ async def next_word(file_id: str, current_user: TokenData = Depends(require_auth
                         "sentence_quiz": {
                             "flat_index": new_index,
                             "original_sentence": next_item["sentence"],
+                            "clean_sentence": clean_sentence_for_speech(next_item["sentence"]),
                             "correct_translation": next_item.get("correct_translation", ""),
                             "correct_tokens": next_item.get("correct_tokens", []),
                             "tokens": tokens,
@@ -636,6 +647,7 @@ async def next_word(file_id: str, current_user: TokenData = Depends(require_auth
                         "listening_quiz": {
                             "flat_index": new_index,
                             "original_sentence": correct_sentence,
+                            "clean_sentence": clean_sentence_for_speech(correct_sentence),
                             "correct_words": sentence_words_display,
                             "options": options,
                             "sentence_translation": (current_sentence_data or {}).get("translation_result", {}).get("tokenized_translation", ""),
