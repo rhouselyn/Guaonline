@@ -318,6 +318,7 @@ async def get_random_word(file_id: str, current_user: TokenData = Depends(requir
                         "original_sentence": correct_sentence,
                         "correct_words": sentence_words_display,
                         "options": options,
+                        "sentence_translation": (current_sentence_data or {}).get("translation_result", {}).get("tokenized_translation", ""),
                         "unit_end_index": unit_end_index,
                         "current_index": current_index,
                         "unit_start_index": unit_start_index,
@@ -637,6 +638,7 @@ async def next_word(file_id: str, current_user: TokenData = Depends(require_auth
                             "original_sentence": correct_sentence,
                             "correct_words": sentence_words_display,
                             "options": options,
+                            "sentence_translation": (current_sentence_data or {}).get("translation_result", {}).get("tokenized_translation", ""),
                             "step_in_unit": get_filtered_step_in_unit(items, vocab, learned_words, only_new_words, step_in_unit),
                             "total_items_in_unit": get_filtered_unit_total(items, vocab, learned_words, only_new_words),
                             "listening_count_in_unit": sum(1 for it in items if it.get("type") == "listening_quiz" and not _is_word_item_learned(it, vocab, learned_words))

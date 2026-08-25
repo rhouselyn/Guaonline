@@ -136,6 +136,8 @@ function App() {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // 移动端底部导航 tab：home/details/quiz/profile
   const [mobileTab, setMobileTab] = useState('home')
+  // 我的页额度：进入时实时刷新，避免读取 localStorage 旧缓存
+  const [profileQuota, setProfileQuota] = useState(() => auth.getQuota())
 
   // === 浏览器历史导航：每个 step 变化压入历史栈，支持回退/前进 ===
   const isPopstateRef = useRef(false)
@@ -1519,12 +1521,22 @@ function App() {
     }
   }
 
-  // ponytail: step 变化时同步移动端底部 nav 高亮（历史条目点击/开始学习等路径也会触发）
+  // step 变化时同步移动端底部 nav 高亮（历史条目点击/开始学习等路径也会触发）
   useEffect(() => {
     if (step === 'input') setMobileTab('home')
     else if (step === 'dictionary') setMobileTab('details')
     else if (step === 'all-units') setMobileTab('quiz')
     else if (step === 'profile') setMobileTab('profile')
+  }, [step])
+
+  // ponytail: 进入"我的"页时实时刷新剩余额度（触发后端 check_and_refill_quota）
+  // 避免只读 localStorage 旧缓存导致额度不更新
+  useEffect(() => {
+    if (step !== 'profile') return
+    auth.refreshQuota().then(q => {
+      if (q) setProfileQuota(q)
+      else { const c = auth.getQuota(); if (c) setProfileQuota(c) }
+    })
   }, [step])
 
   // 移动端底部 nav 仅在非练习 step 显示；做题时只有返回，无 nav
@@ -1642,7 +1654,7 @@ function App() {
           <div className="h-full overflow-y-auto pb-nav-safe px-5 pt-5 safe-top">
             {(() => {
               const user = auth.getUser()
-              const q = auth.getQuota()
+              const q = profileQuota
               const available = q?.available ?? 0
               const max = q?.tier_max ?? q?.max ?? 200
               const isUnlimited = max === -1
