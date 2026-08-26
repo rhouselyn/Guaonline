@@ -51,7 +51,7 @@ function WordDetail({ word, t, onSentenceClick, sourceLang, hideContextSentences
             {word.examples.map((example, index) => (
               <div key={index} className="border-l-2 border-amber-200 pl-2.5">
                 <div className="flex items-start gap-1.5">
-                  <p className="text-ink-700 text-[13px] leading-snug flex-1">{example.sentence}</p>
+                  <p className="text-ink-700 text-[13px] leading-snug flex-1 italic">{example.sentence}</p>
                   {example.sentence && (
                     <button
                       onClick={(e) => { e.stopPropagation(); speakText(example.sentence, sourceLang) }}

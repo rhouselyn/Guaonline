@@ -233,7 +233,7 @@ function SentenceQuizStep({ quizData, onNextQuestion, onBack, onComplete, loadin
             </div>
             {!isCorrect && (
               <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{quizData.correct_translation || (quizData.correct_tokens ? quizData.correct_tokens.join('') : '')}
+                {quizData.correct_translation || (quizData.correct_tokens ? quizData.correct_tokens.join('') : '')}
               </p>
             )}
           </motion.div>

@@ -53,6 +53,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [step, setStep] = useState('input')
   const [text, setText] = useState('')
+  const [images, setImages] = useState([])
   const [sourceLang, setSourceLang] = useState('auto')
   const [detectedLang, setDetectedLang] = useState(null)
   const [targetLang, setTargetLang] = useState('zh')
@@ -525,7 +526,8 @@ function App() {
   }
 
   const handleProcess = async () => {
-    if (!text.trim()) return
+    // 自由生成模式：允许只有图片、没有文字时发送（图片交给大模型解析）
+    if (!text.trim() && !(inputMode === 'generate' && images.length > 0)) return
 
     setSkipPolling(false)
     setLoading(true)
@@ -561,7 +563,10 @@ function App() {
     
     try {
       // 所有模式统一调用 processText，翻译/生成/语言检测在后台执行，不会超时
-      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode)
+      // 图片仅在自由生成模式下随请求发送；其它模式只传文字内容
+      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode, inputMode === 'generate' ? images : [])
+      // 发送后清空已附加的图片
+      setImages([])
       
       if (response && response.file_id) {
         const fileId = response.file_id
@@ -1591,6 +1596,8 @@ function App() {
                       key="input"
                       text={text}
                       setText={setText}
+                      images={images}
+                      setImages={setImages}
                       sourceLang={sourceLang}
                       setSourceLang={setSourceLang}
                       uiLang={uiLang}
@@ -1631,6 +1638,8 @@ function App() {
                   <InputStep
                     text={text}
                     setText={setText}
+                    images={images}
+                    setImages={setImages}
                     sourceLang={sourceLang}
                     setSourceLang={setSourceLang}
                     uiLang={uiLang}

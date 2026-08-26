@@ -207,7 +207,7 @@ function TranslationReconstructionStep({ data, onNext, onBack, onComplete, loadi
             </div>
             {!isCorrect && (
               <p className="text-ink-600 font-medium">
-                {t.correctAnswer || '正确答案'}：{data.original_tokens.join(' ')}
+                {data.original_tokens.join(' ')}
               </p>
             )}
             {isCorrect && isLastExercise && (
