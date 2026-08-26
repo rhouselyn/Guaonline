@@ -152,6 +152,7 @@ function App() {
   }, [])
   const [inputMode, setInputMode] = useState('direct')
   const [preprocessStatus, setPreprocessStatus] = useState(null)
+  const [preprocessStart, setPreprocessStart] = useState(null)
   const [showVocabList, setShowVocabList] = useState(false)
   const [fileTitle, setFileTitle] = useState('')
   const learningContainerRef = useRef(null)
@@ -420,8 +421,15 @@ function App() {
         setPreprocessStatus('detecting')
       } else if (status.preprocess === 'refilling') {
         setPreprocessStatus('refilling')
+      } else if (status.preprocess === 'preparing') {
+        setPreprocessStatus('preparing')
+      } else if (status.preprocess === 'retrying') {
+        setPreprocessStatus('retrying')
       } else {
         setPreprocessStatus(null)
+      }
+      if (status.preprocess_start) {
+        setPreprocessStart(status.preprocess_start)
       }
       if (status.title) {
         setFileTitle(status.title)
@@ -1731,6 +1739,7 @@ function App() {
               sourceLang={sourceLang}
               detectedLang={detectedLang}
               preprocessStatus={preprocessStatus}
+              preprocessStart={preprocessStart}
               onBack={() => { dictStateRef.current = { vocabPage: 1, sentencePage: 1, globalVocabPage: 1, vocabScrollPos: 0, sentenceTranslationScrollPos: 0, sentenceOriginalScrollPos: 0, globalVocabScrollPos: 0, vocabDisplayMode: 0, sentenceDisplayMode: 0, showOriginal: false, showGlobalVocab: false, vocabSearch: '', sentenceSearch: '' }; setStep('input') }}
               fileTitle={fileTitle}
               onTitleChange={(newTitle) => setFileTitle(newTitle)}

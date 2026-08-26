@@ -10,7 +10,7 @@ import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
-function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '', vocabLength = 0, sentenceLength = 0 }) {
+function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, preprocessStart, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '', vocabLength = 0, sentenceLength = 0 }) {
   const saved = dictStateRef?.current || {}
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
@@ -253,12 +253,53 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return () => clearTimeout(id)
   }, [sentenceSearch])
 
-  // ponytail: 进度信号去抖——vocabLength/sentenceLength 稳定 400ms 后才 bump progressVersion，
-  // 触发分页/全量词表的 refetch。避免生成期间每 0.3s 取消重发。
+  // ponytail: 进度信号节流（leading+trailing）替代原 400ms 纯去抖——
+  // 自由生成的文本较短，句子 Stage1/Stage2 并发完成、信号间隔常 <400ms，
+  // 纯去抖的计时器被连续重置，处理期间句子/单词列表完全不刷新、直到结束才一次性出现
+  // （表现为"只显示正在生成然后突然完成"）。节流保证：首次变化立即刷新；之后每 1.2s
+  // 至多一次；最后一次变化后 1.2s 内必有 trailing 刷新。间隔 ≥1.2s 让 in-flight 请求
+  // 有时间落地，不会重现"连续取消导致 pagedVocab 永不更新"的问题；用户翻页/搜索
+  // （vocabPage/sentencePage 等依赖）仍立即触发，不受节流影响。
+  const progressThrottleLastRef = useRef(0)
+  const progressThrottleTimerRef = useRef(null)
   useEffect(() => {
-    const id = setTimeout(() => setProgressVersion(v => v + 1), 400)
-    return () => clearTimeout(id)
+    const INTERVAL = 1200
+    const now = Date.now()
+    const elapsed = now - progressThrottleLastRef.current
+    if (elapsed >= INTERVAL) {
+      progressThrottleLastRef.current = now
+      setProgressVersion(v => v + 1)
+      return
+    }
+    if (!progressThrottleTimerRef.current) {
+      progressThrottleTimerRef.current = setTimeout(() => {
+        progressThrottleTimerRef.current = null
+        progressThrottleLastRef.current = Date.now()
+        setProgressVersion(v => v + 1)
+      }, INTERVAL - elapsed)
+    }
   }, [vocabLength, sentenceLength])
+  useEffect(() => () => {
+    if (progressThrottleTimerRef.current) clearTimeout(progressThrottleTimerRef.current)
+  }, [])
+
+  // ponytail: 预处理阶段耗时显示。后端在 preprocess_start 给了起始时间戳（秒），
+  // 前端每秒 tick 一次算 elapsed——不用后端持续推时间，SSE 状态不携带也无妨。
+  const [preprocessElapsed, setPreprocessElapsed] = useState(0)
+  useEffect(() => {
+    if (!preprocessStatus) { setPreprocessElapsed(0); return }
+    const compute = () => {
+      if (!preprocessStart) return
+      // 服务器时间戳与本机时钟可能有偏差，下限钳到 0
+      setPreprocessElapsed(Math.max(0, Math.floor(Date.now() / 1000 - preprocessStart)))
+    }
+    compute()
+    const timer = setInterval(compute, 1000)
+    return () => clearInterval(timer)
+  }, [preprocessStatus, preprocessStart])
+  const preprocessElapsedText = preprocessElapsed >= 60
+    ? `${Math.floor(preprocessElapsed / 60)}m${String(preprocessElapsed % 60).padStart(2, '0')}s`
+    : `${preprocessElapsed}s`
 
   // ponytail: 按页拉取词汇表（仅当前页 + total）。依赖 currentFileId/page/pageSize/搜索/排序/生成进度。
   useEffect(() => {
@@ -1095,8 +1136,13 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
               {preprocessStatus === 'detecting' ? (t.detectingLanguage || '识别语言中...') :
                preprocessStatus === 'translating' ? (t.translating || '翻译中...') :
                preprocessStatus === 'refilling' ? (t.refillingWords || '补全漏词中...') :
-               (t.generating || '生成文本中...')}
+               preprocessStatus === 'retrying' ? (t.retryingSentences || '重试失败句子中...') :
+               preprocessStatus === 'generating' ? (t.generating || '生成文本中...') :
+               (t.preparing || '准备中...')}
             </span>
+            {preprocessStart && preprocessElapsed > 0 && (
+              <span className="text-[11px] text-blue-400 tabular-nums">{preprocessElapsedText}</span>
+            )}
           </div>
         ) : processingInfo && safeProcessingInfo.total > 0 && progress < 100 ? (
           <div className={innerCls}>
