@@ -631,19 +631,73 @@ function ModeSelector({ mode, setMode, t }) {
   )
 }
 
+// ── 图片压缩：把大图用 canvas 缩到目标大小内再转 data URL，减小 POST body、加速 LLM 生成 ──
+// 保证文字识别的关键：分辨率只等比缩到 MAX_DIMENSION 以下(2048px 仍足够识别小字)，
+// 尽量优先降低 JPEG 质量而非缩减分辨率；原图本来就不大的直接用原图，质量 100% 保留。
+const MAX_DIMENSION = 2048 // 分辨率上限：超过才等比缩小，避免小字模糊
+const MAX_BYTES = 1.5 * 1024 * 1024 // 目标 ≤ 1.5MB
+const MIN_QUALITY = 0.55 // JPEG 质量下限，防止过度压缩糊图
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+function readAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function compressImage(file) {
+  // 原图已 ≤ 目标大小：原样上传，分辨率与质量全保留(最利于文字识别)
+  if (file.size <= MAX_BYTES) return readAsDataURL(file)
+
+  const raw = await readAsDataURL(file)
+  const img = await loadImage(raw)
+
+  // 仅当最长边超限才等比缩小
+  const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height))
+  const w = Math.round(img.width * scale)
+  const h = Math.round(img.height * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+
+  // 透明 PNG 且无需缩小分辨率时保留 PNG，否则转 JPEG 以显著减小体积
+  const mime = file.type === 'image/png' && scale === 1 ? 'image/png' : 'image/jpeg'
+  for (let q = 0.9; q >= MIN_QUALITY; q -= 0.1) {
+    const dataUrl = canvas.toDataURL(mime, q)
+    if (dataUrl.length * 0.75 <= MAX_BYTES) return dataUrl // base64 约 4/3 展开，估算字节数
+  }
+  return canvas.toDataURL(mime, MIN_QUALITY)
+}
+
 function GenerateAttachment({ t, images, setImages, disabled }) {
   const fileInputRef = useRef(null)
-  const handleFiles = (e) => {
+  const handleFiles = async (e) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
-    files.forEach((file) => {
-      if (!file.type.startsWith('image/')) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        setImages((prev) => [...prev, reader.result])
-      }
-      reader.readAsDataURL(file)
-    })
+    const results = await Promise.all(
+      files.map(async (file) => {
+        if (!file.type.startsWith('image/')) return null
+        try {
+          return await compressImage(file)
+        } catch {
+          return null
+        }
+      })
+    )
+    const imgs = results.filter(Boolean)
+    if (imgs.length) setImages((prev) => [...prev, ...imgs])
     e.target.value = ''
   }
   return (
