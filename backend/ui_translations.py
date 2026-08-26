@@ -66,6 +66,7 @@ UI_TRANSLATION_SCHEMA = {
     "modeDirectPlaceholder": {"desc": "Placeholder for direct input mode", "zh": "粘贴或输入你想学习的文本...", "en": "Paste or enter text you want to learn..."},
     "modeTranslatePlaceholder": {"desc": "Placeholder for translate mode", "zh": "输入你想翻译并学习的文本...", "en": "Enter text to translate and learn..."},
     "modeGeneratePlaceholder": {"desc": "Placeholder for generate mode", "zh": "描述你想学习的文本内容，例如：一篇关于旅行的短文...", "en": "Describe the text content you want to learn, e.g.: a short essay about travel..."},
+    "autoTranslateHint": {"desc": "Hint under input box: if input language differs from selected language, it will be automatically translated", "zh": "如果输入文字的语言与所选语种不同，系统将自动翻译成该语种", "en": "If the input language differs from the selected language, it will be automatically translated to it"},
     "translating": {"desc": "Translating state", "zh": "翻译中...", "en": "Translating..."},
     "generating": {"desc": "Generating state", "zh": "生成文本中...", "en": "Generating text..."},
     "detectingLanguage": {"desc": "Detecting language state", "zh": "识别语言中...", "en": "Detecting language..."},
