@@ -631,7 +631,7 @@ function ModeSelector({ mode, setMode, t }) {
   )
 }
 
-function GenerateAttachment({ images, setImages, disabled }) {
+function GenerateAttachment({ t, images, setImages, disabled }) {
   const fileInputRef = useRef(null)
   const handleFiles = (e) => {
     const files = Array.from(e.target.files || [])
@@ -649,19 +649,6 @@ function GenerateAttachment({ images, setImages, disabled }) {
   return (
     <div className="flex items-center gap-1.5">
       <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={disabled}
-        title={t.attachImages || '附加图片'}
-        className={`p-1.5 rounded-sm border-2 transition-colors ${
-          disabled
-            ? 'border-parchment-100 text-ink-300 cursor-not-allowed'
-            : 'border-aged-200 text-ink-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50'
-        }`}
-      >
-        <ImagePlus className="w-4 h-4" />
-      </button>
       {images.map((img, i) => (
         <div key={`${i}-${img.slice(0, 24)}`} className="relative w-9 h-9 rounded-sm overflow-hidden border-2 border-aged-200 shrink-0 group">
           <img src={img} alt="" className="w-full h-full object-cover" />
@@ -675,6 +662,19 @@ function GenerateAttachment({ images, setImages, disabled }) {
           </button>
         </div>
       ))}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={disabled}
+        title={t.attachImages || '附加图片'}
+        className={`p-1.5 rounded-sm border-2 transition-colors ${
+          disabled
+            ? 'border-parchment-100 text-ink-300 cursor-not-allowed'
+            : 'border-aged-200 text-ink-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50'
+        }`}
+      >
+        <ImagePlus className="w-4 h-4" />
+      </button>
     </div>
   )
 }
@@ -798,7 +798,7 @@ function InputStep({ text, setText, images, setImages, sourceLang, setSourceLang
                 {isUnlimited ? '∞' : `${available}/${max}`}
               </span>
               <div className="flex items-center gap-2">
-                {inputMode === 'generate' && <GenerateAttachment images={images} setImages={setImages} disabled={loading} />}
+                {inputMode === 'generate' && <GenerateAttachment t={t} images={images} setImages={setImages} disabled={loading} />}
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -909,7 +909,7 @@ function InputStep({ text, setText, images, setImages, sourceLang, setSourceLang
               <AnimatePresence>
                 {inputMode === 'generate' && (
                   <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
-                    <GenerateAttachment images={images} setImages={setImages} disabled={loading} />
+                    <GenerateAttachment t={t} images={images} setImages={setImages} disabled={loading} />
                   </motion.div>
                 )}
               </AnimatePresence>

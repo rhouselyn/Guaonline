@@ -562,7 +562,8 @@ function App() {
     
     try {
       // 所有模式统一调用 processText，翻译/生成/语言检测在后台执行，不会超时
-      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode, images)
+      // 图片仅在自由生成模式下随请求发送；其它模式只传文字内容
+      const response = await api.processText(text.trim(), sourceLang, targetLang, inputMode, inputMode === 'generate' ? images : [])
       // 发送后清空已附加的图片
       setImages([])
       
