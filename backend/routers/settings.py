@@ -76,18 +76,32 @@ async def translate_ui(lang_code: str):
     from db_storage import DatabaseStorage
     db_storage = DatabaseStorage()
 
+    # ponytail: schema 版本签名 = 全部 key 的英文基准拼接的指纹。
+    # 新增 key 或缺 key → 补译缺失部分；修改既有文案(英文基准变化) → 整包重译刷新，
+    # 保证已缓存的多语言 UI 也能拿到 autoTranslateHint 等最新文案，而不只是新上线的语言。
+    schema_sig = _ui_schema_sig()
+
     # 1. 查数据库缓存
     cached = db_storage.load_ui_translations(lang_code)
     if cached:
-        # ponytail: schema 新增 key（如 autoTranslateHint）时旧缓存缺 key——
-        # 只补译缺失部分并合并回缓存，避免整包重译，也避免多语言界面漏显示新文案。
         missing = [k for k in UI_TRANSLATION_SCHEMA if k not in cached]
-        if not missing:
+        stale = cached.get("_schema_sig") != schema_sig
+        if not missing and not stale:
             return cached
+        # zh/en 不调 LLM，直接从 schema 重建最新值
+        if lang_code in ('zh', 'en'):
+            result = {k: UI_TRANSLATION_SCHEMA[k].get(lang_code, UI_TRANSLATION_SCHEMA[k].get('en', '')) for k in UI_TRANSLATION_SCHEMA}
+            result["_lang_code"] = lang_code
+            result["_schema_sig"] = schema_sig
+            db_storage.save_ui_translations(lang_code, result)
+            return result
         try:
-            patched = await _do_translate_ui(lang_code, db_storage, keys=missing)
-            merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
+            # stale（文案更新）时全量重译；否则只补缺失 key
+            refresh_keys = list(UI_TRANSLATION_SCHEMA.keys()) if stale else missing
+            patched = await _do_translate_ui(lang_code, db_storage, keys=refresh_keys)
+            merged = {**cached, **{k: v for k, v in patched.items() if k in refresh_keys}}
             merged["_lang_code"] = lang_code
+            merged["_schema_sig"] = schema_sig
             db_storage.save_ui_translations(lang_code, merged)
             return merged
         except Exception as e:
@@ -100,11 +114,22 @@ async def translate_ui(lang_code: str):
         for key, val in UI_TRANSLATION_SCHEMA.items():
             result[key] = val.get(lang_code, val.get('en', ''))
         result["_lang_code"] = lang_code
+        result["_schema_sig"] = schema_sig
         db_storage.save_ui_translations(lang_code, result)
         return result
 
     # 3. 用 LLM 生成（同步等待，不再用后台任务）
     return await _do_translate_ui(lang_code, db_storage)
+
+
+def _ui_schema_sig():
+    """UI_TRANSLATION_SCHEMA 的英文基准指纹，用于判断文案基准是否更新过。"""
+    import hashlib
+    payload = json.dumps(
+        {k: v.get("en", "") for k, v in UI_TRANSLATION_SCHEMA.items()},
+        ensure_ascii=False, sort_keys=True,
+    )
+    return hashlib.md5(payload.encode("utf-8")).hexdigest()[:16]
 
 
 async def _do_translate_ui(lang_code: str, db_storage, keys=None):
@@ -150,6 +175,7 @@ async def _do_translate_ui(lang_code: str, db_storage, keys=None):
 
             translated = json.loads(content.strip())
             translated["_lang_code"] = lang_code
+            translated["_schema_sig"] = _ui_schema_sig()
 
             # 存入数据库
             db_storage.save_ui_translations(lang_code, translated)
