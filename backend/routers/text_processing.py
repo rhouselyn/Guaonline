@@ -268,7 +268,8 @@ async def process_text(request: dict, background_tasks: BackgroundTasks, current
         # 自由生成模式附带的多模态图片（base64 data URL 列表，qwen-vl 图像输入格式）
         images = request.get("images") or []
 
-        if not text:
+        # 允许：有文字，或附带了图片（多模态），两者都为空才拒绝
+        if not text and not images:
             raise HTTPException(status_code=400, detail="Text is required")
 
         now = datetime.datetime.now()

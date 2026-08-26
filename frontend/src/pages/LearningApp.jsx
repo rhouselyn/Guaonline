@@ -526,7 +526,8 @@ function App() {
   }
 
   const handleProcess = async () => {
-    if (!text.trim()) return
+    // 自由生成模式：允许只有图片、没有文字时发送（图片交给大模型解析）
+    if (!text.trim() && !(inputMode === 'generate' && images.length > 0)) return
 
     setSkipPolling(false)
     setLoading(true)
