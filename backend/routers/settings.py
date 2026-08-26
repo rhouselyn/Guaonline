@@ -79,7 +79,20 @@ async def translate_ui(lang_code: str):
     # 1. 查数据库缓存
     cached = db_storage.load_ui_translations(lang_code)
     if cached:
-        return cached
+        # ponytail: schema 新增 key（如 autoTranslateHint）时旧缓存缺 key——
+        # 只补译缺失部分并合并回缓存，避免整包重译，也避免多语言界面漏显示新文案。
+        missing = [k for k in UI_TRANSLATION_SCHEMA if k not in cached]
+        if not missing:
+            return cached
+        try:
+            patched = await _do_translate_ui(lang_code, db_storage, keys=missing)
+            merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
+            merged["_lang_code"] = lang_code
+            db_storage.save_ui_translations(lang_code, merged)
+            return merged
+        except Exception as e:
+            print(f"UI translation patch error ({lang_code}): {e}")
+            return cached  # 补译失败退回旧缓存，前端有 zhBase 兜底
 
     # 2. 对于 zh 和 en，从 schema 生成并存入数据库
     if lang_code in ('zh', 'en'):
@@ -94,8 +107,8 @@ async def translate_ui(lang_code: str):
     return await _do_translate_ui(lang_code, db_storage)
 
 
-async def _do_translate_ui(lang_code: str, db_storage):
-    """通过 LLM 翻译 UI 字符串。"""
+async def _do_translate_ui(lang_code: str, db_storage, keys=None):
+    """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。"""
     from llm_api import get_lang_name
     from utils.llm_gateway import gateway
 
@@ -103,6 +116,8 @@ async def _do_translate_ui(lang_code: str, db_storage):
 
     strings_for_prompt = {}
     for key, val in UI_TRANSLATION_SCHEMA.items():
+        if keys is not None and key not in keys:
+            continue
         strings_for_prompt[key] = {
             "description": val["desc"],
             "chinese": val["zh"],

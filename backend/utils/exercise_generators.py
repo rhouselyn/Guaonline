@@ -604,6 +604,12 @@ def _finalize_pipeline(file_id, sentence_translations, total_sentences,
     processing_status[file_id] = {
         "status": "completed",
         "progress": 100,
+        # ponytail: 终态也要带 total_sentences/current_sentence/stage1_count——
+        # 前端 completed 分支靠 total_sentences*2+1 抬高 signal 触发 trailing 刷新，
+        # 缺了它最后一次变化可能不触发 refetch，句子/词表停留在差一条的状态。
+        "current_sentence": total_sentences,
+        "stage1_count": total_sentences,
+        "total_sentences": total_sentences,
         "vocab": all_vocab,
         "sentence_translations": sentence_translations,
         **_preserve4

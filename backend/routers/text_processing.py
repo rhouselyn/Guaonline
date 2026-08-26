@@ -51,11 +51,18 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         merged_translated = False
         if mode == "direct" and source_lang != "auto":
             try:
+                # ponytail: 自动翻译前置检测也要让前端可见——之前这段完全静默，用户提交后
+                # 有一段"什么都没发生"的空窗。复用已有的 detecting/translating 标签。
+                if file_id in processing_status:
+                    processing_status[file_id]["preprocess"] = "detecting"
+                    processing_status[file_id]["preprocess_start"] = time.time()
                 detected = await detect_language(text)
             except Exception as e:
                 print(f"[WARN] Merged auto-translate language detection failed: {e}")
                 detected = None
             if detected and detected != "auto" and detected != source_lang:
+                if file_id in processing_status:
+                    processing_status[file_id]["preprocess"] = "translating"
                 translated = await _translate_for_learning(text, source_lang, detected, user_id, tier)
                 if translated:
                     text = translated
@@ -70,7 +77,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         generation_succeeded = False  # ponytail: 跟踪 LLM 是否产出有效结果，决定额度按结果扣还是退预扣
         if mode == "translate":
             _preserve_tr = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
-            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", **_preserve_tr}
+            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "translating", "preprocess_start": time.time(), **_preserve_tr}
             # 翻译模式：用户输入母语文本，翻译成学习语言(source_lang)
             # 翻译方向是 target_lang(母语) → source_lang(学习语言)
             source_lang_name = get_lang_name(source_lang)
@@ -95,7 +102,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
                 processing_status[file_id]["preprocess"] = None
         elif mode == "generate":
             _preserve_gen = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
-            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", **_preserve_gen}
+            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "generating", "preprocess_start": time.time(), **_preserve_gen}
             source_lang_name = get_lang_name(source_lang)
             gateway.reload()
             _gen_sys = f"You are a text generator. Generate a text in {source_lang_name} based on the user's description. CRITICAL RULES: 1. Generate text content that can include articles, stories, essays, descriptions, dialogues, conversations, or any other natural text form. 2. If the user requests dialogue or conversation content, generate natural exchanges between speakers with clear speaker labels (e.g. A:, B:, or names). 3. Do NOT include any meta-commentary, explanations, or notes about the text itself. 4. The text should be natural, coherent, and suitable for language learning. 5. The text should be at least 3-5 sentences long (or 3-5 exchanges for dialogue). 6. Output ONLY the generated text, nothing else. 7. CRITICAL: Output must be plain text only. Do NOT use any markdown formatting (no bold, italic, headers, lists, code blocks, etc.), no emojis, no special symbols. Output pure plain text only."
@@ -154,7 +161,7 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         # 2. 语言检测
         if source_lang == "auto":
             _preserve_lang = {k: processing_status[file_id][k] for k in ("original_text", "title") if k in processing_status.get(file_id, {})}
-            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "detecting", **_preserve_lang}
+            processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0, "total_sentences": 0, "preprocess": "detecting", "preprocess_start": time.time(), **_preserve_lang}
             try:
                 source_lang = await detect_language(text)
             except Exception as e:
@@ -177,6 +184,12 @@ async def _preprocess_and_run(file_id: str, text: str, source_lang: str, target_
         recent_langs = recent_langs[:10]
         app_settings["recent_languages"] = recent_langs
         storage.save_user_preferences(app_settings, user_id=user_id)
+
+        # ponytail: preparing 阶段标签——预处理(检测/翻译/生成)结束到句子处理启动之间还有
+        # 标题生成、历史记录写入等耗时步骤，direct 模式此前完全静默。统一打上 preparing 让前端可见。
+        if file_id in processing_status:
+            processing_status[file_id]["preprocess"] = "preparing"
+            processing_status[file_id].setdefault("preprocess_start", time.time())
 
         # 4. 生成标题
         title = await generate_title(text, source_lang, user_id=user_id, tier=tier)
@@ -397,7 +410,7 @@ async def retry_sentences(file_id: str, background_tasks: BackgroundTasks, curre
             pass
     # 立即置为处理中，避免前端重复触发
     processing_status[file_id] = {"status": "processing", "progress": 0, "current_sentence": 0,
-                                  "total_sentences": total, "preprocess": "retrying", **_preserve}
+                                  "total_sentences": total, "preprocess": "retrying", "preprocess_start": time.time(), **_preserve}
     background_tasks.add_task(retry_failed_sentences, file_id, current_user.user_id, current_user.tier.value)
     return {"file_id": file_id, "status": "processing", "preprocess": "retrying"}
 

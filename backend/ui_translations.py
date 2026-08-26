@@ -70,6 +70,8 @@ UI_TRANSLATION_SCHEMA = {
     "translating": {"desc": "Translating state", "zh": "翻译中...", "en": "Translating..."},
     "generating": {"desc": "Generating state", "zh": "生成文本中...", "en": "Generating text..."},
     "detectingLanguage": {"desc": "Detecting language state", "zh": "识别语言中...", "en": "Detecting language..."},
+    "preparing": {"desc": "Preparing state (between preprocessing and sentence processing)", "zh": "准备中...", "en": "Preparing..."},
+    "retryingSentences": {"desc": "Retrying failed sentences state", "zh": "重试失败句子中...", "en": "Retrying failed sentences..."},
     "confirmDelete": {"desc": "Confirm delete dialog title", "zh": "确认删除", "en": "Confirm Delete"},
     "deleteCannotUndo": {"desc": "Warning that delete cannot be undone", "zh": "删除后不可恢复，确定要删除吗？", "en": "This action cannot be undone. Are you sure you want to delete?"},
     "cancel": {"desc": "Cancel button", "zh": "取消", "en": "Cancel"},
