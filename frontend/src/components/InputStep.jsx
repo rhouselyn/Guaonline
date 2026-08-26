@@ -631,7 +631,7 @@ function ModeSelector({ mode, setMode, t }) {
   )
 }
 
-function GenerateAttachment({ images, setImages, disabled }) {
+function GenerateAttachment({ images, setImages, disabled, t }) {
   const fileInputRef = useRef(null)
   const handleFiles = (e) => {
     const files = Array.from(e.target.files || [])
@@ -798,7 +798,7 @@ function InputStep({ text, setText, images, setImages, sourceLang, setSourceLang
                 {isUnlimited ? '∞' : `${available}/${max}`}
               </span>
               <div className="flex items-center gap-2">
-                {inputMode === 'generate' && <GenerateAttachment images={images} setImages={setImages} disabled={loading} />}
+                {inputMode === 'generate' && <GenerateAttachment images={images} setImages={setImages} disabled={loading} t={t} />}
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -909,7 +909,7 @@ function InputStep({ text, setText, images, setImages, sourceLang, setSourceLang
               <AnimatePresence>
                 {inputMode === 'generate' && (
                   <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
-                    <GenerateAttachment images={images} setImages={setImages} disabled={loading} />
+                    <GenerateAttachment images={images} setImages={setImages} disabled={loading} t={t} />
                   </motion.div>
                 )}
               </AnimatePresence>
