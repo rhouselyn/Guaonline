@@ -382,32 +382,32 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                 "type": "object",
                 "properties": {
                     "word": {"type": "string"},
-                    "enriched_meaning": {"type": "string", "description": "单词的完整释义，包含多个母语单词的常见含义"},
+                    "enriched_meaning": {"type": "string", "description": f"单词的完整释义。【强制】必须全部使用 {target_lang_name}（用户母语）书写，包含多个常见含义，用分号分隔，不能是占位符"},
                     "variants_detail": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "form": {"type": "string"},
-                                "type": {"type": "string"},
+                                "form": {"type": "string", "description": f"词形本身，必须使用 {source_lang_name}（学习语言）"},
+                                "type": {"type": "string", "description": f"词形变化的类型说明（如复数/过去式），必须使用 {target_lang_name}（用户母语）"},
                             },
                         },
-                        "description": "词形变化 + 类型说明，只包含确实存在的词形变化",
+                        "description": f"词形变化列表，只包含确实存在的词形变化。form 用 {source_lang_name}，type 说明用 {target_lang_name}",
                     },
                     "examples": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "sentence": {"type": "string"},
-                                "translation": {"type": "string"},
+                                "sentence": {"type": "string", "description": f"例句原文，必须使用 {source_lang_name}（学习语言）"},
+                                "translation": {"type": "string", "description": f"例句翻译，使用 {target_lang_name}（用户母语）"},
                             },
                         },
                         "minItems": 2,
                         "maxItems": 2,
-                        "description": "两个全新的例句（绝不能复用原文句子，必须是不同的句子。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同）",
+                        "description": f"两个全新的例句（不复用原文句子）。sentence 用 {source_lang_name}，translation 用 {target_lang_name}。尽量使用简单常见的词汇，不需要与原文中的意思相同",
                     },
-                    "memory_hint": {"type": "string", "description": "记忆辅助（联想/对比母语）。【强制】必须使用用户当前选择的母语（target_lang_name）编写，绝不能使用学习语言（source_lang_name）"},
+                    "memory_hint": {"type": "string", "description": f"记忆辅助（联想/对比母语帮助记忆）。使用 {target_lang_name}（用户母语）编写"},
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
@@ -416,9 +416,9 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                                 "items": {"type": "string"},
                                 "minItems": 3,
                                 "maxItems": 3,
-                                "description": "3 个错误释义（该单词所没有的意思，用作干扰项）。先于 correct_option 生成，作为正确选项的格式模板。不要标记哪个是对错，系统会自动把 correct_option 设为正确答案",
+                                "description": f"3 个错误释义（该单词所没有的意思，用作干扰项），必须使用 {target_lang_name}（用户母语）。先于 correct_option 生成，作为正确选项的格式模板。不要标记哪个是对错，系统会自动把 correct_option 设为正确答案",
                             },
-                            "correct_option": {"type": "string", "description": "1 个正确释义（单词的真实释义）。格式必须与 distractors 中的每一项完全一致：同样的长度、同样的结构（都只含 1 个释义，或都含 N 个释义）、同样的词性范围"},
+                            "correct_option": {"type": "string", "description": f"1 个正确释义（单词的真实释义），必须使用 {target_lang_name}（用户母语）。格式必须与 distractors 中的每一项完全一致：同样的长度、同样的结构（都只含 1 个释义，或都含 N 个释义）、同样的词性范围"},
                         },
                         "required": ["distractors", "correct_option"],
                     },
@@ -428,12 +428,15 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
         },
     }]
 
-    system_prompt = f"""为单词 '{word}' 生成丰富的信息，使用 {target_lang_name} 输出。
+    system_prompt = f"""你是一位面向母语为 {target_lang_name} 的学习者的 {source_lang_name} 词汇教师。为单词 '{word}' 生成学习信息。
 
-【极其重要】这个单词属于 {source_lang_name}（学习语言）：
-- 词形变化（variants_detail）必须是 {source_lang_name} 语法规则下的词形变化
-- 例句（examples）必须使用 {source_lang_name} 编写
-- 所有语言相关的内容都必须遵循 {source_lang_name} 的语法和用法规范
+【语言铁律·按字段逐条执行】用户母语 = {target_lang_name}，学习语言 = {source_lang_name}。除例句原文和词形本身外，所有内容都必须写给母语用户看：
+- enriched_meaning（释义）→ 只能用 {target_lang_name} 书写
+- examples.sentence（例句原文）→ 只能用 {source_lang_name} 书写
+- examples.translation（例句翻译）→ 用 {target_lang_name} 书写
+- memory_hint（记忆辅助）→ 用 {target_lang_name} 书写
+- multiple_choice 的 distractors / correct_option（四个选项）→ 只能用 {target_lang_name} 书写
+- variants_detail.form（词形）→ 只能用 {source_lang_name} 书写；variants_detail.type（类型说明）→ 只能用 {target_lang_name} 书写
 
 上下文释义：{correct_meaning}
 
@@ -441,17 +444,13 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 
 请生成以下信息：
 
-1. enriched_meaning: 单词的完整释义，包含多个常见含义，用分号分隔。每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等）
-2. variants_detail: {source_lang_name} 词形变化列表，带类型说明。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
-3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户当前选择的母语）。绝不能反过来用母语写例句再用学习语言翻译。【严禁】translation 字段输出与 sentence 相同的语言，必须是 {target_lang_name} 的自然翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
-4. memory_hint: 记忆辅助。【强制】必须使用用户当前选择的母语（{target_lang_name}）编写，通过联想/对比母语帮助记忆。【严禁】使用学习语言（{source_lang_name}）编写记忆辅助
-5. multiple_choice: 选择题。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。correct_option 的格式必须严格匹配 distractors 中各项的格式。
+1. enriched_meaning: 单词的完整释义，全部用 {target_lang_name}，包含多个常见含义，用分号分隔。每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等）
+2. variants_detail: {source_lang_name} 词形变化列表。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
+3. examples: 两个全新的例句。sentence 用 {source_lang_name}，translation 用 {target_lang_name}。绝不能反过来用母语写例句再用学习语言翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
+4. memory_hint: 记忆辅助。用 {target_lang_name} 通过联想/对比母语帮助记忆
+5. multiple_choice: 选择题。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。所有选项都用 {target_lang_name}。correct_option 的格式必须严格匹配 distractors 中各项的格式。
 
 要求：
-- 所有输出必须使用 {target_lang_name}
-- 【极其重要】例句必须使用 {source_lang_name} 编写，翻译使用 {target_lang_name}（用户当前选择的母语）。绝不能用母语写例句再用学习语言翻译。【严禁】translation 与 sentence 使用同一种语言——translation 必须是 {target_lang_name} 的自然翻译
-- 例句要自然，尽量使用简单常见的词汇，不需要与原文中的意思相同
-- 【强制】记忆辅助（memory_hint）必须使用用户当前选择的母语（{target_lang_name}）编写，对语言学习者有实际帮助。【严禁】使用学习语言（{source_lang_name}）编写
 - 选择题选项要清晰且合理
 - 【重要】正确答案必须是单词的常见、正常释义，不是上下文特定释义
 - 【重要】错误答案必须是该单词所没有的意思，而不是非句子中的意思
@@ -479,27 +478,31 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
     )
 
     # 解析 tool call 响应
+    # ponytail: 统一打 target_lang/source_lang 标记——所有从本函数产出的 word_cache
+    # 都带语种戳，读取端据此判断"用户切换母语后缓存是否还有效"
+    def _stamp(result):
+        result["word"] = result.get("word", word)
+        result["target_lang"] = target_lang
+        result["source_lang"] = source_lang
+        return result
+
     try:
         choice = response.get("choices", [{}])[0]
         message = choice.get("message", {})
         tool_calls = message.get("tool_calls", [])
         if tool_calls:
             arguments_str = tool_calls[0].get("function", {}).get("arguments", "{}")
-            result = json.loads(arguments_str)
-            result["word"] = result.get("word", word)
-            return result
+            return _stamp(json.loads(arguments_str))
         # 如果没有 tool_calls，尝试从 content 解析 JSON
         content = message.get("content", "")
         if content:
             try:
-                result = json.loads(content)
-                result["word"] = result.get("word", word)
-                return result
+                return _stamp(json.loads(content))
             except json.JSONDecodeError:
                 pass
     except Exception as e:
         print(f"[WARN] generate_multiple_choice tool call parse failed: {e}")
-    return {"word": word, "enriched_meaning": correct_meaning, "multiple_choice": {"options": [{"text": correct_meaning, "is_correct": True}]}}
+    return _stamp({"enriched_meaning": correct_meaning, "multiple_choice": {"options": [{"text": correct_meaning, "is_correct": True}]}})
 
 
 def _extract_vocab_from_sentences(sentence_translations, source_lang):
@@ -1052,10 +1055,10 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
             try:
                 existing = storage.load_word_cache(file_id, word_to_gen)
                 if existing:
-                    # ponytail: 命中缓存立刻检查完整性；不完整则删除，作为新单词重新生成后再写入
-                    if is_word_cache_complete(existing):
+                    # ponytail: 命中缓存立刻检查完整性+母语戳；不完整或母语不匹配则删除重生成
+                    if is_word_cache_complete(existing) and existing.get("target_lang") == target_lang:
                         return
-                    print(f"[CACHE] 单词缓存不完整，删除后重新生成: {word_to_gen}")
+                    print(f"[CACHE] 单词缓存不完整或母语已切换，删除后重新生成: {word_to_gen}")
                     storage.delete_word_cache(file_id, word_to_gen)
                 word_entry = None
                 for v in vocab:
@@ -1085,6 +1088,8 @@ async def process_single_word_gen(file_id, word_to_gen, vocab, source_lang, targ
                     print(f"[CACHE] 词汇缓存命中: {word_to_gen}，跳过 LLM 调用")
                     cache_data = {
                         "word": word_to_gen,
+                        "target_lang": target_lang,
+                        "source_lang": source_lang,
                         "ipa": word_entry.get("ipa", "") or vocab_hit.get("phonetic", ""),
                         "meaning": correct_meaning or vocab_hit.get("meaning", ""),
                         "enriched_meaning": vocab_hit.get("enriched_meaning") or correct_meaning,

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Volume2, BookOpen, BookText, Lightbulb, GitBranch, Loader2, ArrowLeft, RefreshCw, Brain, Star } from 'lucide-react'
 import { api } from '../utils/api'
 import { speakText } from '../utils/speech'
-import { groupVocab } from '../utils/vocab'
+import { groupVocab, groupLetter } from '../utils/vocab'
 import FavoriteButton from './FavoriteButton'
 
 function WordDetailCard({ word, sourceLang, detailLoading, t }) {
@@ -99,7 +99,7 @@ function WordDetailCard({ word, sourceLang, detailLoading, t }) {
   )
 }
 
-function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = false }) {
+function WordListPanel({ sourceLang, targetLang, t, onBack, pageSize = 50, favoritesMode = false }) {
   const [words, setWords] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -119,14 +119,14 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
   const loadWords = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await api.getWordList(sourceLang)
+      const data = await api.getWordList(sourceLang, targetLang)
       setWords(data.words || [])
     } catch (err) {
       console.error('Failed to load word list:', err)
     } finally {
       setLoading(false)
     }
-  }, [sourceLang])
+  }, [sourceLang, targetLang])
 
   const handleRegenerateWord = useCallback(async (wordKey) => {
     setWordDetails(prev => {
@@ -136,7 +136,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
     })
     setDetailLoading(prev => ({ ...prev, [wordKey]: true }))
     try {
-      const data = await api.regenerateWordDetail(wordKey, sourceLang)
+      const data = await api.regenerateWordDetail(wordKey, sourceLang, targetLang)
       if (data) {
         setWordDetails(prev => ({ ...prev, [wordKey]: data }))
         setWords(prev => prev.map(w =>
@@ -154,7 +154,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
     } finally {
       setDetailLoading(prev => ({ ...prev, [wordKey]: false }))
     }
-  }, [sourceLang])
+  }, [sourceLang, targetLang])
 
   const scrollToWord = useCallback((wordKey, delay = 200) => {
     const doScroll = () => {
@@ -258,7 +258,7 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
       if (!wordDetails[wordText] && !detailLoading[wordText]) {
         setDetailLoading(prev => ({ ...prev, [wordText]: true }))
         try {
-          const detail = await api.getWordDetail(wordText, sourceLang)
+          const detail = await api.getWordDetail(wordText, sourceLang, targetLang)
           setWordDetails(prev => ({ ...prev, [wordText]: detail }))
           setWords(prev => prev.map(w =>
             w.word === wordText
@@ -281,9 +281,8 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     } else {
-      // 字母不在当前页，先跳转到对应页面
-      const letterLower = letter.toLowerCase()
-      const wordIdx = displayWords.findIndex(w => w.word.charAt(0).toUpperCase() === letter || w.word.charAt(0).toLowerCase() === letterLower)
+      // 字母不在当前页，先跳转到对应页面（按音标首字母匹配，与分组索引一致）
+      const wordIdx = displayWords.findIndex(w => groupLetter(w.word, w.ipa) === letter)
       if (wordIdx >= 0) {
         const targetPage = Math.floor(wordIdx / pageSize) + 1
         if (targetPage !== page) {

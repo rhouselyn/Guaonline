@@ -6,7 +6,7 @@ from auth.deps import require_auth, TokenData
 
 from utils.llm_gateway import gateway
 from utils.state import storage
-from utils.helpers import fix_llm_options_result, is_word_cache_complete, extract_mc_options, build_context_sentences
+from utils.helpers import fix_llm_options_result, is_word_cache_complete, extract_mc_options, build_context_sentences, word_index_key
 from utils.exercise_generators import _gateway_generate_multiple_choice
 
 router = APIRouter(prefix="/api", tags=["vocabulary"])
@@ -58,13 +58,15 @@ async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
             vocab_list = []
 
         # words_only：跳过富化，只返回排序后的词字符串列表（轻量，无 DB word_cache 查询）
+        # ipa_map 供前端按音标首字母构建字母索引（CJK 词的拼音/罗马字）
         if words_only:
+            ipa_map = {e.get("word", "").lower(): e.get("ipa", "") for e in vocab_list if e.get("word")}
             word_strs = [e.get("word", "") for e in vocab_list if e.get("word")]
             if q:
                 ql = q.lower()
                 word_strs = [w for w in word_strs if ql in w.lower()]
-            word_strs.sort(key=lambda w: w.lower(), reverse=(sort == "desc"))
-            return {"words": word_strs, "total": len(word_strs)}
+            word_strs.sort(key=lambda w: word_index_key(w, ipa_map.get(w.lower(), "")), reverse=(sort == "desc"))
+            return {"words": word_strs, "total": len(word_strs), "ipa_map": ipa_map}
 
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
@@ -105,8 +107,8 @@ async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
                 or ql in (e.get("enriched_meaning", "") or "").lower()
             ]
 
-        # 服务端排序
-        enriched_list.sort(key=lambda e: e.get("word", "").lower(),
+        # 服务端排序（CJK 词按音标/拼音排序，与 words_only 的字母索引保持一致）
+        enriched_list.sort(key=lambda e: word_index_key(e.get("word", ""), e.get("ipa", "")),
                            reverse=(sort == "desc"))
 
         total = len(enriched_list)
@@ -154,19 +156,24 @@ async def get_sentences(file_id: str, offset: int = 0, limit: int = 0, q: str = 
 
 
 @router.get("/word/{file_id}/{word}")
-async def get_word_details(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
+async def get_word_details(file_id: str, word: str, target_lang: Optional[str] = None, current_user: TokenData = Depends(require_auth)):
     try:
         print(f"[DEBUG] 获取单词详情: {word}")
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
-        target_lang = language_settings["target_lang"]
+        target_lang = target_lang or language_settings["target_lang"]
+        # 用户切换母语后：同步文件设置为当前母语，后台生成/缓存校验都按新母语走
+        if target_lang != language_settings.get("target_lang"):
+            storage.save_language_settings(file_id, source_lang, target_lang)
 
-        # 1. 先检查当前文件的缓存
+        # 1. 先检查当前文件的缓存（母语戳不匹配 = 旧母语的缓存，视为失效）
         cached_word = storage.load_word_cache(file_id, word)
+        if cached_word and cached_word.get("target_lang") != target_lang:
+            cached_word = None
         if not cached_word:
             # 2. 当前文件无缓存，查全局缓存
             global_cached = storage.find_global_word_cache(word, source_lang)
-            if global_cached:
+            if global_cached and global_cached.get("target_lang") == target_lang:
                 print(f"[DEBUG] 从全局缓存获取单词信息: {word}")
                 import copy
                 cached_word = copy.deepcopy(global_cached)
@@ -309,11 +316,13 @@ async def regenerate_word_detail(request: dict, current_user: TokenData = Depend
 
 
 @router.post("/word/{file_id}/{word}/regenerate")
-async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
+async def regenerate_word_detail_by_file(file_id: str, word: str, target_lang: Optional[str] = None, current_user: TokenData = Depends(require_auth)):
     try:
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
-        target_lang = language_settings["target_lang"]
+        target_lang = target_lang or language_settings["target_lang"]
+        if target_lang != language_settings.get("target_lang"):
+            storage.save_language_settings(file_id, source_lang, target_lang)
 
         # Delete the existing word cache
         storage.delete_word_cache(file_id, word)
@@ -386,7 +395,7 @@ async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: 
 @router.get("/word-detail")
 async def get_word_detail(word: str, source_lang: str = "en", target_lang: str = "en", current_user: TokenData = Depends(require_auth)):
     try:
-        # 1. 先查当前用户的个人缓存
+        # 1. 先查当前用户的个人缓存（母语戳不匹配 = 旧母语缓存，跳过）
         records = storage.load_history(user_id=current_user.user_id)
         matching = [r for r in records if r.get("source_lang") == source_lang]
 
@@ -395,7 +404,7 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
             if not file_id:
                 continue
             cached = storage.load_word_cache(file_id, word)
-            if cached:
+            if cached and cached.get("target_lang") == target_lang:
                 return {
                     "word": cached.get("word", word),
                     "ipa": cached.get("ipa", ""),
@@ -409,7 +418,7 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
 
         # 2. 个人缓存未命中，查全局缓存
         global_cached = storage.find_global_word_cache(word, source_lang)
-        if global_cached:
+        if global_cached and global_cached.get("target_lang") == target_lang:
             return {
                 "word": global_cached.get("word", word),
                 "ipa": global_cached.get("ipa", ""),
@@ -501,8 +510,8 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                             filtered.append(r)
                             continue
             records = filtered
-        if target_lang:
-            records = [r for r in records if r.get("target_lang") == target_lang]
+        # ponytail: target_lang 不再按记录过滤（用户切换母语后旧记录的 target_lang 仍是旧值，
+        # 过滤会导致词表清空）；改为下方合并缓存时按母语戳匹配，不匹配的缓存详情跳过
 
         merged = {}
         for record in records:
@@ -526,7 +535,11 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 if not word_key:
                     continue
                 if word_key not in merged:
-                    merged[word_key] = {"entry": dict(entry), "file_id": file_id, "cached": cached_map.get(word_key)}
+                    cached = cached_map.get(word_key)
+                    # 母语戳不匹配的缓存详情不并入（用户已切换母语，点击时会按新母语重新生成）
+                    if cached and target_lang and cached.get("target_lang") != target_lang:
+                        cached = None
+                    merged[word_key] = {"entry": dict(entry), "file_id": file_id, "cached": cached}
 
         result = []
         for word_key, data in merged.items():
@@ -568,7 +581,7 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 "context_sentences": cached.get("context_sentences", []) if cached else [],
             })
 
-        result.sort(key=lambda x: x["word"].lower())
+        result.sort(key=lambda x: word_index_key(x["word"], x.get("ipa", "")))
         return {"words": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1354,7 +1354,7 @@ function App() {
     }
     
     try {
-      const response = await api.getWordDetails(currentFileId, word)
+      const response = await api.getWordDetails(currentFileId, word, targetLang)
       setSelectedWord(response)
     } catch (error) {
       console.error('获取单词详情错误:', error)
@@ -1569,6 +1569,7 @@ function App() {
               {wordListLang ? (
                 <WordListPanel
                   sourceLang={wordListLang}
+                  targetLang={targetLang}
                   t={t}
                   onBack={() => window.history.back()}
                   pageSize={pageSize}
@@ -1576,6 +1577,7 @@ function App() {
               ) : favoriteLang ? (
                 <WordListPanel
                   sourceLang={favoriteLang}
+                  targetLang={targetLang}
                   t={t}
                   onBack={() => window.history.back()}
                   pageSize={pageSize}
@@ -1626,11 +1628,11 @@ function App() {
           <div className="h-full flex flex-col pb-nav-safe">
             {wordListLang ? (
               <div className="h-full overflow-y-auto">
-                <WordListPanel sourceLang={wordListLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} />
+                <WordListPanel sourceLang={wordListLang} targetLang={targetLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} />
               </div>
             ) : favoriteLang ? (
               <div className="h-full overflow-y-auto">
-                <WordListPanel sourceLang={favoriteLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} favoritesMode={true} />
+                <WordListPanel sourceLang={favoriteLang} targetLang={targetLang} t={t} onBack={() => window.history.back()} pageSize={pageSize} favoritesMode={true} />
               </div>
             ) : (
               <>
@@ -1737,6 +1739,7 @@ function App() {
               t={t}
               currentFileId={currentFileId}
               sourceLang={sourceLang}
+              targetLang={targetLang}
               detectedLang={detectedLang}
               preprocessStatus={preprocessStatus}
               preprocessStart={preprocessStart}
@@ -2049,7 +2052,7 @@ function App() {
       )}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} uiLang={uiLang} onUiLangChange={(lang) => { setUiLang(lang); setTargetLang(lang) }} pageSize={pageSize} onPageSizeChange={setPageSize} t={t} recentLangs={recentLanguages} onRecentLangsChange={setRecentLanguages} fontScaleMobile={fontScaleMobile} fontScaleDesktop={fontScaleDesktop} onFontScaleMobileChange={setFontScaleMobile} onFontScaleDesktopChange={setFontScaleDesktop} />
       <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} t={t} />
-      {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} pageSize={pageSize} />}
+      {showVocabList && <VocabListStep onClose={() => setShowVocabList(false)} vocab={vocab} loading={loading} t={t} currentFileId={currentFileId} sourceLang={sourceLang} targetLang={targetLang} pageSize={pageSize} />}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title || t.confirmExit || '确认退出'}

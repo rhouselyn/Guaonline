@@ -6,7 +6,7 @@ import asyncio
 import time
 import unicodedata
 
-from text_processor import is_punctuation_only, strip_edge_punctuation, is_source_lang_text, NO_SPACE_LANGUAGES
+from text_processor import is_punctuation_only, strip_edge_punctuation, is_source_lang_text, NO_SPACE_LANGUAGES, _detect_script
 
 
 class RateLimiter:
@@ -40,6 +40,20 @@ def vocab_sort_key(entry):
     si = entry.get("sentence_index", 9999)
     ti = entry.get("token_index", 9999)
     return (si, ti)
+
+
+def ascii_fold(s):
+    """去掉变音符（拼音声调 ā→a 等），供字母索引/排序用。"""
+    return ''.join(c for c in unicodedata.normalize('NFD', s or '') if not unicodedata.combining(c))
+
+
+def word_index_key(word, ipa=""):
+    """单词表字母索引的排序键：CJK 词按音标（拼音/罗马字）排序而非 token 首字。
+    ponytail: 天花板=无音标的 CJK 词退回字码排序（排在拉丁字母后）。"""
+    w = word or ""
+    cjk = any(_detect_script(c) in ('CJK', 'Hiragana', 'Katakana', 'Hangul') for c in w) if w else False
+    key = ascii_fold((ipa or '').strip().lstrip('/[').lower()) if (cjk and ipa) else ascii_fold(w.lower())
+    return (key, ascii_fold(w.lower()))
 
 
 def get_translation_phrases(translation_result, max_phrases=6):
