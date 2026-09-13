@@ -400,14 +400,14 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                             "type": "object",
                             "properties": {
                                 "sentence": {"type": "string", "description": f"例句原文，必须使用 {source_lang_name}（学习语言）"},
-                                "translation": {"type": "string", "description": f"例句翻译，必须使用 {target_lang_name}（用户母语），绝不能与 sentence 同语种"},
+                                "translation": {"type": "string", "description": f"例句翻译，使用 {target_lang_name}（用户母语）"},
                             },
                         },
                         "minItems": 2,
                         "maxItems": 2,
                         "description": f"两个全新的例句（不复用原文句子）。sentence 用 {source_lang_name}，translation 用 {target_lang_name}。尽量使用简单常见的词汇，不需要与原文中的意思相同",
                     },
-                    "memory_hint": {"type": "string", "description": f"记忆辅助（联想/对比母语帮助记忆）。【强制】必须使用 {target_lang_name}（用户母语）编写，绝不能使用 {source_lang_name}（学习语言）"},
+                    "memory_hint": {"type": "string", "description": f"记忆辅助（联想/对比母语帮助记忆）。使用 {target_lang_name}（用户母语）编写"},
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
@@ -433,11 +433,10 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 【语言铁律·按字段逐条执行】用户母语 = {target_lang_name}，学习语言 = {source_lang_name}。除例句原文和词形本身外，所有内容都必须写给母语用户看：
 - enriched_meaning（释义）→ 只能用 {target_lang_name} 书写
 - examples.sentence（例句原文）→ 只能用 {source_lang_name} 书写
-- examples.translation（例句翻译）→ 只能用 {target_lang_name} 书写，绝不能与 sentence 同语种
-- memory_hint（记忆辅助）→ 只能用 {target_lang_name} 书写
+- examples.translation（例句翻译）→ 用 {target_lang_name} 书写
+- memory_hint（记忆辅助）→ 用 {target_lang_name} 书写
 - multiple_choice 的 distractors / correct_option（四个选项）→ 只能用 {target_lang_name} 书写
 - variants_detail.form（词形）→ 只能用 {source_lang_name} 书写；variants_detail.type（类型说明）→ 只能用 {target_lang_name} 书写
-除上述字段规定外不得混用语种：释义、翻译、记忆辅助、选项中【严禁】出现 {source_lang_name} 的文字（引用单词本身除外）。
 
 上下文释义：{correct_meaning}
 
