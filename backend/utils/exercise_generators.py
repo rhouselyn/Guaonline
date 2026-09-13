@@ -407,7 +407,7 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
                         "maxItems": 2,
                         "description": "两个全新的例句（绝不能复用原文句子，必须是不同的句子。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同）",
                     },
-                    "memory_hint": {"type": "string", "description": "记忆辅助（联想/对比母语）。【强制】必须使用用户当前选择的母语（target_lang_name）编写，绝不能使用学习语言（source_lang_name）"},
+                    "memory_hint": {"type": "string", "description": f"记忆辅助（联想/对比母语）。【强制】必须使用用户当前选择的母语（{target_lang_name}）编写，绝不能使用学习语言（{source_lang_name}）"},
                     "multiple_choice": {
                         "type": "object",
                         "properties": {
@@ -428,12 +428,24 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
         },
     }]
 
-    system_prompt = f"""为单词 '{word}' 生成丰富的信息，使用 {target_lang_name} 输出。
+    system_prompt = f"""为单词 '{word}' 生成丰富的信息。
 
-【极其重要】这个单词属于 {source_lang_name}（学习语言）：
-- 词形变化（variants_detail）必须是 {source_lang_name} 语法规则下的词形变化
-- 例句（examples）必须使用 {source_lang_name} 编写
-- 所有语言相关的内容都必须遵循 {source_lang_name} 的语法和用法规范
+【语言矩阵（严格遵守）】这个单词属于 {source_lang_name}（学习语言），用户当前选择的母语是 {target_lang_name}。各字段语言要求如下：
+
+| 字段 | 必须使用的语言 | 说明 |
+| --- | --- | --- |
+| enriched_meaning（完整释义） | {target_lang_name} | 所有含义必须用 {target_lang_name} 写出，一个 {source_lang_name} 词都不能出现 |
+| variants_detail.form（词形本身） | {source_lang_name} | 词形是 {source_lang_name} 语法下的屈折/派生形式 |
+| variants_detail.type（词形类型说明） | {target_lang_name} | 用 {target_lang_name} 描述词形类型（如"复数"、"过去式"） |
+| examples.sentence（例句） | {source_lang_name} | 例句本体必须用 {source_lang_name} 编写 |
+| examples.translation（例句翻译） | {target_lang_name} | 必须是对应例句的 {target_lang_name} 自然翻译 |
+| memory_hint（记忆辅助） | {target_lang_name} | 用 {target_lang_name} 联想/对比，帮助母语者记忆 |
+| multiple_choice 全部选项（干扰项+正确项） | {target_lang_name} | 都必须是 {target_lang_name} 的单词或短语释义 |
+
+【语言分工（极易混淆，务必区分）】
+- 「面向用户母语」的字段（enriched_meaning / memory_hint / multiple_choice / examples.translation / variants_detail.type）：必须 100% 使用 {target_lang_name}，严禁混入 {source_lang_name}。
+- 「学习语言本体」的字段（examples.sentence / variants_detail.form）：必须使用 {source_lang_name}，绝不能改写成 {target_lang_name}。
+- 绝不能出现"用 {target_lang_name} 写例句再用 {source_lang_name} 翻译"的反向操作。
 
 上下文释义：{correct_meaning}
 
@@ -441,17 +453,15 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
 
 请生成以下信息：
 
-1. enriched_meaning: 单词的完整释义，包含多个常见含义，用分号分隔。每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等）
-2. variants_detail: {source_lang_name} 词形变化列表，带类型说明。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等，必须遵循 {source_lang_name} 语法规则）。只包含确实存在的词形变化，如果没有则返回空数组
-3. examples: 两个全新的例句。【极其重要】例句本身必须使用 {source_lang_name}（学习语言）编写，翻译必须使用 {target_lang_name}（用户当前选择的母语）。绝不能反过来用母语写例句再用学习语言翻译。【严禁】translation 字段输出与 sentence 相同的语言，必须是 {target_lang_name} 的自然翻译。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
+1. enriched_meaning: 单词的完整释义，包含多个常见含义，用分号分隔。【强制】全部使用 {target_lang_name} 书写，每个含义必须是具体的、有意义的翻译，不能是占位符（如"释义1"、"含义1"等），也不能夹带任何 {source_lang_name} 原文词
+2. variants_detail: 词形变化列表。【强制】form 必须使用 {source_lang_name}（遵循 {source_lang_name} 语法规则），type 必须使用 {target_lang_name}。对于派生词，必须列出其词根/原形作为词形变化。对于基础词，列出其常见的屈折变化（如名词的复数、动词的变位形式、形容词的比较级/最高级等）。只包含确实存在的词形变化，如果没有则返回空数组
+3. examples: 两个全新的例句。【强制】sentence 必须使用 {source_lang_name} 编写，translation 必须使用 {target_lang_name} 编写（对应例句的自然翻译）。【严禁】translation 与 sentence 使用同一种语言。【严禁】用 {target_lang_name} 写例句。尽量使用简单常见的词汇组成例句，不需要与原文中的意思相同
 4. memory_hint: 记忆辅助。【强制】必须使用用户当前选择的母语（{target_lang_name}）编写，通过联想/对比母语帮助记忆。【严禁】使用学习语言（{source_lang_name}）编写记忆辅助
-5. multiple_choice: 选择题。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。correct_option 的格式必须严格匹配 distractors 中各项的格式。
+5. multiple_choice: 选择题。【强制】所有选项（distractors 与 correct_option）必须使用 {target_lang_name} 书写。【生成顺序极其重要】必须先生成 distractors（3 个错误释义），再生成 correct_option（1 个正确释义）。correct_option 的格式必须严格匹配 distractors 中各项的格式。
 
 要求：
-- 所有输出必须使用 {target_lang_name}
-- 【极其重要】例句必须使用 {source_lang_name} 编写，翻译使用 {target_lang_name}（用户当前选择的母语）。绝不能用母语写例句再用学习语言翻译。【严禁】translation 与 sentence 使用同一种语言——translation 必须是 {target_lang_name} 的自然翻译
+- 各字段语言以【语言矩阵】为准，逐字段检查后再输出
 - 例句要自然，尽量使用简单常见的词汇，不需要与原文中的意思相同
-- 【强制】记忆辅助（memory_hint）必须使用用户当前选择的母语（{target_lang_name}）编写，对语言学习者有实际帮助。【严禁】使用学习语言（{source_lang_name}）编写
 - 选择题选项要清晰且合理
 - 【重要】正确答案必须是单词的常见、正常释义，不是上下文特定释义
 - 【重要】错误答案必须是该单词所没有的意思，而不是非句子中的意思
@@ -464,7 +474,7 @@ async def _gateway_generate_multiple_choice(user_id, tier, word, correct_meaning
   · 正确做法示例：distractors=["猫"、"狗"、"鸟"]，correct_option="鱼"（都是单个名词）
   · 错误做法示例：distractors=["猫"、"狗"、"鸟"]，correct_option="鱼；水中游的动物"（正确选项多塞了释义）
   · 如果某个释义需要两个词才能表达（如"开始；启动"），那么所有四个选项都必须各含两个释义
-- 【极其重要】enriched_meaning 中不能包含占位符文本（如"释义1"、"含义1"、"meaning 1"等），必须全部是具体的、有意义的翻译内容
+- 【极其重要】enriched_meaning 中不能包含占位符文本（如"释义1"、"含义1"、"meaning 1"等），必须全部是具体的、有意义的 {target_lang_name} 翻译内容
 - 【输出约束】除了工具调用的JSON输出外，不要添加任何其他文本、解释或说明。直接生成工具调用所需的JSON参数即可。"""
 
     messages = [

@@ -42,6 +42,59 @@ def _mc_options_already_valid(cached: dict) -> bool:
     return valid >= 4 and has_correct
 
 
+async def _regenerate_word_detail_in_file(file_id: str, word: str, target_lang: str, current_user: TokenData) -> Optional[dict]:
+    """按指定母语同步重新生成文件内单词详情并覆盖缓存。
+
+    ponytail: 供 get_word_details 语言不符分支与 regenerate 端点共用——
+    用户切换母语后旧语种缓存作废，必须按当前母语重新生成。
+    返回 cache_data 或 None（单词不在 vocab 中）。"""
+    language_settings = storage.load_language_settings(file_id)
+    source_lang = language_settings.get("source_lang", "en")
+
+    vocab = storage.load_vocab(file_id)
+    if isinstance(vocab, dict) and "vocab" in vocab:
+        vocab = vocab["vocab"]
+    word_entry = None
+    for v in vocab:
+        if v.get("word", "").lower() == word.lower():
+            word_entry = v
+            break
+    if not word_entry:
+        return None
+
+    sentences = storage.load_pipeline_data(file_id)
+    context_sentences = build_context_sentences(sentences, word)
+    context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
+
+    correct_meaning = word_entry.get("meaning", "")
+    if not correct_meaning:
+        correct_meaning = word_entry.get("translation", "") or word_entry.get("context_meaning", "")
+
+    options_result = await _gateway_generate_multiple_choice(
+        current_user.user_id, current_user.tier.value,
+        word, correct_meaning, context, target_lang, source_lang, 0.7
+    )
+    options_result = fix_llm_options_result(options_result, source_lang, file_id)
+
+    cache_data = dict(options_result)
+    cache_data["word"] = options_result.get("word", word)
+    cache_data["ipa"] = word_entry.get("ipa", "")
+    cache_data["meaning"] = correct_meaning
+    cache_data["examples"] = options_result.get("examples", [])
+    cache_data["context"] = context
+    cache_data["context_sentences"] = context_sentences
+    cache_data["morphology"] = word_entry.get("morphology", "")
+    cache_data["variants_detail"] = options_result.get("variants_detail", [])
+    cache_data["memory_hint"] = options_result.get("memory_hint", "")
+    cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
+    cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
+    cache_data["target_lang"] = target_lang
+    if "context_translations" in cache_data:
+        del cache_data["context_translations"]
+    storage.save_word_cache(file_id, word, cache_data, overwrite_index=True)
+    return cache_data
+
+
 @router.get("/vocab/{file_id}")
 async def get_vocab(file_id: str, offset: int = 0, limit: int = 0, q: str = "",
                     sort: str = "asc", include_total: bool = False, words_only: bool = False):
@@ -154,19 +207,35 @@ async def get_sentences(file_id: str, offset: int = 0, limit: int = 0, q: str = 
 
 
 @router.get("/word/{file_id}/{word}")
-async def get_word_details(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
+async def get_word_details(file_id: str, word: str, target_lang: Optional[str] = None,
+                           current_user: TokenData = Depends(require_auth)):
     try:
         print(f"[DEBUG] 获取单词详情: {word}")
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
-        target_lang = language_settings["target_lang"]
+        # ponytail: 当前母语 = 前端显式传入（用户切换母语后）或文件创建时语种
+        requested_target = target_lang or language_settings.get("target_lang", "zh")
 
         # 1. 先检查当前文件的缓存
         cached_word = storage.load_word_cache(file_id, word)
+        # ponytail: 用户切换母语后，旧语种缓存作废。此时不能走下方 404 后台生成——
+        # 后台生成固定用文件创建时语种，会"生成旧语种→校验不符→再删除→再生成"死循环，
+        # 必须同步按当前母语重新生成并覆盖缓存。
+        if cached_word and cached_word.get("target_lang") != requested_target:
+            print(f"[DEBUG] 缓存语种不符，按当前母语重新生成: {word} ({cached_word.get('target_lang')} → {requested_target})")
+            storage.delete_word_cache(file_id, word)
+            cache_data = await _regenerate_word_detail_in_file(file_id, word, requested_target, current_user)
+            if cache_data:
+                options, correct_index = extract_mc_options(cache_data)
+                cache_data["options"] = options
+                cache_data["correct_index"] = correct_index
+                return cache_data
+            cached_word = None
+
         if not cached_word:
-            # 2. 当前文件无缓存，查全局缓存
+            # 2. 当前文件无缓存，查全局缓存（须语种一致，否则视为未命中）
             global_cached = storage.find_global_word_cache(word, source_lang)
-            if global_cached:
+            if global_cached and global_cached.get("target_lang") == requested_target:
                 print(f"[DEBUG] 从全局缓存获取单词信息: {word}")
                 import copy
                 cached_word = copy.deepcopy(global_cached)
@@ -175,6 +244,7 @@ async def get_word_details(file_id: str, word: str, current_user: TokenData = De
                 if context_sents:
                     cached_word["context_sentences"] = context_sents
                     cached_word["context"] = context_sents[0]["sentence"]
+                cached_word["target_lang"] = requested_target
                 # 保存到当前文件的缓存
                 storage.save_word_cache(file_id, word, cached_word)
 
@@ -301,6 +371,7 @@ async def regenerate_word_detail(request: dict, current_user: TokenData = Depend
             cache_data["context_sentences"] = []
             cache_data["morphology"] = options_result.get("morphology", "")
             cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
+            cache_data["target_lang"] = target_lang
             storage.save_word_cache(file_id, word, cache_data, overwrite_index=True)
 
         return result
@@ -309,70 +380,23 @@ async def regenerate_word_detail(request: dict, current_user: TokenData = Depend
 
 
 @router.post("/word/{file_id}/{word}/regenerate")
-async def regenerate_word_detail_by_file(file_id: str, word: str, current_user: TokenData = Depends(require_auth)):
+async def regenerate_word_detail_by_file(file_id: str, word: str, request: dict = None,
+                                         current_user: TokenData = Depends(require_auth)):
     try:
         language_settings = storage.load_language_settings(file_id)
         source_lang = language_settings.get("source_lang", "en")
-        target_lang = language_settings["target_lang"]
+        # ponytail: 允许前端显式传入当前母语（切换母语后重新生成按新母语输出），缺省用文件语种
+        target_lang = (request or {}).get("target_lang") or language_settings["target_lang"]
 
         # Delete the existing word cache
         storage.delete_word_cache(file_id, word)
 
-        # Load vocab to find the word entry
-        vocab = storage.load_vocab(file_id)
-        if isinstance(vocab, dict) and "vocab" in vocab:
-            vocab = vocab["vocab"]
-        word_entry = None
-        for v in vocab:
-            if v.get("word", "").lower() == word.lower():
-                word_entry = v
-                break
-        if not word_entry:
+        cache_data = await _regenerate_word_detail_in_file(file_id, word, target_lang, current_user)
+        if not cache_data:
             raise HTTPException(status_code=404, detail=f"Word '{word}' not found in vocab")
 
-        # Load pipeline data to find context sentences
-        sentences = storage.load_pipeline_data(file_id)
-        context_sentences = build_context_sentences(sentences, word)
-        context = context_sentences[0]["sentence"] if context_sentences else (sentences[0].get("sentence", "") if sentences else "")
-
-        correct_meaning = word_entry.get("meaning", "")
-        if not correct_meaning:
-            if "translation" in word_entry:
-                correct_meaning = word_entry["translation"]
-            elif "context_meaning" in word_entry:
-                correct_meaning = word_entry["context_meaning"]
-
-        # Generate with temperature 0.7
-        options_result = await _gateway_generate_multiple_choice(
-            current_user.user_id, current_user.tier.value,
-            word,
-            correct_meaning,
-            context,
-            target_lang,
-            source_lang,
-            0.7
-        )
-        options_result = fix_llm_options_result(options_result, source_lang, file_id)
-
-        # Save to cache with all the same fields as process_single_word_gen
-        cache_data = dict(options_result)
-        cache_data["word"] = options_result.get("word", word)
-        cache_data["ipa"] = word_entry.get("ipa", "")
-        cache_data["meaning"] = correct_meaning
-        cache_data["examples"] = options_result.get("examples", [])
-        cache_data["context"] = context
-        cache_data["context_sentences"] = context_sentences
-        cache_data["morphology"] = word_entry.get("morphology", "")
-        cache_data["variants_detail"] = options_result.get("variants_detail", [])
-        cache_data["memory_hint"] = options_result.get("memory_hint", "")
-        cache_data["enriched_meaning"] = options_result.get("enriched_meaning", correct_meaning)
-        cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
-        if "context_translations" in cache_data:
-            del cache_data["context_translations"]
-        storage.save_word_cache(file_id, word, cache_data, overwrite_index=True)
-
         # Compute options and correct_index from multiple_choice
-        options, correct_index = extract_mc_options(options_result)
+        options, correct_index = extract_mc_options(cache_data)
         cache_data["options"] = options
         cache_data["correct_index"] = correct_index
         return cache_data
@@ -395,7 +419,8 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
             if not file_id:
                 continue
             cached = storage.load_word_cache(file_id, word)
-            if cached:
+            # ponytail: 缓存语种须与请求母语一致，否则视为未命中（切换母语后旧缓存作废）
+            if cached and cached.get("target_lang") == target_lang:
                 return {
                     "word": cached.get("word", word),
                     "ipa": cached.get("ipa", ""),
@@ -407,9 +432,9 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
                     "variants_detail": cached.get("variants_detail", []),
                 }
 
-        # 2. 个人缓存未命中，查全局缓存
+        # 2. 个人缓存未命中，查全局缓存（须语种一致）
         global_cached = storage.find_global_word_cache(word, source_lang)
-        if global_cached:
+        if global_cached and global_cached.get("target_lang") == target_lang:
             return {
                 "word": global_cached.get("word", word),
                 "ipa": global_cached.get("ipa", ""),
@@ -451,6 +476,7 @@ async def get_word_detail(word: str, source_lang: str = "en", target_lang: str =
             cache_data["context_sentences"] = []
             cache_data["morphology"] = options_result.get("morphology", "")
             cache_data["multiple_choice"] = options_result.get("multiple_choice", {})
+            cache_data["target_lang"] = target_lang
             storage.save_word_cache(save_file_id, word, cache_data)
 
         return result
@@ -566,6 +592,9 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 "memory_hint": memory_hint,
                 "variants_detail": variants_detail,
                 "context_sentences": cached.get("context_sentences", []) if cached else [],
+                # ponytail: 缓存详情的生成母语。前端据此判断是否与当前母语一致：
+                # 不一致时点击单词应重新按当前母语获取，而不是直接展示旧语种缓存。
+                "detail_lang": cached.get("target_lang", "") if cached else "",
             })
 
         result.sort(key=lambda x: x["word"].lower())

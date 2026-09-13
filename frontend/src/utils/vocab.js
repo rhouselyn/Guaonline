@@ -19,14 +19,14 @@ function getGroupKey(word) {
   const w = word.word || ''
   const ipa = word.ipa || ''
 
-  if (hasCJK(w)) {
-    if (ipa && ipa.length > 1) {
-      const cleaned = ipa.replace(/^[\/\[]+/, '').trim()
-      if (cleaned.length > 0) {
-        return cleaned[0].toUpperCase()
-      }
+  // 优先按音标首字母分组：去掉斜杠/括号/重音符号等非字母前缀后取首字母。
+  // 避免"拼写首字母与发音首字母不一致"的词（如 eau→/o/、hôtel→/o/）被分到错误的分组。
+  if (ipa && ipa.length > 1) {
+    const cleaned = ipa.replace(/^[\s/\[\]()ˈˌ'"]+/, '')
+    if (cleaned.length > 0) {
+      const first = cleaned[0].normalize('NFD')[0].toUpperCase()
+      if (first) return first
     }
-    return w[0]
   }
 
   if (w.length > 0) {

@@ -309,6 +309,15 @@ class DatabaseStorage:
 
     def save_word_cache(self, file_id: str, word: str, word_info: Dict, overwrite_index: bool = False):
         conn = self._get_conn()
+        # ponytail: word_info 里记录该条缓存生成的母语（target_lang）。
+        # 调用方（如 /api/word-detail 等按请求母语生成的路径）通常已显式写入；
+        # 未写入时按文件语种兜底标记。读取端据此判断"用户切换母语后旧缓存是否失效"。
+        if "target_lang" not in word_info:
+            try:
+                settings = self.load_language_settings(file_id)
+                word_info["target_lang"] = settings.get("target_lang", "zh")
+            except Exception:
+                pass
         conn.execute(
             "INSERT OR REPLACE INTO word_cache (file_id, word, word_info, updated_at) VALUES (?, ?, ?, datetime('now'))",
             (file_id, word.lower(), json.dumps(word_info, ensure_ascii=False))

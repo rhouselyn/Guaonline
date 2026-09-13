@@ -4,7 +4,7 @@ import { Shuffle, Loader2, Languages, BookOpen, Search, Volume2, ArrowLeft, Penc
 import WordDetail from './WordDetail'
 import SentenceDetail from './SentenceDetail'
 import FavoriteButton from './FavoriteButton'
-import { groupVocab } from '../utils/vocab'
+import { groupVocab, getGroupKey } from '../utils/vocab'
 import { useMediaQuery } from '../utils/useMediaQuery'
 import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
@@ -352,16 +352,16 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     return () => { cancelled = true }
   }, [currentFileId, sentencePage, pageSize, sentenceSearchDebounced, progressVersion])
 
-  // 拉取全量词表（仅词字符串，轻量 words_only），用于构建字母→页、单词→页索引。
+  // 拉取全量词表（含音标，供构建音标字母→页、单词→页索引）。
   // ponytail: 不传 q——allWords 供句子链接跨页匹配（findVocabWordBySourceText / wordToPage），
   // 必须是全量词表；搜索过滤由分页词表各自负责，否则搜索时句子链接会漏掉不匹配搜索词的单词。
   useEffect(() => {
     if (!currentFileId) return
     let cancelled = false
     const seq = ++allWordsSeq.current
-    api.getVocab(currentFileId, { words_only: true, sort: sortOrder }).then(data => {
+    api.getVocab(currentFileId, { sort: sortOrder }).then(data => {
       if (cancelled || seq !== allWordsSeq.current) return
-      setAllWords(Array.isArray(data.words) ? data.words : [])
+      setAllWords(Array.isArray(data.vocab) ? data.vocab : [])
     }).catch(() => {
       if (cancelled || seq !== allWordsSeq.current) return
       setAllWords([])
@@ -381,7 +381,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const letters = []
     const seen = new Set()
     for (const w of allWords) {
-      const letter = (w[0] || '#').toUpperCase()
+      const letter = getGroupKey(w)
       if (!seen.has(letter)) { seen.add(letter); letters.push(letter) }
     }
     return letters
@@ -390,7 +390,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const letterToPage = useMemo(() => {
     const m = new Map()
     allWords.forEach((w, i) => {
-      const letter = (w[0] || '#').toUpperCase()
+      const letter = getGroupKey(w)
       const page = Math.floor(i / pageSize) + 1
       if (!m.has(letter)) m.set(letter, page)
     })
@@ -400,7 +400,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const wordToPage = useMemo(() => {
     const m = new Map()
     allWords.forEach((w, i) => {
-      m.set(w.toLowerCase(), Math.floor(i / pageSize) + 1)
+      m.set(w.word.toLowerCase(), Math.floor(i / pageSize) + 1)
     })
     return m
   }, [allWords, pageSize])
@@ -410,7 +410,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const allWordsSet = useMemo(() => {
     const s = new Set()
     for (const w of allWords) {
-      const l = w.toLowerCase()
+      const l = w.word.toLowerCase()
       s.add(l)
       const noHyphen = l.replace(/-/g, ' ')
       if (noHyphen !== l) s.add(noHyphen)
@@ -456,7 +456,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const globalLetterToPage = useMemo(() => {
     const m = new Map()
     filteredGlobalVocab.forEach((w, i) => {
-      const letter = (w.word[0] || '#').toUpperCase()
+      const letter = getGroupKey(w)
       const page = Math.floor(i / pageSize) + 1
       if (!m.has(letter)) m.set(letter, page)
     })
@@ -717,8 +717,8 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const sourceNoHyphen = sourceLower.replace(/-/g, ' ')
     const sourceStripped = stripEdgePunct(sourceLower)
     // 在全量词表中匹配（不再仅限当前页），获取规范 wordKey
-    const matchedWordStr = allWords.find(w => {
-      const wLower = w.toLowerCase()
+    const matchedWord = allWords.find(w => {
+      const wLower = w.word.toLowerCase()
       if (wLower === sourceLower) return true
       if (wLower === sourceNoHyphen) return true
       if (wLower.replace(/-/g, ' ') === sourceLower) return true
@@ -726,9 +726,9 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       return false
     })
 
-    if (!matchedWordStr) return
+    if (!matchedWord) return
 
-    const wordKey = matchedWordStr
+    const wordKey = matchedWord.word
     if (expandedWord === wordKey) {
       setExpandedWord(null)
       return

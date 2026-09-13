@@ -232,7 +232,21 @@ export const translations = {
     fontSize: "字体大小",
     fontScaleDesc: "调整学习页面字号",
     fontScaleSmall: "小",
-    fontScaleLarge: "大"
+    fontScaleLarge: "大",
+    freeTier: "免费版",
+    basicTier: "基础版",
+    proTier: "专业版",
+    logout: "退出登录",
+    confirm: "确定",
+    remainingQuota: "剩余额度",
+    wordList: "单词总表",
+    learningOptions: "学习选项",
+    onlyNewWordsDesc: "跳过已学过的单词",
+    skipListeningDesc: "跳过听力练习",
+    refillingWords: "补全漏词中...",
+    slowPlay: "慢速播放",
+    removeImage: "删除",
+    attachImages: "附加图片"
   },
   en: {
     title: "Gualingo",
@@ -466,6 +480,20 @@ export const translations = {
     fontSize: "Font Size",
     fontScaleDesc: "Adjust learning page font size",
     fontScaleSmall: "Small",
-    fontScaleLarge: "Large"
+    fontScaleLarge: "Large",
+    freeTier: "Free",
+    basicTier: "Basic",
+    proTier: "Pro",
+    logout: "Log Out",
+    confirm: "Confirm",
+    remainingQuota: "Remaining Quota",
+    wordList: "Word List",
+    learningOptions: "Learning Options",
+    onlyNewWordsDesc: "Skip words you already know",
+    skipListeningDesc: "Skip listening exercises",
+    refillingWords: "Refilling missing words...",
+    slowPlay: "Slow Play",
+    removeImage: "Remove Image",
+    attachImages: "Attach Images"
   }
 };

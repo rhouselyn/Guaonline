@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Volume2, BookOpen, BookText, Lightbulb, GitBranch, Loader2, ArrowLeft, RefreshCw, Brain, Star } from 'lucide-react'
 import { api } from '../utils/api'
 import { speakText } from '../utils/speech'
-import { groupVocab } from '../utils/vocab'
+import { groupVocab, getGroupKey } from '../utils/vocab'
 import FavoriteButton from './FavoriteButton'
 
 function WordDetailCard({ word, sourceLang, detailLoading, t }) {
@@ -281,9 +281,8 @@ function WordListPanel({ sourceLang, t, onBack, pageSize = 50, favoritesMode = f
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     } else {
-      // 字母不在当前页，先跳转到对应页面
-      const letterLower = letter.toLowerCase()
-      const wordIdx = displayWords.findIndex(w => w.word.charAt(0).toUpperCase() === letter || w.word.charAt(0).toLowerCase() === letterLower)
+      // 字母不在当前页，先跳转到对应页面（按音标分组键匹配，与 groupVocab 一致）
+      const wordIdx = displayWords.findIndex(w => getGroupKey(w) === letter)
       if (wordIdx >= 0) {
         const targetPage = Math.floor(wordIdx / pageSize) + 1
         if (targetPage !== page) {
