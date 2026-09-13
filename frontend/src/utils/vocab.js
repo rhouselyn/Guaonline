@@ -15,26 +15,20 @@ function hasCJK(text) {
   return [...text].some(c => isCJK(c))
 }
 
-function getGroupKey(word) {
-  const w = word.word || ''
-  const ipa = word.ipa || ''
-
+// 字母索引键：CJK 词按音标（拼音/罗马字）首字母，NFD 折叠去掉声调符（ā→A）
+function groupLetter(w, ipa) {
+  w = w || ''
   if (hasCJK(w)) {
-    if (ipa && ipa.length > 1) {
-      const cleaned = ipa.replace(/^[\/\[]+/, '').trim()
-      if (cleaned.length > 0) {
-        return cleaned[0].toUpperCase()
-      }
-    }
+    const cleaned = (ipa || '').replace(/^[\/\[]+/, '').trim()
+    if (cleaned) return cleaned.normalize('NFD')[0].toUpperCase()
     return w[0]
   }
-
-  if (w.length > 0) {
-    const first = w[0]
-    return first.normalize('NFD')[0].toUpperCase()
-  }
-
+  if (w.length > 0) return w[0].normalize('NFD')[0].toUpperCase()
   return '#'
+}
+
+function getGroupKey(word) {
+  return groupLetter(word.word, word.ipa)
 }
 
 function groupVocab(vocab) {
@@ -47,4 +41,4 @@ function groupVocab(vocab) {
   return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
 }
 
-export { getGroupKey, groupVocab, hasCJK }
+export { getGroupKey, groupLetter, groupVocab, hasCJK }

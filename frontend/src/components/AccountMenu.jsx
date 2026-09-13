@@ -44,7 +44,7 @@ export default function AccountMenu({ t, onOpenSettings, onOpenChangePassword })
       <button
         onClick={() => navigate('/login')}
         className="w-8 h-8 rounded-full border-2 border-ink-300 flex items-center justify-center text-ink-400 hover:text-ink-600 hover:border-ink-500 transition-colors"
-        title="登录"
+        title={t?.login || '登录'}
       >
         <User className="w-4 h-4" />
       </button>

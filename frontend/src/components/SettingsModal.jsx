@@ -406,7 +406,7 @@ function SettingsModal({ isOpen, onClose, uiLang, onUiLangChange, pageSize, onPa
         </label>
         <NativeLangSelector value={localUiLang} onChange={setLocalUiLang} recentLangs={recentLangs} />
         <p className="text-[10px] text-ink-400 mt-1.5">
-          {t.retryIntervalDesc ? 'UI language and translation target language' : '界面语言和翻译目标语言'}
+          {t.uiLangDesc || '界面语言和翻译目标语言'}
         </p>
       </div>
     </div>

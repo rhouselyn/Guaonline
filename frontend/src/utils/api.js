@@ -76,8 +76,9 @@ export const api = {
   },
 
   // 获取单词详情
-  getWordDetails: async (fileId, word) => {
-    const response = await axios.get(`${baseUrl}/api/word/${fileId}/${word}`);
+  getWordDetails: async (fileId, word, targetLang) => {
+    const params = targetLang ? { target_lang: targetLang } : {};
+    const response = await axios.get(`${baseUrl}/api/word/${fileId}/${word}`, { params });
     return response.data;
   },
 
@@ -240,8 +241,9 @@ export const api = {
     return response.data
   },
 
-  regenerateWordDetailByFile: async (fileId, word) => {
-    const response = await axios.post(`${baseUrl}/api/word/${fileId}/${word}/regenerate`)
+  regenerateWordDetailByFile: async (fileId, word, targetLang) => {
+    const params = targetLang ? { target_lang: targetLang } : {}
+    const response = await axios.post(`${baseUrl}/api/word/${fileId}/${word}/regenerate`, null, { params })
     return response.data
   },
 

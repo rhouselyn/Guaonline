@@ -25,6 +25,7 @@ import utils.exercise_generators as eg
 def _complete_cache(word="apple"):
     return {
         "word": word,
+        "target_lang": "zh",  # 与 process_single_word_gen 调用时的 target_lang 一致（line 482 起所有新缓存均带此标记）
         "enriched_meaning": "a round fruit",
         "memory_hint": "think of red",
         "variants_detail": [{"type": "noun", "word": word}],
@@ -180,11 +181,31 @@ def test_background_word_gen_skips_incomplete_vocab_hit():
     )
 
 
+def test_process_single_word_gen_deletes_cache_on_lang_switch():
+    """完整但 target_lang 不匹配（用户切换母语）→ 必须删除重生成，不能拿旧母语缓存凑数。"""
+    stale = _complete_cache("apple")
+    stale["target_lang"] = "ja"  # 旧母语缓存
+    fake = _FakeStorage(initial_cache={"apple": stale})
+    _setup_state()
+    with patch.object(eg, "storage", fake), \
+         patch.object(eg, "global_vocab", type("G", (), {"lookup": lambda *a, **k: None, "upsert": lambda *a, **k: None})()), \
+         patch.object(eg, "user_vocab", type("U", (), {"lookup": lambda *a, **k: None, "upsert": lambda *a, **k: None})()), \
+         patch.object(eg, "_gateway_generate_multiple_choice", new=AsyncMock(return_value=_complete_cache("apple"))), \
+         patch.object(eg, "fix_llm_options_result", side_effect=lambda x, *a, **k: x):
+        asyncio.run(eg.process_single_word_gen("f1", "apple", eg.word_gen_state["f1"]["vocab"], "en", "zh"))
+
+    assert "apple" in fake.deleted, f"母语不匹配的缓存应被删除，实际 deleted={fake.deleted}"
+    assert fake.saved, "应按新母语重新生成"
+    assert fake.saved[-1][1].get("target_lang") == "zh"
+
+
 if __name__ == "__main__":
     test_process_single_word_gen_keeps_complete_cache()
     print("✅ 完整缓存保留测试通过")
     test_process_single_word_gen_deletes_incomplete_then_regenerates()
     print("✅ 不完整缓存删除+重新生成测试通过")
+    test_process_single_word_gen_deletes_cache_on_lang_switch()
+    print("✅ 母语切换缓存失效测试通过")
     test_background_word_gen_skips_incomplete_vocab_hit()
     print("✅ background_word_gen 不完整 vocab_hit 不命中测试通过")
     print("\n全部测试通过 ✅")

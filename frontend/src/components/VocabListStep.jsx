@@ -6,7 +6,7 @@ import { speakText } from '../utils/speech'
 import { groupVocab } from '../utils/vocab'
 import WordDetail from './WordDetail'
 
-function VocabListStep({ vocab: propVocab, onClose, loading, t, currentFileId, sourceLang, pageSize = 50 }) {
+function VocabListStep({ vocab: propVocab, onClose, loading, t, currentFileId, sourceLang, targetLang, pageSize = 50 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchDebounced, setSearchDebounced] = useState('')
   const [expandedWord, setExpandedWord] = useState(null)
@@ -85,7 +85,7 @@ function VocabListStep({ vocab: propVocab, onClose, loading, t, currentFileId, s
     if (currentFileId && !enrichedWords[wordKey]) {
       setLoadingWord(wordKey)
       try {
-        const details = await api.getWordDetails(currentFileId, wordKey)
+        const details = await api.getWordDetails(currentFileId, wordKey, targetLang)
         setEnrichedWords(prev => ({ ...prev, [wordKey]: details }))
       } catch (e) {
         console.error('Failed to fetch word details:', e)
@@ -93,7 +93,7 @@ function VocabListStep({ vocab: propVocab, onClose, loading, t, currentFileId, s
         setLoadingWord(null)
       }
     }
-  }, [expandedWord, scrollToWord, currentFileId, enrichedWords, sourceLang])
+  }, [expandedWord, scrollToWord, currentFileId, enrichedWords, sourceLang, targetLang])
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(vocabTotal / pageSize)), [vocabTotal, pageSize])
 

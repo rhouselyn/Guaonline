@@ -4,13 +4,13 @@ import { Shuffle, Loader2, Languages, BookOpen, Search, Volume2, ArrowLeft, Penc
 import WordDetail from './WordDetail'
 import SentenceDetail from './SentenceDetail'
 import FavoriteButton from './FavoriteButton'
-import { groupVocab } from '../utils/vocab'
+import { groupVocab, groupLetter } from '../utils/vocab'
 import { useMediaQuery } from '../utils/useMediaQuery'
 import { speakText } from '../utils/speech'
 import { LangIcon, LANGUAGES } from './InputStep'
 import { api } from '../utils/api'
 
-function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, detectedLang, preprocessStatus, preprocessStart, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '', vocabLength = 0, sentenceLength = 0 }) {
+function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingInfo, sentenceTranslations, selectedSentence, selectedWord, onSentenceClick, onCloseSentenceDetail, onWordClick, onStartLearning, loading, t, currentFileId, sourceLang, targetLang, detectedLang, preprocessStatus, preprocessStart, onBack, fileTitle, onTitleChange, pageSize = 50, dictStateRef, originalText = '', entryPrompt = '', vocabLength = 0, sentenceLength = 0 }) {
   const saved = dictStateRef?.current || {}
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [activePanel, setActivePanel] = useState(0) // 0=句子翻译, 1=词汇表
@@ -76,6 +76,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const [sentenceSearchDebounced, setSentenceSearchDebounced] = useState(sentenceSearch)
   // 全量词表（仅词字符串，轻量），用于构建字母→页、单词→页索引，支持跨页跳转
   const [allWords, setAllWords] = useState([])
+  const [ipaMap, setIpaMap] = useState({})
   const allWordsSeq = useRef(0)
   const vocabFetchSeq = useRef(0)
   // ponytail: 生成进度信号去抖——vocabLength/sentenceLength 在生成期间每 0.3s 变一次，
@@ -203,7 +204,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const queryLang = (lang && lang !== 'auto') ? lang : null
     let cancelled = false
     setGlobalVocabLoading(true)
-    api.getWordList(queryLang).then(data => {
+    api.getWordList(queryLang, targetLang).then(data => {
       if (!cancelled) {
         setGlobalVocab(data.words || [])
         setGlobalVocabLoading(false)
@@ -212,7 +213,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (!cancelled) setGlobalVocabLoading(false)
     })
     return () => { cancelled = true }
-  }, [showGlobalVocab, actualSourceLang, sourceLang])
+  }, [showGlobalVocab, actualSourceLang, sourceLang, targetLang])
 
   useEffect(() => {
     if (!currentFileId) return
@@ -362,9 +363,11 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     api.getVocab(currentFileId, { words_only: true, sort: sortOrder }).then(data => {
       if (cancelled || seq !== allWordsSeq.current) return
       setAllWords(Array.isArray(data.words) ? data.words : [])
+      setIpaMap(data.ipa_map || {})
     }).catch(() => {
       if (cancelled || seq !== allWordsSeq.current) return
       setAllWords([])
+      setIpaMap({})
     })
     return () => { cancelled = true }
   }, [currentFileId, sortOrder, progressVersion])
@@ -381,21 +384,21 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     const letters = []
     const seen = new Set()
     for (const w of allWords) {
-      const letter = (w[0] || '#').toUpperCase()
+      const letter = groupLetter(w, ipaMap[w.toLowerCase()])
       if (!seen.has(letter)) { seen.add(letter); letters.push(letter) }
     }
     return letters
-  }, [allWords])
+  }, [allWords, ipaMap])
 
   const letterToPage = useMemo(() => {
     const m = new Map()
     allWords.forEach((w, i) => {
-      const letter = (w[0] || '#').toUpperCase()
+      const letter = groupLetter(w, ipaMap[w.toLowerCase()])
       const page = Math.floor(i / pageSize) + 1
       if (!m.has(letter)) m.set(letter, page)
     })
     return m
-  }, [allWords, pageSize])
+  }, [allWords, ipaMap, pageSize])
 
   const wordToPage = useMemo(() => {
     const m = new Map()
@@ -456,7 +459,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
   const globalLetterToPage = useMemo(() => {
     const m = new Map()
     filteredGlobalVocab.forEach((w, i) => {
-      const letter = (w.word[0] || '#').toUpperCase()
+      const letter = groupLetter(w.word, w.ipa)
       const page = Math.floor(i / pageSize) + 1
       if (!m.has(letter)) m.set(letter, page)
     })
@@ -625,7 +628,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     try {
       // 先尝试直接获取缓存数据
       try {
-        const data = await api.getWordDetails(currentFileId, wordKey)
+        const data = await api.getWordDetails(currentFileId, wordKey, targetLang)
         if (data && (data.enriched_meaning || data.meaning || data.multiple_choice)) {
           setWordDetails(prev => ({ ...prev, [wordKey]: data }))
           setWordDetailCache(prev => ({ ...prev, [wordKey]: data }))
@@ -643,7 +646,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       // 轮询等待生成完成
       const waitForDetail = async (retries = 30) => {
         try {
-          const data = await api.getWordDetails(currentFileId, wordKey)
+          const data = await api.getWordDetails(currentFileId, wordKey, targetLang)
           if (data && (data.enriched_meaning || data.meaning || data.multiple_choice)) {
             return data
           }
@@ -667,7 +670,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     } finally {
       setLoadingWords(prev => ({ ...prev, [wordKey]: false }))
     }
-  }, [currentFileId, wordDetails, wordDetailCache])
+  }, [currentFileId, targetLang, wordDetails, wordDetailCache])
 
   const scrollToWord = useCallback((wordKey, delay = 50) => {
     const doScroll = () => {
@@ -845,7 +848,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
       if (!wordDetails[globalKey] && !loadingWords[globalKey]) {
         setLoadingWords(prev => ({ ...prev, [globalKey]: true }))
         try {
-          const detail = await api.getWordDetail(word.word, actualSourceLang)
+          const detail = await api.getWordDetail(word.word, actualSourceLang, targetLang)
           setWordDetails(prev => ({ ...prev, [globalKey]: detail }))
         } catch (err) {
           console.error('Failed to load global word detail:', err)
@@ -854,7 +857,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
         }
       }
     }, 50)
-  }, [expandedWord, wordDetails, loadingWords, actualSourceLang])
+  }, [expandedWord, wordDetails, loadingWords, actualSourceLang, targetLang])
 
   const handleSentenceJump = useCallback((sentenceIndex) => {
     onSentenceClick(sentenceIndex)
@@ -888,7 +891,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     })
     setLoadingWords(prev => ({ ...prev, [localKey]: true, [globalKey]: true }))
     try {
-      const data = await api.regenerateWordDetailByFile(currentFileId, wordKey)
+      const data = await api.regenerateWordDetailByFile(currentFileId, wordKey, targetLang)
       if (data) {
         setWordDetails(prev => ({ ...prev, [localKey]: data, [globalKey]: data }))
         setWordDetailCache(prev => ({ ...prev, [wordKey]: data }))
@@ -898,7 +901,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     } finally {
       setLoadingWords(prev => ({ ...prev, [localKey]: false, [globalKey]: false }))
     }
-  }, [currentFileId])
+  }, [currentFileId, targetLang])
 
   const handleTitleClick = useCallback(() => {
     setTitleInput(fileTitle)
