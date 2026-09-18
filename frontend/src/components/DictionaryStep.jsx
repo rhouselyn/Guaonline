@@ -827,7 +827,7 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     }
   }, [])
 
-  const handleGlobalVocabWordClick = useCallback(async (word) => {
+  const handleGlobalVocabWordClick = useCallback((word) => {
     const globalKey = `global-${word.word}`
     if (expandedWord === globalKey) {
       setExpandedWord(null)
@@ -836,28 +836,15 @@ function DictionaryStep({ vocab, onToggleSort, sortOrder, progress, processingIn
     setActiveSentenceContext(null) // 全局词表——无句子上下文
     speakText(word.word, actualSourceLang)
     scrollToGlobalWord(word.word, 0)
-    setTimeout(async () => {
+    // 直接展开显示原有数据，不触发生成；点击刷新按钮时才按当前母语重新生成
+    setTimeout(() => {
       setExpandedWord(globalKey)
-
       const hasDetail = word && (word.examples?.length > 0 || word.memory_hint || word.variants_detail?.length > 0)
       if (hasDetail) {
         setWordDetails(prev => ({ ...prev, [globalKey]: word }))
-        return
-      }
-
-      if (!wordDetails[globalKey] && !loadingWords[globalKey]) {
-        setLoadingWords(prev => ({ ...prev, [globalKey]: true }))
-        try {
-          const detail = await api.getWordDetail(word.word, actualSourceLang, targetLang)
-          setWordDetails(prev => ({ ...prev, [globalKey]: detail }))
-        } catch (err) {
-          console.error('Failed to load global word detail:', err)
-        } finally {
-          setLoadingWords(prev => ({ ...prev, [globalKey]: false }))
-        }
       }
     }, 50)
-  }, [expandedWord, wordDetails, loadingWords, actualSourceLang, targetLang])
+  }, [expandedWord, actualSourceLang])
 
   const handleSentenceJump = useCallback((sentenceIndex) => {
     onSentenceClick(sentenceIndex)

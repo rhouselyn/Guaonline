@@ -276,16 +276,30 @@ async def regenerate_word_detail(request: dict, current_user: TokenData = Depend
         records = storage.load_history(user_id=current_user.user_id)
         matching = [r for r in records if r.get("source_lang") == source_lang]
 
+        # 刷新后的缓存写回 /word-list 合并读取时实际命中的文件
+        # （第一个 vocab 含该词的 record），否则多文件同语言时刷新结果在词表重载后丢失
+        save_file_id = None
         for record in matching:
             file_id = record.get("file_id")
-            if file_id:
-                storage.delete_word_cache(file_id, word)
+            if not file_id:
+                continue
+            storage.delete_word_cache(file_id, word)
+            if save_file_id is None:
+                vocab = storage.load_vocab(file_id)
+                if isinstance(vocab, dict) and "vocab" in vocab:
+                    vocab = vocab["vocab"]
+                if isinstance(vocab, list) and any(
+                    isinstance(v, dict) and v.get("word", "").lower() == word.lower() for v in vocab
+                ):
+                    save_file_id = file_id
+        if not save_file_id and matching:
+            save_file_id = matching[0].get("file_id")
 
         options_result = await _gateway_generate_multiple_choice(
             current_user.user_id, current_user.tier.value,
             word, "", "", target_lang, source_lang, 0.7
         )
-        file_id = matching[0].get("file_id") if matching else None
+        file_id = save_file_id
         if file_id:
             options_result = fix_llm_options_result(options_result, source_lang, file_id)
 
@@ -511,7 +525,8 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                             continue
             records = filtered
         # ponytail: target_lang 不再按记录过滤（用户切换母语后旧记录的 target_lang 仍是旧值，
-        # 过滤会导致词表清空）；改为下方合并缓存时按母语戳匹配，不匹配的缓存详情跳过
+        # 过滤会导致词表清空）；缓存详情也始终按原样并入——展开单词只显示原有数据，
+        # 用户点"刷新"按钮时才按当前母语重新生成（见 /word-detail/regenerate）
 
         merged = {}
         for record in records:
@@ -535,11 +550,8 @@ async def get_word_list(source_lang: Optional[str] = None, target_lang: Optional
                 if not word_key:
                     continue
                 if word_key not in merged:
-                    cached = cached_map.get(word_key)
-                    # 母语戳不匹配的缓存详情不并入（用户已切换母语，点击时会按新母语重新生成）
-                    if cached and target_lang and cached.get("target_lang") != target_lang:
-                        cached = None
-                    merged[word_key] = {"entry": dict(entry), "file_id": file_id, "cached": cached}
+                    # 缓存详情不论母语戳一律并入（原有数据）；切换母语后点"刷新"才按新母语生成
+                    merged[word_key] = {"entry": dict(entry), "file_id": file_id, "cached": cached_map.get(word_key)}
 
         result = []
         for word_key, data in merged.items():
