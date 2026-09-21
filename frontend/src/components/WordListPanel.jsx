@@ -237,40 +237,16 @@ function WordListPanel({ sourceLang, targetLang, t, onBack, pageSize = 50, favor
     setPage(1)
   }, [searchQuery])
 
-  const handleWordClick = async (wordText) => {
+  const handleWordClick = (wordText) => {
     if (expandedWord === wordText) {
       setExpandedWord(null)
       return
     }
     speakText(wordText, sourceLang)
     scrollToWord(wordText, 0)
-    setTimeout(async () => {
+    // 直接展开显示原有数据，不触发生成；点击刷新按钮时才按当前母语重新生成
+    setTimeout(() => {
       setExpandedWord(wordText)
-
-      const existing = words.find(w => w.word === wordText)
-      const hasDetail = existing && (existing.examples?.length > 0 || existing.memory_hint || existing.variants_detail?.length > 0)
-
-      if (hasDetail) {
-        setWordDetails(prev => ({ ...prev, [wordText]: existing }))
-        return
-      }
-
-      if (!wordDetails[wordText] && !detailLoading[wordText]) {
-        setDetailLoading(prev => ({ ...prev, [wordText]: true }))
-        try {
-          const detail = await api.getWordDetail(wordText, sourceLang, targetLang)
-          setWordDetails(prev => ({ ...prev, [wordText]: detail }))
-          setWords(prev => prev.map(w =>
-            w.word === wordText
-              ? { ...w, variants_detail: detail.variants_detail || w.variants_detail, examples: detail.examples || w.examples, memory_hint: detail.memory_hint || w.memory_hint }
-              : w
-          ))
-        } catch (err) {
-          console.error('Failed to load word detail:', err)
-        } finally {
-          setDetailLoading(prev => ({ ...prev, [wordText]: false }))
-        }
-      }
     }, 50)
   }
 
