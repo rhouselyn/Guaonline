@@ -1,5 +1,6 @@
 """设置与UI翻译相关路由：user-preferences, translate_ui"""
 
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -76,17 +77,16 @@ async def translate_ui(lang_code: str):
     from db_storage import DatabaseStorage
     db_storage = DatabaseStorage()
 
-    # ponytail: schema 版本签名 = 全部 key 的英文基准拼接的指纹。
-    # 新增 key 或缺 key → 补译缺失部分；修改既有文案(英文基准变化) → 整包重译刷新，
-    # 保证已缓存的多语言 UI 也能拿到 autoTranslateHint 等最新文案，而不只是新上线的语言。
+    # ponytail: 软配对——缓存命中就直接换；只有缺 key 时才补译缺少的那部分，
+    # 不再因英文基准变化整包重译（旧行为会让已缓存语言每次都跑一次全量 LLM，很慢）。
     schema_sig = _ui_schema_sig()
 
     # 1. 查数据库缓存
     cached = db_storage.load_ui_translations(lang_code)
     if cached:
         missing = [k for k in UI_TRANSLATION_SCHEMA if k not in cached]
-        stale = cached.get("_schema_sig") != schema_sig
-        if not missing and not stale:
+        # 命中（无缺失 key）→ 直接返回
+        if not missing:
             return cached
         # zh/en 不调 LLM，直接从 schema 重建最新值
         if lang_code in ('zh', 'en'):
@@ -96,34 +96,33 @@ async def translate_ui(lang_code: str):
             db_storage.save_ui_translations(lang_code, result)
             return result
         try:
-            # stale（文案更新）时全量重译；否则只补缺失 key
-            refresh_keys = list(UI_TRANSLATION_SCHEMA.keys()) if stale else missing
-            patched = await _do_translate_ui(lang_code, db_storage, keys=refresh_keys)
-            merged = {**cached, **{k: v for k, v in patched.items() if k in refresh_keys}}
+            # 部分未命中：只把缺失的 key 交给 LLM 补译，已有的原样保留
+            patched = await _do_translate_ui(lang_code, keys=missing)
+            merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
             merged["_lang_code"] = lang_code
             merged["_schema_sig"] = schema_sig
             db_storage.save_ui_translations(lang_code, merged)
             return merged
         except Exception as e:
             print(f"UI translation patch error ({lang_code}): {e}")
-            return cached  # 补译失败退回旧缓存，前端有 zhBase 兜底
+            return cached  # 补译失败退回旧缓存，缺失 key 前端用 zhBase 兜底
 
     # 2. 对于 zh 和 en，从 schema 生成并存入数据库
     if lang_code in ('zh', 'en'):
-        result = {}
-        for key, val in UI_TRANSLATION_SCHEMA.items():
-            result[key] = val.get(lang_code, val.get('en', ''))
+        result = {k: UI_TRANSLATION_SCHEMA[k].get(lang_code, UI_TRANSLATION_SCHEMA[k].get('en', '')) for k in UI_TRANSLATION_SCHEMA}
         result["_lang_code"] = lang_code
         result["_schema_sig"] = schema_sig
         db_storage.save_ui_translations(lang_code, result)
         return result
 
-    # 3. 用 LLM 生成（同步等待，不再用后台任务）
-    return await _do_translate_ui(lang_code, db_storage)
+    # 3. 首次全量生成（单次 LLM 调用上限 1 分钟）
+    result = await _do_translate_ui(lang_code)
+    db_storage.save_ui_translations(lang_code, result)
+    return result
 
 
 def _ui_schema_sig():
-    """UI_TRANSLATION_SCHEMA 的英文基准指纹，用于判断文案基准是否更新过。"""
+    """UI_TRANSLATION_SCHEMA 的英文基准指纹，写入缓存用于记录基准版本。"""
     import hashlib
     payload = json.dumps(
         {k: v.get("en", "") for k, v in UI_TRANSLATION_SCHEMA.items()},
@@ -132,8 +131,11 @@ def _ui_schema_sig():
     return hashlib.md5(payload.encode("utf-8")).hexdigest()[:16]
 
 
-async def _do_translate_ui(lang_code: str, db_storage, keys=None):
-    """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。"""
+async def _do_translate_ui(lang_code: str, keys=None):
+    """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。
+
+    单次调用总时长上限 1 分钟；超时/失败抛异常，由调用方决定退回旧缓存还是报错。
+    """
     from llm_api import get_lang_name
     from utils.llm_gateway import gateway
 
@@ -161,9 +163,12 @@ async def _do_translate_ui(lang_code: str, db_storage, keys=None):
     ]
 
     try:
-        result = await gateway.call(
-            user_id="system", tier="free", messages=messages,
-            temperature=0, request_type="ui_translation"
+        result = await asyncio.wait_for(
+            gateway.call(
+                user_id="system", tier="free", messages=messages,
+                temperature=0, request_type="ui_translation"
+            ),
+            timeout=60,
         )
 
         if result and result.get("choices"):
@@ -176,10 +181,9 @@ async def _do_translate_ui(lang_code: str, db_storage, keys=None):
             translated = json.loads(content.strip())
             translated["_lang_code"] = lang_code
             translated["_schema_sig"] = _ui_schema_sig()
-
-            # 存入数据库
-            db_storage.save_ui_translations(lang_code, translated)
             return translated
+    except asyncio.TimeoutError:
+        print(f"UI translation timeout ({lang_code}, keys={'all' if keys is None else len(keys)})")
     except Exception as e:
         print(f"UI translation error: {e}")
 

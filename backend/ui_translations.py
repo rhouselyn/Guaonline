@@ -218,6 +218,7 @@ UI_TRANSLATION_SCHEMA = {
     "enterCurrentPassword": {"desc": "Current password placeholder", "zh": "请输入当前密码", "en": "Enter your current password"},
     "enterNewPassword": {"desc": "New password placeholder", "zh": "请输入新密码", "en": "Enter your new password"},
     "enterConfirmPassword": {"desc": "Confirm new password placeholder", "zh": "请再次输入新密码", "en": "Enter your new password again"},
+    "confirm": {"desc": "Generic confirm button", "zh": "确定", "en": "Confirm"},
     # ── 单词表 / 收藏 / 输入 ──
     "wordList": {"desc": "Word list button title in history sidebar", "zh": "单词总表", "en": "Word List"},
     "favorites": {"desc": "Favorites title", "zh": "收藏", "en": "Favorites"},
@@ -230,6 +231,7 @@ UI_TRANSLATION_SCHEMA = {
     "refillingWords": {"desc": "Refilling missing words status", "zh": "补全漏词中...", "en": "Refilling missing words..."},
     "slowPlay": {"desc": "Slow playback button tooltip", "zh": "慢速播放", "en": "Slow playback"},
     "attachImages": {"desc": "Attach images button tooltip", "zh": "附加图片", "en": "Attach images"},
+    "removeImage": {"desc": "Remove an attached image button tooltip", "zh": "删除", "en": "Remove"},
     "prevPage": {"desc": "Previous page button", "zh": "上一页", "en": "Prev"},
     "nextPage": {"desc": "Next page button", "zh": "下一页", "en": "Next"},
 }

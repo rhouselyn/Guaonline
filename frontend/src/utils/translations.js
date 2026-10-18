@@ -246,7 +246,14 @@ export const translations = {
     fontSize: "字体大小",
     fontScaleDesc: "调整学习页面字号",
     fontScaleSmall: "小",
-    fontScaleLarge: "大"
+    fontScaleLarge: "大",
+    confirm: "确定",
+    removeImage: "删除",
+    attachImages: "附加图片",
+    slowPlay: "慢速播放",
+    refillingWords: "补全漏词中...",
+    wordList: "单词总表",
+    rateLimitExceeded: "请求过于频繁，请稍后再试"
   },
   en: {
     title: "Gualingo",
@@ -494,6 +501,13 @@ export const translations = {
     fontSize: "Font Size",
     fontScaleDesc: "Adjust learning page font size",
     fontScaleSmall: "Small",
-    fontScaleLarge: "Large"
+    fontScaleLarge: "Large",
+    confirm: "Confirm",
+    removeImage: "Remove",
+    attachImages: "Attach images",
+    slowPlay: "Slow playback",
+    refillingWords: "Refilling missing words...",
+    wordList: "Word List",
+    rateLimitExceeded: "Too many requests, please try again later"
   }
 };

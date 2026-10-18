@@ -311,30 +311,25 @@ function App() {
   useEffect(() => {
     // ponytail: 内置语言不需要LLM翻译
     if (translations[uiLang]) return
+    // 缓存命中（本次会话已加载）→ 直接切换，不再请求
+    if (customTranslations[uiLang]) return
     if (loadedLangs.has(uiLang)) return
-    
+
     setLoadedLangs(prev => new Set([...prev, uiLang]))
     setTranslatingUI(true)
-    
-    // Poll for translations (backend may return pending status while LLM is generating)
-    const pollTranslation = async () => {
+
+    // 后端软配对：缓存命中直接返回；只对缺失 key 补译，单次上限 1 分钟
+    const fetchTranslation = async () => {
       try {
         const data = await api.translateUI(uiLang)
-        
-        if (data._status === 'pending') {
-          // LLM still generating, poll again in 2 seconds
-          setTimeout(pollTranslation, 2000)
-          return
-        }
-        
+
         if (data._error || data._lang_code === null) {
-          // Translation failed, allow retry
+          // 翻译失败，允许重试
           setLoadedLangs(prev => { const next = new Set(prev); next.delete(uiLang); return next })
           setTranslatingUI(false)
           return
         }
-        
-        // Translation succeeded
+
         setCustomTranslations(prev => ({ ...prev, [uiLang]: data }))
         setTranslatingUI(false)
       } catch (err) {
@@ -343,8 +338,8 @@ function App() {
         setTranslatingUI(false)
       }
     }
-    
-    pollTranslation()
+
+    fetchTranslation()
   }, [uiLang])
 
   useEffect(() => {
