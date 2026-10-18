@@ -475,7 +475,8 @@ class LLMGateway:
     async def call(self, user_id: str, tier: str, messages: List[Dict],
                    temperature: float = 0.0, max_tokens: int = 65536,
                    request_type: str = "llm_call", tools: List[Dict] = None,
-                   _max_tokens_eff: int = None) -> dict:
+                   _max_tokens_eff: int = None, ignore_key_cap: bool = False,
+                   http_timeout: float = None) -> dict:
         if _max_tokens_eff is None:
             _max_tokens_eff = max_tokens
         pool = self._resolve_pool(tier, request_type)
@@ -503,7 +504,7 @@ class LLMGateway:
             print(f"[GATEWAY] --- all keys blocked, wait {wait:.1f}s until next recovery tier={tier} type={request_type}")
             if wait > 0:
                 await asyncio.sleep(wait)
-            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=_max_tokens_eff)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=_max_tokens_eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
 
         config, idx = result
         api_key = config.get("api_key", "")
@@ -518,7 +519,10 @@ class LLMGateway:
         if not key_cap:
             key_cap = 16384 if pool.tier == "free" else 65536
         eff = _max_tokens_eff
-        if eff is None or eff > key_cap:
+        # ignore_key_cap：允许调用方显式突破 pool/tier 的 max_tokens 封顶。
+        # UI 全量翻译单次输出可达 12K–16K tokens，卡在 free 档默认 16384 会被截断
+        # 导致 JSON 解析失败，故该链路需要破例抬高上限。
+        if not ignore_key_cap and eff > key_cap:
             eff = key_cap
         max_tokens = eff
 
@@ -541,7 +545,8 @@ class LLMGateway:
             _t0 = _t.time()
             _title = self.key_defs.get(key_id, {}).get("title", "") or "-"
             print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title}")
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            _http_timeout = HTTP_TIMEOUT if http_timeout is None else http_timeout
+            async with httpx.AsyncClient(timeout=_http_timeout) as client:
                 resp = await client.post(url, headers=headers, json=payload)
 
             if resp.status_code == 200:
@@ -564,17 +569,17 @@ class LLMGateway:
                 retry_after = _parse_retry_after(resp.headers.get("retry-after"))
                 print(f"[GATEWAY] <<< 429 key_id={key_id} title={_title} retry_after={retry_after} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_rate_limited(self, idx, retry_after=retry_after)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
 
             elif resp.status_code == 401:
                 print(f"[GATEWAY] <<< 401 key_id={key_id} title={_title} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_invalid(self, idx)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
 
             elif resp.status_code >= 500:
                 print(f"[GATEWAY] <<< {resp.status_code} key_id={key_id} title={_title} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_server_error(self, idx)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
 
             else:
                 body = resp.text[:300]
@@ -584,21 +589,21 @@ class LLMGateway:
                     if halved < eff:
                         print(f"[GATEWAY] max_tokens 非法({eff})，折半为 {halved} 后重试 tier={tier} type={request_type}")
                         pool.mark_complete(self, idx)
-                        return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=halved)
+                        return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=halved, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
                 print(f"[GATEWAY] <<< {resp.status_code} key_id={key_id} title={_title} body={body!r} → 切换 key 重试 tier={tier} type={request_type}")
                 pool.mark_server_error(self, idx)
-                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+                return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
 
         except httpx.TimeoutException:
             _elapsed = _t.time() - _t0
             print(f"[GATEWAY] <<< TIMEOUT key_id={key_id} title={_title} elapsed={_elapsed:.1f}s (>{HTTP_TIMEOUT}s) → 切换 key 重试 tier={tier} type={request_type}")
             pool.mark_network_error(self, idx)
-            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
         except httpx.HTTPError as e:
             # 其他网络错（连接失败、DNS 等）
             print(f"[GATEWAY] network error key_id={key_id} title={_title}: {e} → 切换 key 重试 tier={tier} type={request_type}")
             pool.mark_network_error(self, idx)
-            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
+            return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff, ignore_key_cap=ignore_key_cap, http_timeout=http_timeout)
         except Exception as e:
             if "No API Key" in str(e) or "服务暂时不可用" in str(e):
                 raise

@@ -318,7 +318,7 @@ function App() {
     setLoadedLangs(prev => new Set([...prev, uiLang]))
     setTranslatingUI(true)
 
-    // 后端软配对：缓存命中直接返回；只对缺失 key 补译，单次上限 1 分钟
+    // 后端软配对：缓存命中直接返回；只对缺失 key 补译，全量翻译单次上限 150s；失败结果有冷却缓存，避免反复重翻
     const fetchTranslation = async () => {
       try {
         const data = await api.translateUI(uiLang)

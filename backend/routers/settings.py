@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -12,6 +13,14 @@ from ui_translations import UI_TRANSLATION_SCHEMA, TRANSLATION_PROMPT
 from utils.state import storage
 
 router = APIRouter(prefix="/api", tags=["settings"])
+
+# UI 全量翻译链路参数（413 条文案，单次输出可达 12K–16K tokens，链路脆弱）：
+# - 超时放宽到 150s：后端还在生成时，前端不会先超时放弃而退回中文
+# - 显式抬高 max_tokens 并突破 pool 封顶：避免在 free 档 16384 处被截断导致 JSON 解析失败
+# - 失败结果写回缓存并设冷却期：避免每次重试都整包重翻，冷却后自动允许一次重试以自愈
+UI_TRANSLATION_TIMEOUT = 150
+UI_TRANSLATION_MAX_TOKENS = 65536
+UI_TRANSLATION_FAILURE_COOLDOWN = 300
 
 
 class UserPreferencesUpdate(BaseModel):
@@ -83,6 +92,14 @@ async def translate_ui(lang_code: str):
 
     # 1. 查数据库缓存
     cached = db_storage.load_ui_translations(lang_code)
+
+    # 失败缓存：上次生成失败且仍在冷却期内 → 直接回失败标记（前端静默退回中文），
+    # 不再触发整包重翻，避免反复失败；冷却结束后丢弃标记，允许一次重试以自愈。
+    if cached and cached.get("_error"):
+        if time.time() - (cached.get("_failed_at") or 0) < UI_TRANSLATION_FAILURE_COOLDOWN:
+            return cached
+        cached = None  # 冷却结束 → 清掉失败标记，重新尝试
+
     if cached:
         missing = [k for k in UI_TRANSLATION_SCHEMA if k not in cached]
         # 命中（无缺失 key）→ 直接返回
@@ -96,8 +113,8 @@ async def translate_ui(lang_code: str):
             db_storage.save_ui_translations(lang_code, result)
             return result
         try:
-            # 部分未命中：只把缺失的 key 交给 LLM 补译（单次上限 60s），已有的原样保留
-            patched = await _do_translate_ui(lang_code, keys=missing, timeout=60)
+            # 部分未命中：只把缺失的 key 交给 LLM 补译（单次上限 UI_TRANSLATION_TIMEOUT），已有的原样保留
+            patched = await _do_translate_ui(lang_code, keys=missing, timeout=UI_TRANSLATION_TIMEOUT)
             merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
             merged["_lang_code"] = lang_code
             merged["_schema_sig"] = schema_sig
@@ -115,8 +132,20 @@ async def translate_ui(lang_code: str):
         db_storage.save_ui_translations(lang_code, result)
         return result
 
-    # 3. 首次全量生成（不封顶；只有增量补译才走 60s 上限）
-    result = await _do_translate_ui(lang_code)
+    # 3. 首次全量生成（150s 上限，抬高 max_tokens 避免截断）
+    try:
+        result = await _do_translate_ui(lang_code, timeout=UI_TRANSLATION_TIMEOUT)
+    except Exception as e:
+        print(f"UI translation failed ({lang_code}): {e}")
+        # 失败缓存：写回失败标记（含时间戳），冷却期内不再整包重翻，冷却后自动重试自愈
+        failure = {
+            "_lang_code": lang_code,
+            "_schema_sig": schema_sig,
+            "_error": "ui_translation_failed",
+            "_failed_at": time.time(),
+        }
+        db_storage.save_ui_translations(lang_code, failure)
+        return failure
     db_storage.save_ui_translations(lang_code, result)
     return result
 
@@ -134,8 +163,8 @@ def _ui_schema_sig():
 async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
     """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。
 
-    timeout 传入时以 asyncio.wait_for 封顶单次调用（补译走 60s）；
-    首次全量生成不封顶，避免大 schema 被掐断。失败抛异常，由调用方决定退回旧缓存还是报错。
+    timeout 传入时以 asyncio.wait_for 封顶单次调用（全量 150s）；
+    不传则不加外层超时。失败抛异常，由调用方决定退回旧缓存、写失败缓存还是报错。
     """
     from llm_api import get_lang_name
     from utils.llm_gateway import gateway
@@ -166,7 +195,11 @@ async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
     try:
         call = gateway.call(
             user_id="system", tier="free", messages=messages,
-            temperature=0, request_type="ui_translation"
+            temperature=0, request_type="ui_translation",
+            max_tokens=UI_TRANSLATION_MAX_TOKENS, ignore_key_cap=True,
+            # 大 schema 单次生成常超 gateway 默认 60s HTTP 超时（会被误判为挂起而重试），
+            # 故对本链路放宽单次 HTTP 超时，与整体 150s 预算一致
+            http_timeout=UI_TRANSLATION_TIMEOUT,
         )
         result = await (asyncio.wait_for(call, timeout=timeout) if timeout else call)
 
@@ -178,6 +211,10 @@ async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
                 content = content.split("```")[1].split("```")[0]
 
             translated = json.loads(content.strip())
+            # 模型回显中文时也会返回合法 JSON，若直接当成功缓存会导致界面永久中文、无自愈，
+            # 故先校验是否真的翻译了（绝大多数值仍与中文原文相同 → 判定为未翻译）。
+            if _looks_untranslated(translated, keys):
+                raise ValueError("model returned untranslated (Chinese) content")
             translated["_lang_code"] = lang_code
             translated["_schema_sig"] = _ui_schema_sig()
             return translated
@@ -187,6 +224,24 @@ async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
         print(f"UI translation error: {e}")
 
     raise HTTPException(status_code=500, detail="UI 翻译生成失败，请稍后重试")
+
+
+def _looks_untranslated(translated: dict, keys=None) -> bool:
+    """判断返回结果是否几乎没有翻译（模型回显中文）。
+
+    统计目标值与中文原文完全相同的比例，>= 90% 视为回显（正常翻译只有少量
+    专有名词/技术词与中文一致），据此拦截，避免把坏结果当成功缓存。
+    """
+    keys = list(UI_TRANSLATION_SCHEMA.keys()) if keys is None else list(keys)
+    total = same = 0
+    for k in keys:
+        zh = UI_TRANSLATION_SCHEMA.get(k, {}).get("zh")
+        if zh is None or k not in translated:
+            continue
+        total += 1
+        if translated[k] == zh:
+            same += 1
+    return total > 0 and same / total >= 0.9
 
 
 
