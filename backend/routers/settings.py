@@ -96,8 +96,8 @@ async def translate_ui(lang_code: str):
             db_storage.save_ui_translations(lang_code, result)
             return result
         try:
-            # 部分未命中：只把缺失的 key 交给 LLM 补译，已有的原样保留
-            patched = await _do_translate_ui(lang_code, keys=missing)
+            # 部分未命中：只把缺失的 key 交给 LLM 补译（单次上限 60s），已有的原样保留
+            patched = await _do_translate_ui(lang_code, keys=missing, timeout=60)
             merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
             merged["_lang_code"] = lang_code
             merged["_schema_sig"] = schema_sig
@@ -115,7 +115,7 @@ async def translate_ui(lang_code: str):
         db_storage.save_ui_translations(lang_code, result)
         return result
 
-    # 3. 首次全量生成（单次 LLM 调用上限 1 分钟）
+    # 3. 首次全量生成（不封顶；只有增量补译才走 60s 上限）
     result = await _do_translate_ui(lang_code)
     db_storage.save_ui_translations(lang_code, result)
     return result
@@ -131,10 +131,11 @@ def _ui_schema_sig():
     return hashlib.md5(payload.encode("utf-8")).hexdigest()[:16]
 
 
-async def _do_translate_ui(lang_code: str, keys=None):
+async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
     """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。
 
-    单次调用总时长上限 1 分钟；超时/失败抛异常，由调用方决定退回旧缓存还是报错。
+    timeout 传入时以 asyncio.wait_for 封顶单次调用（补译走 60s）；
+    首次全量生成不封顶，避免大 schema 被掐断。失败抛异常，由调用方决定退回旧缓存还是报错。
     """
     from llm_api import get_lang_name
     from utils.llm_gateway import gateway
@@ -163,13 +164,11 @@ async def _do_translate_ui(lang_code: str, keys=None):
     ]
 
     try:
-        result = await asyncio.wait_for(
-            gateway.call(
-                user_id="system", tier="free", messages=messages,
-                temperature=0, request_type="ui_translation"
-            ),
-            timeout=60,
+        call = gateway.call(
+            user_id="system", tier="free", messages=messages,
+            temperature=0, request_type="ui_translation"
         )
+        result = await (asyncio.wait_for(call, timeout=timeout) if timeout else call)
 
         if result and result.get("choices"):
             content = result["choices"][0]["message"]["content"]

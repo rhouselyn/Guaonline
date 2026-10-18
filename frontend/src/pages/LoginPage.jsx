@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../utils/auth';
 import { ArrowLeft, Sparkles } from 'lucide-react';
+import { usePublicI18n } from '../utils/publicI18n';
+import LangSwitcher from '../components/LangSwitcher';
 
 // 复用着陆页的青蛙 Logo
 function FrogLogo({ size = 48 }) {
@@ -76,6 +78,7 @@ function DotBackground() {
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { lang, t, changeLang } = usePublicI18n();
   // ponytail: switch=1 表示从"切换账号"进入，此时原会话仍保留，返回应回到原账号学习页而非首页
   const isSwitching = searchParams.get('switch') === '1';
   const [isRegister, setIsRegister] = useState(false);
@@ -106,10 +109,10 @@ export default function LoginPage() {
       }
     } catch (err) {
       if (err.response?.status === 403) {
-        setError(err.response?.data?.detail || '账号已被封禁');
+        setError(err.response?.data?.detail || t.lgBanned);
       } else {
         const detail = err.response?.data?.detail;
-        setError(detail || (isRegister ? '注册失败' : '登录失败'));
+        setError(detail || (isRegister ? t.lgRegisterFailed : t.lgLoginFailed));
       }
     } finally {
       setLoading(false);
@@ -119,6 +122,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
       <DotBackground />
+      {/* 母语切换：仅影响登录/落地页，独立于登录后的界面语言 */}
+      <LangSwitcher lang={lang} onChange={changeLang} className="absolute top-4 right-4 z-20" />
 
       <div className="relative z-10 w-full max-w-md mx-4">
         {/* 主卡片 */}
@@ -135,7 +140,7 @@ export default function LoginPage() {
             transition={{ duration: 0.4 }}
             onClick={() => navigate(isSwitching && auth.isLoggedIn() ? '/learn' : '/')}
             className="absolute top-4 left-4 p-1.5 text-[#8b7e5e] hover:text-[#3d3929] hover:bg-[#f0ead6] rounded transition-colors"
-            title={isSwitching ? '返回' : '返回首页'}
+            title={isSwitching ? t.lgBack : t.lgBackHome}
           >
             <ArrowLeft className="w-5 h-5" />
           </motion.button>
@@ -164,10 +169,10 @@ export default function LoginPage() {
             </motion.div>
             <h1 className="text-2xl font-bold text-[#3d3929]"
               style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-              {isRegister ? '加入呱邻国' : '欢迎回来'}
+              {isRegister ? t.lgJoinGualingo : t.lgWelcomeBack}
             </h1>
             <p className="text-sm text-[#8b7e5e] mt-1">
-              {isRegister ? '创建账号，开始你的语言学习之旅' : '登录你的账号，继续学习'}
+              {isRegister ? t.lgRegisterSub : t.lgLoginSub}
             </p>
           </div>
 
@@ -189,19 +194,19 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-                <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">昵称</label>
+                <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">{t.lgNameLabel}</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="你希望被怎么称呼？"
+                  placeholder={t.lgNamePlaceholder}
                   className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
                 />
               </motion.div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">邮箱</label>
+              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">{t.lgEmailLabel}</label>
               <input
                 type="email"
                 value={email}
@@ -213,14 +218,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">密码</label>
+              <label className="block text-xs font-medium text-[#8b7e5e] mb-1.5 tracking-wide uppercase">{t.lgPasswordLabel}</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                placeholder="至少 6 位"
+                placeholder={t.lgPasswordPlaceholder}
                 className="w-full px-3.5 py-2.5 border border-[#d4c9a8] rounded bg-white/80 text-[#3d3929] placeholder-[#b5ae8e] focus:outline-none focus:border-[#d4a853] focus:shadow-[0_0_0_1px_#d4a853] transition-all text-sm"
               />
             </div>
@@ -230,18 +235,18 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-2.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] disabled:opacity-50 transition-all shadow-[2px_2px_0_#8b7e5e] hover:shadow-[1px_1px_0_#8b7e5e] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] text-sm"
             >
-              {loading ? '...' : (isRegister ? '创建账号' : '登录')}
+              {loading ? '...' : (isRegister ? t.lgCreateAccount : t.lgSignIn)}
             </button>
           </form>
 
           {/* 切换登录/注册 */}
           <p className="mt-5 text-center text-sm text-[#8b7e5e]">
-            {isRegister ? '已有账号？' : '还没有账号？'}
+            {isRegister ? t.lgHasAccount : t.lgNoAccount}
             <button
               onClick={() => { setIsRegister(!isRegister); setError(''); }}
               className="text-[#d4a853] hover:text-[#c49a48] ml-1 font-medium transition-colors"
             >
-              {isRegister ? '登录' : '注册一个'}
+              {isRegister ? t.lgSignIn : t.lgRegisterOne}
             </button>
           </p>
 
@@ -251,7 +256,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-[#d4c9a8]" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-[#faf8f0] px-3 text-xs text-[#b5ae8e]">或者</span>
+              <span className="bg-[#faf8f0] px-3 text-xs text-[#b5ae8e]">{t.lgOr}</span>
             </div>
           </div>
 
@@ -267,7 +272,7 @@ export default function LoginPage() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              使用 Google 登录
+              {t.lgGoogleSignIn}
             </a>
             <a
               href="/api/auth/oauth/github"
@@ -276,7 +281,7 @@ export default function LoginPage() {
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
               </svg>
-              使用 GitHub 登录
+              {t.lgGithubSignIn}
             </a>
           </div>
         </motion.div>
