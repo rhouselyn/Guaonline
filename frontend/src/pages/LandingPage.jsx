@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { auth } from '../utils/auth';
+import { usePublicI18n } from '../utils/publicI18n';
+import LangSwitcher from '../components/LangSwitcher';
 import {
   ArrowRight, Globe, PenTool, Brain, Star, Volume2, BarChart3,
   ChevronDown, Sparkles, BookOpen, List, Mic, Trophy, Check,
@@ -131,43 +133,43 @@ function FrogLogo({ size = 48, className = '' }) {
   );
 }
 
-const FEATURES = [
-  { icon: Sparkles, title: '自动生成内容', desc: '粘贴英语新闻、日语歌词、法语文章——任何文本丢进来，AI 自动检测语言、分句翻译、提取词汇，省去手动整理的麻烦。', color: '#D4A853' },
-  { icon: Globe, title: '任意语言互学', desc: '英语、日语、法语、德语、泰语、越南语……120+ 种语言 TTS 朗读，小语种也能学，不受平台资源限制。', color: '#8B7E5E' },
-  { icon: List, title: '完整词汇表', desc: '自动生成词汇表，支持字母索引、搜索、逐词详情，随时查阅。比手动抄单词本高效 10 倍。', color: '#524D3C' },
-  { icon: Star, title: '收藏单词', desc: '一键收藏生词，跨文本收藏夹随时复习，重点词汇不再遗漏。', color: '#D4A853' },
-  { icon: Volume2, title: '语音朗读', desc: '基于 Edge TTS，单词和句子都能朗读，常速/慢速自由切换。练听力、练发音一步到位。', color: '#8B7E5E' },
-  { icon: Trophy, title: '星级评价', desc: '每个单元完成后获得星级评价，答错的题自动进入错题回顾。像游戏一样有成就感。', color: '#524D3C' },
+const makeFeatures = (t) => [
+  { icon: Sparkles, title: t.lpFeat1Title, desc: t.lpFeat1Desc, color: '#D4A853' },
+  { icon: Globe, title: t.lpFeat2Title, desc: t.lpFeat2Desc, color: '#8B7E5E' },
+  { icon: List, title: t.lpFeat3Title, desc: t.lpFeat3Desc, color: '#524D3C' },
+  { icon: Star, title: t.lpFeat4Title, desc: t.lpFeat4Desc, color: '#D4A853' },
+  { icon: Volume2, title: t.lpFeat5Title, desc: t.lpFeat5Desc, color: '#8B7E5E' },
+  { icon: Trophy, title: t.lpFeat6Title, desc: t.lpFeat6Desc, color: '#524D3C' },
 ];
 
-const COMPARISON = [
-  { duo: '没有单词表，复习无门', gua: '自动生成完整词汇表' },
-  { duo: '做题时想查其它单词', gua: '学习过程中随时打开单词表' },
-  { duo: '学了也很难用上', gua: '你提供什么素材就学什么' },
-  { duo: '小众语种不支持', gua: '英语日语法语德语泰语越南语都能学' },
-  { duo: '无法深入理解一篇文章', gua: '分句翻译，彻底吃透阅读理解' },
+const makeComparison = (t) => [
+  { duo: t.lpComp1Duo, gua: t.lpComp1Gua },
+  { duo: t.lpComp2Duo, gua: t.lpComp2Gua },
+  { duo: t.lpComp3Duo, gua: t.lpComp3Gua },
+  { duo: t.lpComp4Duo, gua: t.lpComp4Gua },
+  { duo: t.lpComp5Duo, gua: t.lpComp5Gua },
 ];
 
-const PAIN_POINTS = [
-  { icon: BookOpen, title: '课程内容千篇一律', desc: '市面上的 App 用统一教材教所有人，你被迫学跟自己无关的对话场景，学了忘、忘了学。留学备考想练真题阅读？中学英语想精读课文？固定课程帮不了你。' },
-  { icon: Search, title: '生词脱离上下文', desc: '单独背单词没有语境，记住的只是翻译对照，真到阅读理解和写作时还是不会用。英语阅读理解丢分，往往就是生词没吃透。' },
-  { icon: Globe, title: '小语种资源匮乏', desc: '想学泰语、越南语、阿拉伯语？法语 DELF、德语德福备考？主流 App 要么不支持，要么内容极少。' },
+const makePainPoints = (t) => [
+  { icon: BookOpen, title: t.lpPain1Title, desc: t.lpPain1Desc },
+  { icon: Search, title: t.lpPain2Title, desc: t.lpPain2Desc },
+  { icon: Globe, title: t.lpPain3Title, desc: t.lpPain3Desc },
 ];
 
-const EXERCISES = [
-  { phase: 1, title: '单词选择题', desc: '看到目标语言单词，从四个母语释义中选出正确答案。答对后展开完整单词卡：释义、词形变化、例句、记忆辅助。', demo: 'abandon → 废弃 / 采纳 / 伴随 / 仰慕 ✓' },
-  { phase: 1, title: '句子翻译排序', desc: '将打乱的母语翻译片段拖拽排列成正确顺序，训练对句子结构和语义的理解。', demo: '他 / 放弃了 / 这个 / 计划 → 拖拽排序' },
-  { phase: 1, title: '听力理解', desc: '听朗读句子，从四个翻译选项中选出正确含义。可随时点击重听。', demo: '🔊 He abandoned the plan. → 选出正确翻译' },
-  { phase: 2, title: '遮蔽填空', desc: '原文中随机遮蔽若干单词，从候选词池中选出正确单词填入空位。同一句子多次出现，每次遮蔽不同位置。', demo: 'He ___ the plan. → 候选：abandon / adopted / ...' },
-  { phase: 2, title: '翻译重组', desc: '看到原文句子，将打乱的母语翻译片段重新排列成正确顺序。需要自己理解原文并组织翻译。', demo: '原文：He abandoned the plan. → 重组翻译片段' },
-  { phase: 0, title: '错题回顾 + 星级评价', desc: '答错的题自动收集，强化练习直到掌握。每个单元根据错误数量给出 0-3 星评价。', demo: '⭐⭐⭐ 满星通过 / ❌ 错题自动进入复习' },
+const makeExercises = (t) => [
+  { phase: 1, title: t.lpEx1Title, desc: t.lpEx1Desc, demo: t.lpEx1Demo },
+  { phase: 1, title: t.lpEx2Title, desc: t.lpEx2Desc, demo: t.lpEx2Demo },
+  { phase: 1, title: t.lpEx3Title, desc: t.lpEx3Desc, demo: t.lpEx3Demo },
+  { phase: 2, title: t.lpEx4Title, desc: t.lpEx4Desc, demo: t.lpEx4Demo },
+  { phase: 2, title: t.lpEx5Title, desc: t.lpEx5Desc, demo: t.lpEx5Demo },
+  { phase: 0, title: t.lpEx6Title, desc: t.lpEx6Desc, demo: t.lpEx6Demo },
 ];
 
-const TARGET_USERS = [
-  { icon: '🎓', title: '留学备考 & 语言学习者', scene: '雅思托福 / 日语N1N2 / 法语DELF', desc: '厌倦了固定教材？粘贴真题阅读、留学文书、播客文本，立刻生成专属练习。比刷题更高效，比背单词更深入。' },
-  { icon: '💼', title: '职场人士', scene: '外企沟通 / 专业阅读', desc: '把英文邮件、德语行业报告、法语商务文档变成学习材料，学到的就是用得上的。' },
-  { icon: '📖', title: '中学生 & 家长', scene: '英语阅读理解 / 课文精读', desc: '粘贴英语课文或阅读理解原文，自动生成词汇表和练习题。生词在语境中记忆，阅读理解不再丢分。' },
-  { icon: '🌏', title: '小语种爱好者', scene: '旅行 / 文化探索', desc: '120+ 种语言支持，泰语、越南语、阿拉伯语、韩语……主流 App 忽略的语言，这里都能学。' },
+const makeTargetUsers = (t) => [
+  { icon: '🎓', title: t.lpUser1Title, scene: t.lpUser1Scene, desc: t.lpUser1Desc },
+  { icon: '💼', title: t.lpUser2Title, scene: t.lpUser2Scene, desc: t.lpUser2Desc },
+  { icon: '📖', title: t.lpUser3Title, scene: t.lpUser3Scene, desc: t.lpUser3Desc },
+  { icon: '🌏', title: t.lpUser4Title, scene: t.lpUser4Scene, desc: t.lpUser4Desc },
 ];
 
 const LANG_CLOUD = [
@@ -185,49 +187,58 @@ const LANG_CLOUD = [
   { name: 'עברית', color: '#2563eb' }, { name: 'தமிழ்', color: '#f97316' },
 ];
 
-const MODES = [
+const makeModes = (t) => [
   {
-    icon: PenTool, title: '直接输入', subtitle: '我有素材，想直接学',
-    desc: '粘贴一篇 BBC 英语新闻、一首日语歌词、一段法语课文——任何外语文本丢进来，自动检测语言、分句翻译、提取词汇。',
+    icon: PenTool, title: t.lpMode1Title, subtitle: t.lpMode1Subtitle,
+    desc: t.lpMode1Desc,
     bg: '#d4a853',
   },
   {
-    icon: Languages, title: '自动翻译', subtitle: '我想用母语素材来学外语',
-    desc: '输入中文，自动翻译成英语、日语、法语等目标语言，然后基于翻译后的文本生成词汇和练习。留学文书也能这样练。',
+    icon: Languages, title: t.lpMode2Title, subtitle: t.lpMode2Subtitle,
+    desc: t.lpMode2Desc,
     bg: '#8b7e5e',
   },
   {
-    icon: Zap, title: '自由生成', subtitle: '我没有素材，帮我生成',
-    desc: '告诉它你想学什么主题——"日语旅行对话""德语商务邮件""法语日常会话"——自动生成目标语言文本，然后开始学习。',
+    icon: Zap, title: t.lpMode3Title, subtitle: t.lpMode3Subtitle,
+    desc: t.lpMode3Desc,
     bg: '#524d3c',
   },
 ];
 
-const STEPS = [
-  { num: '01', title: '输入文本', desc: '粘贴外语文本、翻译母语文本、或让系统生成', icon: PenTool },
-  { num: '02', title: '浏览字典', desc: '查看分句翻译和词汇释义，随时查阅任意单词', icon: BookOpen },
-  { num: '03', title: '阶段一练习', desc: '单词选择、句子翻译、听力理解', icon: Mic },
-  { num: '04', title: '阶段二练习', desc: '遮蔽填空、翻译重组', icon: Brain },
-  { num: '05', title: '错题回顾', desc: '答错的题自动收集，强化练习直到掌握', icon: Trophy },
-  { num: '06', title: '收藏单词', desc: '一键收藏生词，方便重点复习', icon: Star },
+const makeSteps = (t) => [
+  { num: '01', title: t.lpStep1Title, desc: t.lpStep1Desc, icon: PenTool },
+  { num: '02', title: t.lpStep2Title, desc: t.lpStep2Desc, icon: BookOpen },
+  { num: '03', title: t.lpStep3Title, desc: t.lpStep3Desc, icon: Mic },
+  { num: '04', title: t.lpStep4Title, desc: t.lpStep4Desc, icon: Brain },
+  { num: '05', title: t.lpStep5Title, desc: t.lpStep5Desc, icon: Trophy },
+  { num: '06', title: t.lpStep6Title, desc: t.lpStep6Desc, icon: Star },
 ];
 
-const PLANS = [
+const makePlans = (t) => [
   {
-    id: 'free', name: '免费版', price: '¥0', period: '', highlight: false,
-    features: ['免费 200 句额度', '每日恢复 50 句（上限 200）', '基础学习功能'],
-    cta: '免费开始',
+    id: 'free', name: t.lpPlan1Name, price: '¥0', period: '', highlight: false,
+    features: [t.lpPlan1F1, t.lpPlan1F2, t.lpPlan1F3],
+    cta: t.lpPlan1Cta,
   },
   {
-    id: 'basic', name: '基础版', price: '¥19', period: '/月', highlight: true,
-    features: ['2000 句/月', '更优模型', '云同步', 'SRS 间隔复习', '跨设备使用'],
-    cta: '即将推出', disabled: true,
+    id: 'basic', name: t.lpPlan2Name, price: '¥19', period: t.lpPeriodMonth, highlight: true,
+    features: [t.lpPlan2F1, t.lpPlan2F2, t.lpPlan2F3, t.lpPlan2F4, t.lpPlan2F5],
+    cta: t.lpPlan2Cta, disabled: true,
   },
   {
-    id: 'pro', name: '专业版', price: '¥49', period: '/月', highlight: false,
-    features: ['无限 API 额度', '口语对话', '学习分析', '优先支持', '所有基础版功能'],
-    cta: '即将推出', disabled: true,
+    id: 'pro', name: t.lpPlan3Name, price: '¥49', period: t.lpPeriodMonth, highlight: false,
+    features: [t.lpPlan3F1, t.lpPlan3F2, t.lpPlan3F3, t.lpPlan3F4, t.lpPlan3F5],
+    cta: t.lpPlan3Cta, disabled: true,
   },
+];
+
+const makeFaq = (t) => [
+  { q: t.lpFaq1Q, a: t.lpFaq1A },
+  { q: t.lpFaq2Q, a: t.lpFaq2A },
+  { q: t.lpFaq3Q, a: t.lpFaq3A },
+  { q: t.lpFaq4Q, a: t.lpFaq4A },
+  { q: t.lpFaq5Q, a: t.lpFaq5A },
+  { q: t.lpFaq6Q, a: t.lpFaq6A },
 ];
 
 // ponytail: 原 fadeUp variants 已被 CSS .reveal 类替代，由 IntersectionObserver 触发
@@ -244,9 +255,20 @@ function SectionTitle({ children, sub }) {
 }
 
 export default function LandingPage() {
+  const { lang, t, changeLang } = usePublicI18n();
   const [user, setUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const features = makeFeatures(t);
+  const comparison = makeComparison(t);
+  const painPoints = makePainPoints(t);
+  const exercises = makeExercises(t);
+  const targetUsers = makeTargetUsers(t);
+  const modes = makeModes(t);
+  const steps = makeSteps(t);
+  const plans = makePlans(t);
+  const faq = makeFaq(t);
 
   useEffect(() => {
     auth.fetchUser().then(u => { if (u) setUser(u); }).catch(() => {});
@@ -287,36 +309,39 @@ export default function LandingPage() {
             <FrogLogo size={32} />
             <span className="text-lg font-bold text-[#3d3929] group-hover:text-[#d4a853] transition-colors"
               style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-              呱邻国
+              {t.title}
             </span>
           </button>
-          <div className="hidden sm:flex items-center gap-6">
-            <button onClick={() => scrollTo('modes')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">模式</button>
-            <button onClick={() => scrollTo('exercises')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">练习</button>
-            <button onClick={() => scrollTo('comparison')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">对比</button>
-            <button onClick={() => scrollTo('features')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">功能</button>
-            <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">定价</button>
-            <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
-              className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">GitHub</a>
-            <a
-              href={user ? '/learn' : '/login'}
-              className="px-4 py-1.5 text-sm bg-[#3d3929] text-[#faf8f0] rounded hover:bg-[#524d3c] transition-colors">
-              {user ? '进入学习' : '登录'}
-            </a>
+          <div className="flex items-center gap-3">
+            <LangSwitcher lang={lang} onChange={changeLang} />
+            <div className="hidden sm:flex items-center gap-6">
+              <button onClick={() => scrollTo('modes')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">{t.lpNavModes}</button>
+              <button onClick={() => scrollTo('exercises')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">{t.lpNavExercises}</button>
+              <button onClick={() => scrollTo('comparison')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">{t.lpNavComparison}</button>
+              <button onClick={() => scrollTo('features')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">{t.lpNavFeatures}</button>
+              <button onClick={() => scrollTo('pricing')} className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">{t.lpNavPricing}</button>
+              <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
+                className="text-sm text-[#8b7e5e] hover:text-[#3d3929] transition-colors">GitHub</a>
+              <a
+                href={user ? '/learn' : '/login'}
+                className="px-4 py-1.5 text-sm bg-[#3d3929] text-[#faf8f0] rounded hover:bg-[#524d3c] transition-colors">
+                {user ? t.lpEnterLearn : t.lpLogin}
+              </a>
+            </div>
+            {/* 手机汉堡按钮 */}
+            <button
+              onClick={() => setMobileMenuOpen(v => !v)}
+              className="sm:hidden w-10 h-10 flex items-center justify-center text-[#3d3929] hover:bg-[#d4c9a8]/40 rounded-md transition-colors"
+              aria-label={t.lpMenu}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              )}
+            </button>
           </div>
-          {/* 手机汉堡按钮 */}
-          <button
-            onClick={() => setMobileMenuOpen(v => !v)}
-            className="sm:hidden w-10 h-10 flex items-center justify-center text-[#3d3929] hover:bg-[#d4c9a8]/40 rounded-md transition-colors"
-            aria-label="菜单"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-            )}
-          </button>
         </div>
         {/* 手机下拉菜单 */}
         {mobileMenuOpen && (
@@ -326,14 +351,14 @@ export default function LandingPage() {
             className="sm:hidden absolute top-16 left-0 right-0 bg-[#faf8f0] border-b-2 border-[#d4c9a8] shadow-retro-lg z-40 overflow-hidden"
           >
             <div className="flex flex-col px-6 py-4 gap-1">
-              <button onClick={() => { scrollTo('modes'); setMobileMenuOpen(false); }} className="btn-ghost text-left">模式</button>
-              <button onClick={() => { scrollTo('exercises'); setMobileMenuOpen(false); }} className="btn-ghost text-left">练习</button>
-              <button onClick={() => { scrollTo('comparison'); setMobileMenuOpen(false); }} className="btn-ghost text-left">对比</button>
-              <button onClick={() => { scrollTo('features'); setMobileMenuOpen(false); }} className="btn-ghost text-left">功能</button>
-              <button onClick={() => { scrollTo('pricing'); setMobileMenuOpen(false); }} className="btn-ghost text-left">定价</button>
+              <button onClick={() => { scrollTo('modes'); setMobileMenuOpen(false); }} className="btn-ghost text-left">{t.lpNavModes}</button>
+              <button onClick={() => { scrollTo('exercises'); setMobileMenuOpen(false); }} className="btn-ghost text-left">{t.lpNavExercises}</button>
+              <button onClick={() => { scrollTo('comparison'); setMobileMenuOpen(false); }} className="btn-ghost text-left">{t.lpNavComparison}</button>
+              <button onClick={() => { scrollTo('features'); setMobileMenuOpen(false); }} className="btn-ghost text-left">{t.lpNavFeatures}</button>
+              <button onClick={() => { scrollTo('pricing'); setMobileMenuOpen(false); }} className="btn-ghost text-left">{t.lpNavPricing}</button>
               <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="btn-ghost text-left">GitHub</a>
               <div className="border-t border-[#d4c9a8] my-1" />
-              <a href={user ? '/learn' : '/login'} onClick={() => setMobileMenuOpen(false)} className="btn-primary block text-center">{user ? '进入学习' : '登录'}</a>
+              <a href={user ? '/learn' : '/login'} onClick={() => setMobileMenuOpen(false)} className="btn-primary block text-center">{user ? t.lpEnterLearn : t.lpLogin}</a>
             </div>
           </motion.div>
         )}
@@ -357,24 +382,24 @@ export default function LandingPage() {
 
           <h1 className="text-5xl md:text-7xl font-bold text-[#3d3929] mb-4 hero-fade-in"
             style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif", letterSpacing: '-0.02em', animationDelay: '150ms' }}>
-            呱邻国
+            {t.title}
           </h1>
 
           <p className="text-lg md:text-xl text-[#8b7e5e] mb-2 hero-fade-in"
             style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif", animationDelay: '250ms' }}>
-            用你喜欢的文本学外语
+            {t.lpHeroTagline}
           </p>
 
           {/* LCP 元素：无动画，首帧即绘制，避免等待 framer-motion */}
           <p className="text-[#8b7e5e]/70 mb-10 max-w-lg mx-auto leading-relaxed">
-            学英语、日语、法语、德语、小语种——粘贴任何文本，自动生成词汇表、分句翻译和练习题。<br />
-            留学备考、阅读理解辅助、职场外语，你的素材你做主。
+            {t.lpHeroDesc1}<br />
+            {t.lpHeroDesc2}
           </p>
 
           <div className="flex justify-center items-center hero-fade-in" style={{ animationDelay: '450ms' }}>
             <a href={user ? '/learn' : '/login'}
               className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg flex items-center gap-2 shadow-[2px_2px_0_#8b7e5e]">
-              {user ? '进入学习' : '免费开始'}
+              {user ? t.lpEnterLearn : t.lpStartFree}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
           </div>
@@ -390,12 +415,12 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-6xl mx-auto relative">
-          <SectionTitle sub="传统语言学习的困境">学外语的素材，永远不够"自己"</SectionTitle>
+          <SectionTitle sub={t.lpPainSub}>{t.lpPainTitle}</SectionTitle>
           <p className="reveal text-center text-[#8b7e5e] max-w-2xl mx-auto mb-12 leading-relaxed">
-            传统语言 App 提供固定课程，但每个人的兴趣、职业、阅读习惯完全不同。你读的英语新闻、追的日剧台词、留学文书里的专业术语、中学英语课文——这些最贴近你生活的内容，标准化课程覆盖不了。
+            {t.lpPainPara}
           </p>
           <div className="grid md:grid-cols-3 gap-6">
-            {PAIN_POINTS.map((p, i) => {
+            {painPoints.map((p, i) => {
               const Icon = p.icon;
               return (
                 <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 relative overflow-hidden" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -416,11 +441,11 @@ export default function LandingPage() {
       {/* 三种模式 - 解决方案 */}
       <section id="modes" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="你的素材，你做主">
-            三种<span className="text-[#d4a853]">模式</span>
+          <SectionTitle sub={t.lpModesSub}>
+            {t.lpModesTitleA}<span className="text-[#d4a853]">{t.lpModesTitleB}</span>
           </SectionTitle>
           <div className="grid md:grid-cols-3 gap-6">
-            {MODES.map((m, i) => {
+            {modes.map((m, i) => {
               const Icon = m.icon;
               return (
                 <div key={i} className="reveal rounded-lg overflow-hidden border border-[#d4c9a8]" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -443,11 +468,11 @@ export default function LandingPage() {
       {/* 使用流程 */}
       <section className="py-24 px-4 sm:px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-5xl mx-auto">
-          <SectionTitle sub="从输入到掌握，六步搞定">
-            使用<span className="text-[#d4a853]">流程</span>
+          <SectionTitle sub={t.lpStepsSub}>
+            {t.lpStepsTitleA}<span className="text-[#d4a853]">{t.lpStepsTitleB}</span>
           </SectionTitle>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {STEPS.map((s, i) => {
+            {steps.map((s, i) => {
               const Icon = s.icon;
               return (
                 <div key={i} className="reveal text-center relative" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -468,9 +493,9 @@ export default function LandingPage() {
       {/* 练习体系 */}
       <section id="exercises" className="py-24 px-4 sm:px-6 bg-[#faf8f0] relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="从单词辨认到句子输出，阶梯式设计">六大题型，从认到用</SectionTitle>
+          <SectionTitle sub={t.lpExSub}>{t.lpExTitle}</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {EXERCISES.map((ex, i) => (
+            {exercises.map((ex, i) => (
               <div key={i} className={`reveal reveal-hover rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow ${
                   ex.phase === 0
                     ? 'bg-[#3d3929] text-[#faf8f0] border border-[#3d3929]'
@@ -483,11 +508,11 @@ export default function LandingPage() {
                       ? 'bg-[#8b7e5e]/10 text-[#8b7e5e] border border-[#8b7e5e]/20'
                       : 'bg-[#d4a853]/10 text-[#B8860B] border border-[#d4a853]/20'
                   }`}>
-                    阶段{ex.phase === 1 ? '一' : '二'}
+                    {ex.phase === 1 ? t.lpPhase1 : t.lpPhase2}
                   </span>
                 ) : (
                   <span className="inline-block px-2 py-0.5 rounded text-xs font-bold tracking-wide mb-3 bg-[#d4a853]/20 text-[#d4a853] border border-[#d4a853]/30">
-                    收尾
+                    {t.lpPhaseFinal}
                   </span>
                 )}
                 <h3 className={`text-lg font-bold mb-2 ${
@@ -518,13 +543,13 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative">
-          <SectionTitle sub="多邻国做不到的，呱邻国做到了">
-            <span className="text-[#faf8f0]">多邻国做不到的</span>
+          <SectionTitle sub={t.lpCompSub}>
+            <span className="text-[#faf8f0]">{t.lpCompTitleA}</span>
             <br className="md:hidden" />
-            <span className="text-[#d4a853]"> 呱邻国做到了</span>
+            <span className="text-[#d4a853]"> {t.lpCompTitleB}</span>
           </SectionTitle>
           <div className="space-y-4">
-            {COMPARISON.map((row, i) => (
+            {comparison.map((row, i) => (
               <div key={i} className="reveal flex items-center gap-2 sm:gap-4 md:gap-8" style={{ transitionDelay: `${i * 100}ms` }}>
                 <div className="flex-1 min-w-0 text-right">
                   <span className="text-[#b5ae8e] text-sm md:text-base line-through decoration-[#8b7e5e]/40">{row.duo}</span>
@@ -546,9 +571,9 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.08 }} />
         <div className="max-w-6xl mx-auto relative">
-          <SectionTitle sub="从输入到掌握，覆盖全流程">特色功能</SectionTitle>
+          <SectionTitle sub={t.lpFeatSub}>{t.lpFeatTitle}</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => {
+            {features.map((f, i) => {
               const Icon = f.icon;
               return (
                 <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 hover:shadow-[2px_2px_0_#b5ae8e] transition-shadow" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -569,9 +594,9 @@ export default function LandingPage() {
       {/* 目标用户 */}
       <section id="users" className="py-24 px-4 sm:px-6 bg-[#f0ead6]/30 relative">
         <div className="max-w-6xl mx-auto">
-          <SectionTitle sub="留学备考、阅读理解辅助、职场外语、小语种学习">谁需要呱邻国？</SectionTitle>
+          <SectionTitle sub={t.lpUsersSub}>{t.lpUsersTitle}</SectionTitle>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {TARGET_USERS.map((u, i) => (
+            {targetUsers.map((u, i) => (
               <div key={i} className="reveal reveal-hover bg-[#faf8f0] border border-[#d4c9a8] rounded-lg p-6 text-center" style={{ transitionDelay: `${i * 100}ms` }}>
                 <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl bg-[#8b7e5e]/10 border-2 border-[#8b7e5e]/15">
                   {u.icon}
@@ -591,8 +616,8 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #faf8f0 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.03 }} />
         <div className="max-w-4xl mx-auto relative text-center">
-          <p className="reveal text-sm text-[#b5ae8e] mb-2">英语、日语、法语、德语、小语种……</p>
-          <p className="reveal text-xs text-[#b5ae8e]/60 mb-4" style={{ transitionDelay: '100ms' }}>支持的语言（部分展示）</p>
+          <p className="reveal text-sm text-[#b5ae8e] mb-2">{t.lpLangCloudNote}</p>
+          <p className="reveal text-xs text-[#b5ae8e]/60 mb-4" style={{ transitionDelay: '100ms' }}>{t.lpLangCloudSub}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {LANG_CLOUD.map((lang, i) => (
               <span key={i} className="reveal px-3 py-1 rounded text-xs font-semibold text-white tracking-wide hover:scale-110 transition-transform cursor-default"
@@ -610,16 +635,16 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, #b5ae8e 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.06 }} />
         <div className="max-w-5xl mx-auto relative">
-          <SectionTitle sub="免费开始，随时升级">选择适合你的方案</SectionTitle>
+          <SectionTitle sub={t.lpPricingSub}>{t.lpPricingTitle}</SectionTitle>
           <div className="grid md:grid-cols-3 gap-6">
-            {PLANS.map((plan, i) => (
+            {plans.map((plan, i) => (
               <div key={plan.id} className={`reveal bg-[#faf8f0] border rounded-lg p-7 relative ${
                   plan.highlight ? 'border-[#d4a853] shadow-[3px_3px_0_#d4a853]' : 'border-[#d4c9a8]'
                 }`}
                 style={{ transitionDelay: `${i * 100}ms` }}>
                 {plan.highlight && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-[#d4a853] text-[#3d3929] text-xs font-bold rounded-full">
-                    推荐
+                     {t.lpRecommended}
                   </div>
                 )}
                 <h3 className="text-xl font-bold text-[#3d3929] mb-1"
@@ -667,37 +692,30 @@ export default function LandingPage() {
         <div className="relative max-w-2xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-4"
             style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-            准备好了吗？
+            {t.lpCtaTitle}
           </h2>
           <p className="text-[#b5ae8e] mb-2">
-            学英语、日语、法语、德语、小语种，注册即可免费使用。
+            {t.lpCtaDesc1}
           </p>
           <p className="text-[#b5ae8e]/70 text-sm mb-8">
-            留学备考 · 阅读理解辅助 · 职场外语 · 你的素材你做主
+            {t.lpCtaDesc2}
           </p>
           <a href={user ? '/learn' : '/login'}
             className="group px-8 py-3.5 bg-[#d4a853] text-[#3d3929] font-semibold rounded hover:bg-[#c49a48] transition-all text-lg inline-flex items-center gap-2 shadow-[2px_2px_0_#faf8f0/20]">
-            {user ? '进入学习' : '立即开始'}
+            {user ? t.lpEnterLearn : t.lpCtaStart}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </a>
         </div>
       </section>
 
       {/* FAQ：以问答形式覆盖长尾搜索意图（替代原关键词堆砌带） */}
-      <section className="py-12 px-4 sm:px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label="常见问题">
+      <section className="py-12 px-4 sm:px-6 bg-[#faf8f0] border-t border-[#d4c9a8]/50" aria-label={t.lpFaqTitle}>
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl font-bold text-[#3d3929] mb-8 text-center" style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-            常见问题
+            {t.lpFaqTitle}
           </h2>
           <div className="space-y-4">
-            {[
-              { q: '呱邻国适合学哪些语言？', a: '支持英语、日语、法语、德语、韩语、西班牙语、意大利语、葡萄牙语、俄语等主流语言，也支持泰语、越南语、阿拉伯语、印地语、土耳其语、芬兰语等 120+ 种语言，覆盖大部分留学备考与小语种学习需求。' },
-              { q: '留学备考怎么用呱邻国？', a: '把雅思、托福真题阅读，或日语 N1N2、法语 DELF、德语德福的备考材料直接粘贴进来，AI 会自动分句翻译、提取生词并生成练习题。你练的就是你要考的素材，比固定课程更贴合实战。' },
-              { q: '能帮中学英语阅读理解吗？', a: '可以。把课文或考试阅读段落粘贴进来，分句翻译帮助吃透每一句，自动生成的词汇表配合遮蔽填空、翻译重组等题型，针对丢分点反复练习。' },
-              { q: '需要自己准备学习材料吗？', a: '不一定。三种模式任选：直接粘贴你已有的文本、输入中文自动翻译成目标语言，或让 AI 按主题（如旅行对话）自由生成。没有素材也能开始学。' },
-              { q: '呱邻国和多邻国有什么区别？', a: '多邻国提供固定课程，呱邻国则让你用任何文本学——你提供什么素材就学什么，并自动生成完整词汇表、分句翻译和六种练习题型，从单词辨认到句子输出阶梯式训练。' },
-              { q: '免费版够用吗？', a: '免费版含 200 句额度，每天恢复 50 句（上限 200），适合日常精读一篇文章。需要更大练习量可升级基础版（2000 句/月）或专业版（无限额度）。' },
-            ].map((item, i) => (
+            {faq.map((item, i) => (
               <details key={i} className="group bg-white/60 rounded-lg border border-[#d4c9a8]/60 overflow-hidden">
                 <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-[#3d3929] font-medium hover:bg-[#f0ead6]/50 transition-colors">
                   <span>{item.q}</span>
@@ -717,17 +735,17 @@ export default function LandingPage() {
             <FrogLogo size={24} />
             <span className="font-bold text-[#3d3929]"
               style={{ fontFamily: "'Noto Serif SC', 'Georgia', serif" }}>
-              呱邻国 Gualingo
+              {t.title}
             </span>
-            <span className="text-xs text-[#b5ae8e]">由 houselyn 开发</span>
+            <span className="text-xs text-[#b5ae8e]">{t.lpFooterDev}</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[#8b7e5e]">
-            <span>兼容 LLM API</span>
-            <span>AGPL v3 开源</span>
+            <span>{t.lpFooterLlm}</span>
+            <span>{t.lpFooterLicense}</span>
             <a href="https://github.com/rhouselyn/Gualingo" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors">GitHub</a>
             <a href="https://github.com/rhouselyn/Gualingo/issues/new" target="_blank" rel="noopener noreferrer"
-              className="hover:text-[#3d3929] transition-colors">反馈建议</a>
+              className="hover:text-[#3d3929] transition-colors">{t.lpFooterFeedback}</a>
             {/* 小红书 */}
             <a href="https://www.xiaohongshu.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-[#3d3929] transition-colors inline-flex items-center text-[#8b7e5e]" title="小红书" aria-label="小红书">
