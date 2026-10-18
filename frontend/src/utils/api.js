@@ -265,9 +265,9 @@ export const api = {
     return response.data;
   },
 
-  // Translate UI strings（缓存命中直接返回；缺失 key 才补译，单次上限 1 分钟）
+  // Translate UI strings（缓存命中直接返回；缺失 key 分批补译，逐批落库，单批上限 150s）
   translateUI: async (langCode) => {
-    const response = await axios.get(`${baseUrl}/api/translate_ui/${langCode}`, { timeout: 60000 });
+    const response = await axios.get(`${baseUrl}/api/translate_ui/${langCode}`, { timeout: 300000 });
     return response.data;
   },
 

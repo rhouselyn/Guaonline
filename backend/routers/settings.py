@@ -81,33 +81,20 @@ async def translate_ui(lang_code: str):
     # 不再因英文基准变化整包重译（旧行为会让已缓存语言每次都跑一次全量 LLM，很慢）。
     schema_sig = _ui_schema_sig()
 
-    # 1. 查数据库缓存
-    cached = db_storage.load_ui_translations(lang_code)
-    if cached:
-        missing = [k for k in UI_TRANSLATION_SCHEMA if k not in cached]
-        # 命中（无缺失 key）→ 直接返回
-        if not missing:
-            return cached
-        # zh/en 不调 LLM，直接从 schema 重建最新值
-        if lang_code in ('zh', 'en'):
-            result = {k: UI_TRANSLATION_SCHEMA[k].get(lang_code, UI_TRANSLATION_SCHEMA[k].get('en', '')) for k in UI_TRANSLATION_SCHEMA}
-            result["_lang_code"] = lang_code
-            result["_schema_sig"] = schema_sig
-            db_storage.save_ui_translations(lang_code, result)
-            return result
-        try:
-            # 部分未命中：只把缺失的 key 交给 LLM 补译（单次上限 60s），已有的原样保留
-            patched = await _do_translate_ui(lang_code, keys=missing, timeout=60)
-            merged = {**cached, **{k: v for k, v in patched.items() if k in missing}}
-            merged["_lang_code"] = lang_code
-            merged["_schema_sig"] = schema_sig
-            db_storage.save_ui_translations(lang_code, merged)
-            return merged
-        except Exception as e:
-            print(f"UI translation patch error ({lang_code}): {e}")
-            return cached  # 补译失败退回旧缓存，缺失 key 前端用 zhBase 兜底
+    def save_merged(partial: dict):
+        """把已翻译部分合并进当前缓存并落库（分批翻译的断点续翻）。"""
+        current = db_storage.load_ui_translations(lang_code) or {}
+        merged = {**current, **partial, "_lang_code": lang_code, "_schema_sig": schema_sig}
+        db_storage.save_ui_translations(lang_code, merged)
+        return merged
 
-    # 2. 对于 zh 和 en，从 schema 生成并存入数据库
+    # 1. 查数据库缓存，算出缺失的 key
+    cached = db_storage.load_ui_translations(lang_code)
+    missing = [k for k in UI_TRANSLATION_SCHEMA if not cached or k not in cached]
+    if not missing:
+        return cached
+
+    # zh/en 不调 LLM，直接从 schema 重建最新值
     if lang_code in ('zh', 'en'):
         result = {k: UI_TRANSLATION_SCHEMA[k].get(lang_code, UI_TRANSLATION_SCHEMA[k].get('en', '')) for k in UI_TRANSLATION_SCHEMA}
         result["_lang_code"] = lang_code
@@ -115,10 +102,15 @@ async def translate_ui(lang_code: str):
         db_storage.save_ui_translations(lang_code, result)
         return result
 
-    # 3. 首次全量生成（不封顶；只有增量补译才走 60s 上限）
-    result = await _do_translate_ui(lang_code)
-    db_storage.save_ui_translations(lang_code, result)
-    return result
+    # 2. 分批翻译（首次全量与补缺失 key 同一条路），逐批落库：
+    #    中途失败时已成功的批次已缓存，下次请求只补剩下的（断点续翻）；
+    #    一批都没成功则抛 500，由前端保留旧语言兜底。
+    translated, err = await _translate_keys(lang_code, missing, save_progress=save_merged)
+    if translated:
+        return save_merged(translated)
+    if err:
+        raise HTTPException(status_code=500, detail="UI 翻译生成失败，请稍后重试")
+    return cached  # 理论上不可达（missing 非空必有 err），保守返回旧缓存
 
 
 def _ui_schema_sig():
@@ -131,62 +123,96 @@ def _ui_schema_sig():
     return hashlib.md5(payload.encode("utf-8")).hexdigest()[:16]
 
 
-async def _do_translate_ui(lang_code: str, keys=None, timeout=None):
-    """通过 LLM 翻译 UI 字符串。keys 传入时只翻译 schema 的子集（用于补译缺失 key）。
+# 单次 LLM 调用翻 400+ 条易被 max_tokens 截断（free 档输出上限 16384）且耗时常超前端 60s 超时，
+# 因此分批：每批 80 条，单批独立超时；每批成功即落库。
+UI_TRANSLATION_BATCH_SIZE = 80
+UI_TRANSLATION_BATCH_TIMEOUT = 150  # 单批秒数上限
 
-    timeout 传入时以 asyncio.wait_for 封顶单次调用（补译走 60s）；
-    首次全量生成不封顶，避免大 schema 被掐断。失败抛异常，由调用方决定退回旧缓存还是报错。
-    """
+
+def _chunked(seq, size):
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
+
+
+def _is_chinese_echo(raw: dict, lang_code: str) -> bool:
+    """翻译结果大半与中文原文相同 → 模型回显了中文源，判失败（防中毒缓存）。
+    zh 系语言（yue 等与中文大量同文）豁免。返回条数太少时不算，靠缺失 key 补译自愈。"""
+    if lang_code.startswith('zh') or lang_code == 'yue':
+        return False
+    if len(raw) < 16:
+        return False
+    same = sum(1 for k, v in raw.items() if isinstance(v, str) and v.strip() == UI_TRANSLATION_SCHEMA[k]["zh"].strip())
+    return same / len(raw) > 0.5
+
+
+async def _translate_batch(lang_code: str, keys: list) -> dict:
+    """单批翻译：调一次 LLM，返回 {key: 译文}（只含本次请求的 key）。失败抛异常。"""
     from llm_api import get_lang_name
     from utils.llm_gateway import gateway
 
-    lang_name = get_lang_name(lang_code)
-
-    strings_for_prompt = {}
-    for key, val in UI_TRANSLATION_SCHEMA.items():
-        if keys is not None and key not in keys:
-            continue
-        strings_for_prompt[key] = {
-            "description": val["desc"],
-            "chinese": val["zh"],
-            "english": val["en"]
+    strings_for_prompt = {
+        k: {
+            "description": UI_TRANSLATION_SCHEMA[k]["desc"],
+            "chinese": UI_TRANSLATION_SCHEMA[k]["zh"],
+            "english": UI_TRANSLATION_SCHEMA[k]["en"],
         }
-
+        for k in keys
+    }
     prompt = TRANSLATION_PROMPT.format(
-        target_lang_name=lang_name,
+        target_lang_name=get_lang_name(lang_code),
         target_lang_code=lang_code,
         strings_json=json.dumps(strings_for_prompt, ensure_ascii=False, indent=2)
     )
-
     messages = [
         {"role": "system", "content": "You are a professional UI translator. Always respond with valid JSON only."},
         {"role": "user", "content": prompt}
     ]
 
-    try:
-        call = gateway.call(
-            user_id="system", tier="free", messages=messages,
-            temperature=0, request_type="ui_translation"
-        )
-        result = await (asyncio.wait_for(call, timeout=timeout) if timeout else call)
+    call = gateway.call(
+        user_id="system", tier="free", messages=messages,
+        temperature=0, request_type="ui_translation"
+    )
+    result = await asyncio.wait_for(call, timeout=UI_TRANSLATION_BATCH_TIMEOUT)
 
-        if result and result.get("choices"):
-            content = result["choices"][0]["message"]["content"]
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
+    if not (result and result.get("choices")):
+        raise ValueError("empty LLM response")
+    content = result["choices"][0]["message"]["content"] or ""
+    if "```json" in content:
+        content = content.split("```json")[1].split("```")[0]
+    elif "```" in content:
+        content = content.split("```")[1].split("```")[0]
 
-            translated = json.loads(content.strip())
-            translated["_lang_code"] = lang_code
-            translated["_schema_sig"] = _ui_schema_sig()
-            return translated
-    except asyncio.TimeoutError:
-        print(f"UI translation timeout ({lang_code}, keys={'all' if keys is None else len(keys)})")
-    except Exception as e:
-        print(f"UI translation error: {e}")
+    raw = json.loads(content.strip())
+    if not isinstance(raw, dict):
+        raise ValueError("LLM response is not a JSON object")
+    # 只保留本次请求的 key 和字符串值，多余内容一律丢弃
+    batch = {k: v for k, v in raw.items() if k in keys and isinstance(v, str)}
+    if not batch:
+        raise ValueError("no usable keys in LLM response")
+    if _is_chinese_echo(batch, lang_code):
+        raise ValueError("translation echoes Chinese source")
+    return batch
 
-    raise HTTPException(status_code=500, detail="UI 翻译生成失败，请稍后重试")
+
+async def _translate_keys(lang_code: str, keys: list, save_progress=None):
+    """分批翻译 keys，每批成功即通过 save_progress 落库（断点续翻）。
+    返回 (accumulated, error)：某批失败时停止后续批次，返回已成功部分和错误描述。"""
+    accumulated = {}
+    error = None
+    for chunk in _chunked(list(keys), UI_TRANSLATION_BATCH_SIZE):
+        try:
+            accumulated.update(await _translate_batch(lang_code, chunk))
+            if save_progress and accumulated:
+                save_progress(accumulated)
+        except asyncio.TimeoutError:
+            print(f"UI translation batch timeout ({lang_code}, {len(chunk)} keys)")
+            error = "timeout"
+            break
+        except Exception as e:
+            print(f"UI translation batch error ({lang_code}): {e}")
+            error = str(e)
+            break
+    return accumulated, error
 
 
 
