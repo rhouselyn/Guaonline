@@ -36,6 +36,13 @@ CIRCUIT_COOLDOWN_NET = 30       # 网络错阻塞 30s
 # 提高失败检测速度：原 120s 会让单次超时拖到 2 分钟才轮询，60s 能让一次失败+重试控制在 100s 内。
 HTTP_TIMEOUT = 60.0
 
+# 按请求类型放宽调用参数。
+# UI 翻译单次输出 12K–16K tokens，正好卡在 free 档 16384 的截断边缘，且生成常超过 60s：
+# 单独给它更大的 max_tokens 上限和 150s HTTP 超时，不拖慢其它请求的失败检测。
+REQUEST_TYPE_OVERRIDES = {
+    "ui_translation": {"http_timeout": 150.0, "key_cap_floor": 65536},
+}
+
 
 def _load_global_settings() -> dict:
     try:
@@ -478,6 +485,8 @@ class LLMGateway:
                    _max_tokens_eff: int = None) -> dict:
         if _max_tokens_eff is None:
             _max_tokens_eff = max_tokens
+        override = REQUEST_TYPE_OVERRIDES.get(request_type, {})
+        http_timeout = override.get("http_timeout", HTTP_TIMEOUT)
         pool = self._resolve_pool(tier, request_type)
         if not pool:
             raise Exception(f"No API Key configured for tier: {tier} (request_type={request_type})")
@@ -517,6 +526,8 @@ class LLMGateway:
         key_cap = ref.get("max_tokens")
         if not key_cap:
             key_cap = 16384 if pool.tier == "free" else 65536
+        # ui_translation 等大输出请求允许突破池里的 per-ref 上限（provider 拒绝时下面折半重试兜底）
+        key_cap = max(key_cap, override.get("key_cap_floor", 0))
         eff = _max_tokens_eff
         if eff is None or eff > key_cap:
             eff = key_cap
@@ -541,7 +552,7 @@ class LLMGateway:
             _t0 = _t.time()
             _title = self.key_defs.get(key_id, {}).get("title", "") or "-"
             print(f"[GATEWAY] >>> START user={user_id} tier={tier} type={request_type} key_id={key_id} title={_title}")
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=http_timeout) as client:
                 resp = await client.post(url, headers=headers, json=payload)
 
             if resp.status_code == 200:
@@ -579,7 +590,7 @@ class LLMGateway:
             else:
                 body = resp.text[:300]
                 low = body.lower()
-                if "max_tokens" in low and ("非法" in body or "invalid" in low or "range" in low or "exceed" in low or "maximum" in low):
+                if "max_tokens" in low and ("非法" in body or "invalid" in low or "range" in low or "exceed" in low or "maximum" in low or "large" in low):
                     halved = max(eff // 2, 256)
                     if halved < eff:
                         print(f"[GATEWAY] max_tokens 非法({eff})，折半为 {halved} 后重试 tier={tier} type={request_type}")
@@ -591,7 +602,7 @@ class LLMGateway:
 
         except httpx.TimeoutException:
             _elapsed = _t.time() - _t0
-            print(f"[GATEWAY] <<< TIMEOUT key_id={key_id} title={_title} elapsed={_elapsed:.1f}s (>{HTTP_TIMEOUT}s) → 切换 key 重试 tier={tier} type={request_type}")
+            print(f"[GATEWAY] <<< TIMEOUT key_id={key_id} title={_title} elapsed={_elapsed:.1f}s (>{http_timeout}s) → 切换 key 重试 tier={tier} type={request_type}")
             pool.mark_network_error(self, idx)
             return await self.call(user_id, tier, messages, temperature, max_tokens, request_type, tools, _max_tokens_eff=eff)
         except httpx.HTTPError as e:
